@@ -9,24 +9,22 @@ const navItems = [
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-[#5E704F]/15 bg-[#F8F1E9]/95 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-4 py-4 sm:px-6">
-        <a href="#" className="flex items-center gap-3">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#2F3827]/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-4 py-4 text-white sm:px-6">
+        <a href="#" className="flex items-center gap-3 text-white">
           <img
             src="/brand/logo.svg"
             alt="Логотип СНТ «Улыбка»"
             className="h-10 w-auto"
           />
-          <span className="text-base font-semibold text-zinc-900">
-            СНТ «Улыбка»
-          </span>
+          <span className="text-base font-semibold">СНТ «Улыбка»</span>
         </a>
-        <nav className="hidden items-center gap-5 text-sm font-medium text-zinc-800 lg:flex">
+        <nav className="hidden items-center gap-5 text-sm font-medium text-white/80 lg:flex">
           {navItems.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="transition-colors hover:text-[#5E704F]"
+              className="transition-colors hover:text-white"
             >
               {item.label}
             </a>
@@ -34,17 +32,17 @@ export default function Header() {
         </nav>
         <a
           href="#pay"
-          className="rounded-full bg-[#5E704F] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
+          className="rounded-full border border-white/30 bg-white px-5 py-2 text-sm font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
         >
           Оплата
         </a>
       </div>
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-3 px-4 pb-3 text-xs font-medium text-zinc-700 lg:hidden sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-3 px-4 pb-3 text-xs font-medium text-white/80 lg:hidden sm:px-6">
         {navItems.map((item) => (
           <a
             key={item.href}
             href={item.href}
-            className="rounded-full border border-[#5E704F]/30 px-3 py-1 transition-colors hover:border-[#5E704F] hover:text-[#5E704F]"
+            className="rounded-full border border-white/25 px-3 py-1 transition-colors hover:border-white hover:text-white"
           >
             {item.label}
           </a>
