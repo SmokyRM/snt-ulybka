@@ -2,6 +2,7 @@
 
 import {
   OwnershipRequest,
+  AuditLog,
   Plot,
   PlotOwner,
   RequestStatus,
@@ -14,6 +15,7 @@ interface MockDb {
   plots: Plot[];
   ownershipRequests: OwnershipRequest[];
   plotOwners: PlotOwner[];
+  auditLogs: AuditLog[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -62,6 +64,7 @@ const getDb = (): MockDb => {
       plots: [...defaultPlots],
       ownershipRequests: [],
       plotOwners: [],
+      auditLogs: [],
     };
   }
   return g.__SNT_DB__;
@@ -255,5 +258,59 @@ export const resetMockDb = () => {
     plots: [...defaultPlots],
     ownershipRequests: [],
     plotOwners: [],
+    auditLogs: [],
   };
+};
+
+export const logAdminAction = (entry: {
+  actorUserId: string | null;
+  actorRole: User["role"] | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  before?: unknown;
+  after?: unknown;
+  ip?: string | null;
+  userAgent?: string | null;
+}) => {
+  const db = getDb();
+  const log: AuditLog = {
+    id: createId("audit"),
+    actorUserId: entry.actorUserId ?? null,
+    actorRole: entry.actorRole ?? null,
+    action: entry.action,
+    entity: entry.entity,
+    entityId: entry.entityId ?? null,
+    before: entry.before,
+    after: entry.after,
+    ip: entry.ip ?? null,
+    userAgent: entry.userAgent ?? null,
+    createdAt: new Date().toISOString(),
+  };
+  db.auditLogs.unshift(log);
+  if (db.auditLogs.length > 1000) {
+    db.auditLogs = db.auditLogs.slice(0, 1000);
+  }
+  return log;
+};
+
+export const listAuditLogs = (filters?: {
+  action?: string | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+}) => {
+  const db = getDb();
+  const { action, from, to, limit = 50 } = filters ?? {};
+  const fromDate = from ? new Date(from).getTime() : null;
+  const toDate = to ? new Date(to).getTime() : null;
+  return db.auditLogs
+    .filter((log) => {
+      if (action && log.action !== action) return false;
+      const ts = new Date(log.createdAt).getTime();
+      if (fromDate && ts < fromDate) return false;
+      if (toDate && ts > toDate) return false;
+      return true;
+    })
+    .slice(0, limit);
 };

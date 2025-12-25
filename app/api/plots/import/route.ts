@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session.server";
 import { addPlot, findPlotByNumberStreet, updatePlot } from "@/lib/plotsDb";
 import { validatePlotInput } from "@/lib/plotsValidators";
 import { Plot } from "@/types/snt";
+import { logAdminAction } from "@/lib/audit";
 
 type ImportRow = {
   street?: string;
@@ -109,6 +110,13 @@ export async function POST(request: Request) {
       notes,
     });
     created += 1;
+  });
+
+  await logAdminAction({
+    action: "import_plots",
+    entity: "plot",
+    after: { created, updated, skipped, errors },
+    headers: request.headers,
   });
 
   return NextResponse.json({ created, updated, skipped, errors });

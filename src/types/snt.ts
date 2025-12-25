@@ -36,6 +36,20 @@ export interface User {
   status: UserStatus;
 }
 
+export interface AuditLog {
+  id: string;
+  actorUserId: string | null;
+  actorRole: UserRole | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  before?: unknown;
+  after?: unknown;
+  ip?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+}
+
 export interface OwnershipRequest {
   id: string;
   plotNumber: string;

@@ -6,6 +6,7 @@ import {
   updateTicketStatus,
 } from "@/lib/ticketsDb";
 import { TicketStatus } from "@/types/snt";
+import { logAdminAction } from "@/lib/audit";
 
 const allowedStatuses: TicketStatus[] = ["NEW", "IN_PROGRESS", "DONE"];
 
@@ -44,9 +45,18 @@ export async function PATCH(
   if (!status || !allowedStatuses.includes(status)) {
     return NextResponse.json({ error: "Недопустимый статус" }, { status: 400 });
   }
+  const before = findTicketById(id);
   const updated = updateTicketStatus(id, status);
   if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  await logAdminAction({
+    action: "update_ticket_status",
+    entity: "ticket",
+    entityId: id,
+    before,
+    after: updated,
+    headers: request.headers,
+  });
   return NextResponse.json({ ticket: updated });
 }

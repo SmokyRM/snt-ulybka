@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session.server";
 import { addPlot, existsStreetNumber, listPlots } from "@/lib/plotsDb";
 import { validatePlotInput } from "@/lib/plotsValidators";
 import { Plot } from "@/types/snt";
+import { logAdminAction } from "@/lib/audit";
 
 const parseFilters = (request: Request) => {
   const url = new URL(request.url);
@@ -76,6 +77,12 @@ export async function POST(request: Request) {
     isConfirmed,
     notes,
   });
+  await logAdminAction({
+    action: "create_plot",
+    entity: "plot",
+    entityId: plot.id,
+    after: plot,
+    headers: request.headers,
+  });
   return NextResponse.json({ plot }, { status: 201 });
 }
-

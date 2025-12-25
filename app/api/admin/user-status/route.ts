@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { findUserById, setUserStatus } from "@/lib/mockDb";
 import { UserStatus } from "@/types/snt";
+import { logAdminAction } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
@@ -30,5 +31,13 @@ export async function POST(request: Request) {
   }
 
   const updated = setUserStatus(targetIdStr, statusStr as UserStatus);
+  await logAdminAction({
+    action: "update_user_status",
+    entity: "user",
+    entityId: targetIdStr,
+    before: target,
+    after: updated,
+    headers: request.headers,
+  });
   return NextResponse.json({ ok: true, user: updated });
 }

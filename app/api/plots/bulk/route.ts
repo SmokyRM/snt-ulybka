@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { bulkUpdatePlots } from "@/lib/plotsDb";
 import { Plot } from "@/types/snt";
+import { logAdminAction } from "@/lib/audit";
 
 type BulkBody = {
   ids?: string[];
@@ -41,6 +42,14 @@ export async function PATCH(request: Request) {
 
   const updated = bulkUpdatePlots(ids, patch);
 
+  await logAdminAction({
+    action: "bulk_update_plots",
+    entity: "plot",
+    entityId: ids.join(","),
+    before: { ids },
+    after: { updated, patch },
+    headers: request.headers,
+  });
+
   return NextResponse.json({ updated });
 }
-
