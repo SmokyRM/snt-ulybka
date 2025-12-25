@@ -12,14 +12,10 @@ type RawRow = Partial<{
 }>;
 
 const membershipMap: Record<string, Plot["membershipStatus"]> = {
-  member: "MEMBER",
   "член": "MEMBER",
-  non_member: "NON_MEMBER",
-  "non-member": "NON_MEMBER",
   "не член": "NON_MEMBER",
-  none: "UNKNOWN",
-  unknown: "UNKNOWN",
   "не определен": "UNKNOWN",
+  "не определён": "UNKNOWN",
   "не определено": "UNKNOWN",
 };
 
@@ -64,4 +60,3 @@ export const normalizeRow = (row: RawRow) => {
     errors,
   };
 };
-

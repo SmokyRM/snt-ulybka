@@ -31,14 +31,19 @@ const headers = [
 
 const headerAliases: Record<string, string> = {
   улица: "street",
+  "номер участка": "number",
   участок: "number",
   фио: "ownerFullName",
+  "фамилия имя отчество": "ownerFullName",
   телефон: "phone",
   почта: "email",
+  email: "email",
   статус: "membershipStatus",
+  членство: "membershipStatus",
   подтвержден: "isConfirmed",
   подтверждён: "isConfirmed",
   примечание: "notes",
+  комментарий: "notes",
 };
 
 const parseCsv = (text: string) => {
@@ -94,22 +99,22 @@ const parseTsv = (text: string) => {
     .filter((row) => row.length > 1);
 };
 
-const mapHeaders = (raw: string[]) =>
+const mapHeadersLocal = (raw: string[]) =>
   raw.map((h) => {
     const low = h.trim().toLowerCase();
     return headerAliases[low] ?? low;
   });
 
 type XLSXType = {
-  read: (data: ArrayBuffer, opts: { type: string }) => any;
-  utils: { sheet_to_json: (sheet: any, opts: { header: number }) => unknown[] };
+  read: (data: ArrayBuffer, opts: { type: string }) => { SheetNames: string[]; Sheets: Record<string, unknown> };
+  utils: { sheet_to_json: (sheet: unknown, opts: { header: number }) => unknown[] };
 };
 
 async function parseXlsx(file: File): Promise<string[][]> {
   const buffer = await file.arrayBuffer();
   try {
     const XLSX: XLSXType = await import(
-      // @ts-ignore - external ESM import from CDN at runtime
+      // @ts-expect-error External ESM import from CDN at runtime (types unavailable)
       /* webpackIgnore: true */ "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"
     );
     const workbook = XLSX.read(buffer, { type: "array" });
@@ -141,27 +146,41 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
       setError("Пустой файл или данные");
       return;
     }
-    const normalizedHeader = mapHeaders(headerRow);
-    if (headers.some((h) => !normalizedHeader.includes(h))) {
-      setError("Отсутствуют обязательные заголовки");
+    const mappedHeaders = mapHeadersLocal(headerRow);
+    const streetIdx = mappedHeaders.indexOf("street");
+    const numberIdx = mappedHeaders.indexOf("number");
+    if (streetIdx === -1 || numberIdx === -1) {
+      setError("Не найдены обязательные заголовки: улица, участок");
       return;
     }
     const mapped: ParsedRow[] = dataRows
       .filter((r) => r.length > 1)
       .map((cols) => {
         const row: ParsedRow = {};
-        normalizedHeader.forEach((h, idx) => {
-          const value = cols[idx]?.toString().trim();
-          if (value === undefined) return;
-          if (h === "street") row.street = value;
-          else if (h === "number") row.number = value;
-          else if (h === "ownerFullName") row.ownerFullName = value || null;
-          else if (h === "phone") row.phone = value || null;
-          else if (h === "email") row.email = value || null;
-          else if (h === "membershipStatus") row.membershipStatus = value.toUpperCase() || "UNKNOWN";
-          else if (h === "isConfirmed") row.isConfirmed = value;
-          else if (h === "notes") row.notes = value || null;
-        });
+        const getVal = (name: string) => {
+          const idx = mappedHeaders.indexOf(name);
+          if (idx === -1) return undefined;
+          return cols[idx];
+        };
+        const street = getVal("street");
+        const number = getVal("number");
+        const ownerFullName = getVal("ownerFullName");
+        const phone = getVal("phone");
+        const email = getVal("email");
+        const membershipStatus = getVal("membershipStatus");
+        const isConfirmed = getVal("isConfirmed");
+        const notes = getVal("notes");
+
+        if (street !== undefined) row.street = street?.toString().trim();
+        if (number !== undefined) row.number = number?.toString().trim();
+        if (ownerFullName !== undefined) row.ownerFullName = ownerFullName?.toString().trim() || null;
+        if (phone !== undefined) row.phone = phone?.toString().trim() || null;
+        if (email !== undefined) row.email = email?.toString().trim() || null;
+        if (membershipStatus !== undefined)
+          row.membershipStatus = membershipStatus?.toString().trim().toUpperCase();
+        if (isConfirmed !== undefined) row.isConfirmed = isConfirmed?.toString().trim();
+        if (notes !== undefined) row.notes = notes?.toString().trim() || null;
+
         return row;
       });
     setRows(mapped);
