@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { getSetting } from "@/lib/mockDb";
-import { formatAdminTime } from "@/lib/settings";
+import { formatAdminTime } from "@/lib/settings.shared";
 
 const formatLocal = (date: Date) => formatAdminTime(date.toISOString());
 
@@ -52,4 +52,3 @@ export async function GET() {
     recentErrors: [],
   });
 }
-

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { restoreSettingVersion } from "@/lib/settings";
+import { restoreSettingVersion } from "@/lib/settings.server";
 import { logAdminAction } from "@/lib/audit";
 
 export async function POST(request: Request) {
@@ -32,4 +32,3 @@ export async function POST(request: Request) {
   });
   return NextResponse.json({ ok: true });
 }
-

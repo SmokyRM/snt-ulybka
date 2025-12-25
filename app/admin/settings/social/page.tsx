@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { formatAdminTime, getOfficialChannelsSetting, listSettingVersions } from "@/lib/settings";
+import { formatAdminTime, getOfficialChannelsSettingServer, listSettingVersions } from "@/lib/settings.server";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { revalidatePath } from "next/cache";
 
@@ -10,7 +10,7 @@ export default async function AdminSocialHistory() {
     redirect("/login");
   }
 
-  const channels = getOfficialChannelsSetting();
+  const channels = getOfficialChannelsSettingServer();
   const versions = listSettingVersions("social_links", "official_channels", 50);
 
   async function restoreVersion(formData: FormData) {

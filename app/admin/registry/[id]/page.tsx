@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { findPlotById, listPersons } from "@/lib/mockDb";
-import { formatAdminTime } from "@/lib/settings";
+import { formatAdminTime } from "@/lib/settings.shared";
 
 const formatMembership = (status?: string | null) => {
   switch (status) {

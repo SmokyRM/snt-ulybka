@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { listPlotsWithFilters, listPersons } from "@/lib/mockDb";
-import { formatAdminTime } from "@/lib/settings";
+import { formatAdminTime } from "@/lib/settings.shared";
 import { membershipLabel } from "@/lib/membershipLabels";
 
 const parseFilters = (request: Request) => {

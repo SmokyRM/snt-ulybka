@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { formatAdminTime } from "@/lib/settings";
+import { formatAdminTime } from "@/lib/settings.shared";
 import { getPlots, listPayments } from "@/lib/mockDb";
 
 const MAX_ROWS = 200;

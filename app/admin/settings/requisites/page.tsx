@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getPaymentDetailsSetting, listSettingVersions, formatAdminTime } from "@/lib/settings";
+import { getPaymentDetailsSettingServer, listSettingVersions, formatAdminTime } from "@/lib/settings.server";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { revalidatePath } from "next/cache";
 
@@ -9,7 +9,7 @@ export default async function AdminRequisitesHistory() {
   if (!isAdmin(user)) {
     redirect("/login");
   }
-  const requisites = getPaymentDetailsSetting();
+  const requisites = getPaymentDetailsSettingServer();
   const versions = listSettingVersions("requisites", "payment_details", 50);
 
   async function restoreVersion(formData: FormData) {

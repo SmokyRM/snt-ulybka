@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { formatAdminTime } from "@/lib/settings";
+import { formatAdminTime } from "@/lib/settings.shared";
 
 export default function RegistryTableClient({
   plots,

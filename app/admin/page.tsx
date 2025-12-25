@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { getFeatureFlags, isAdminNewUIEnabled, setFeatureFlag } from "@/lib/featureFlags";
 import { getSessionUser } from "@/lib/session.server";
-import { formatAdminTime, getOfficialChannelsSetting, getPaymentDetailsSetting } from "@/lib/settings";
+import { formatAdminTime, getOfficialChannelsSettingServer, getPaymentDetailsSettingServer } from "@/lib/settings.server";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -47,8 +47,8 @@ export default async function AdminDashboard() {
   const featureFlags = await getFeatureFlags(cookieStore);
   const sessionUser = await getSessionUser();
   const lastSeen = new Date().toISOString();
-  const requisites = getPaymentDetailsSetting();
-  const channels = getOfficialChannelsSetting();
+  const requisites = getPaymentDetailsSettingServer();
+  const channels = getOfficialChannelsSettingServer();
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { listAuditLogs } from "@/lib/mockDb";
-import { formatAdminTime } from "@/lib/settings";
+import { formatAdminTime } from "@/lib/settings.shared";
 
 type ParamsPromise<T> = { params: Promise<T> };
 
@@ -26,4 +26,3 @@ export async function GET(_request: Request, { params }: ParamsPromise<{ id: str
 
   return NextResponse.json({ ok: true, items });
 }
-
