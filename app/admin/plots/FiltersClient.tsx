@@ -39,6 +39,17 @@ export default function FiltersClient({ initialFilters }: { initialFilters: Filt
     router.push("/admin/plots");
   };
 
+  const exportCsv = () => {
+    const query = buildQuery({
+      confirmed: initialFilters.confirmed,
+      membership: initialFilters.membership,
+      missingContacts: initialFilters.missingContacts,
+      q: initialFilters.q,
+    });
+    const url = `/api/admin/plots/export.csv${query ? `?${query}` : ""}`;
+    window.location.href = url;
+  };
+
   return (
     <form
       className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5"
@@ -104,6 +115,13 @@ export default function FiltersClient({ initialFilters }: { initialFilters: Filt
           className="w-full rounded-full border border-zinc-300 px-4 py-2 text-center text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
         >
           Сбросить
+        </button>
+        <button
+          type="button"
+          onClick={exportCsv}
+          className="w-full rounded-full border border-zinc-300 px-4 py-2 text-center text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-100"
+        >
+          Экспорт CSV
         </button>
       </div>
     </form>

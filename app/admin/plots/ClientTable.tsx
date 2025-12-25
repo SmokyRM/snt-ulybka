@@ -111,9 +111,11 @@ export default function ClientTable({ plots }: { plots: Plot[] }) {
               </th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Улица</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Участок</th>
-              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Членство</th>
-              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Подтверждён</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">ФИО</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Контакты</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Членство</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Подтв.</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Открыть</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
@@ -129,9 +131,18 @@ export default function ClientTable({ plots }: { plots: Plot[] }) {
                 </td>
                 <td className="px-3 py-2">{plot.street}</td>
                 <td className="px-3 py-2">{plot.plotNumber}</td>
+                <td className="px-3 py-2">{plot.ownerFullName ?? "—"}</td>
+                <td className="px-3 py-2">{contactShort(plot)}</td>
                 <td className="px-3 py-2">{membershipLabel(plot.membershipStatus)}</td>
                 <td className="px-3 py-2">{statusConfirmed(plot)}</td>
-                <td className="px-3 py-2">{contactShort(plot)}</td>
+                <td className="px-3 py-2">
+                  <a
+                    href={`/admin/plots/${plot.id}`}
+                    className="text-[#5E704F] underline"
+                  >
+                    Открыть
+                  </a>
+                </td>
               </tr>
             ))}
           </tbody>
