@@ -137,6 +137,15 @@ export default function DebtorsClient() {
         </button>
         <button
           type="button"
+          onClick={() => {
+            window.location.href = `/api/admin/notifications/debtors/pdf?type=${type}&period=${period}`;
+          }}
+          className="rounded border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
+        >
+          Скачать PDF
+        </button>
+        <button
+          type="button"
           onClick={async () => {
             setLoading(true);
             setError(null);
