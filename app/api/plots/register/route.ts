@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   claimPlot,
@@ -65,7 +64,8 @@ export async function POST(request: Request) {
     );
   }
 
-  cookies().set(
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(
     SESSION_COOKIE,
     JSON.stringify({ userId: user.id, contact: phone || email }),
     {
@@ -76,5 +76,5 @@ export async function POST(request: Request) {
     }
   );
 
-  return NextResponse.json({ ok: true });
+  return res;
 }
