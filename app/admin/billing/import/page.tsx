@@ -50,12 +50,23 @@ function ImportClient() {
       error?: string;
     }>;
   } | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [importComment, setImportComment] = useState("");
+  const [commitLoading, setCommitLoading] = useState(false);
+  const [commitResult, setCommitResult] = useState<{
+    createdCount: number;
+    skippedCount: number;
+    created: Array<{ paymentId: string; plotId: string; periodId: string; amount: number; paidAtIso: string; reference: string | null }>;
+    skipped: Array<{ rowIndex: number; reason: string }>;
+  } | null>(null);
 
   const upload = async () => {
     if (!file) return;
     setLoading(true);
     setError(null);
     setResult(null);
+    setSelected([]);
+    setCommitResult(null);
     const form = new FormData();
     form.append("file", file);
     try {
@@ -85,12 +96,71 @@ function ImportClient() {
     setFile(null);
     setResult(null);
     setError(null);
+    setSelected([]);
+    setCommitResult(null);
+    setImportComment("");
   };
 
   const statusColor = (status: string) => {
     if (status === "OK") return "text-green-700";
     if (status === "DUPLICATE") return "text-amber-700";
     return "text-red-700";
+  };
+
+  const toggleRow = (rowIndex: number) => {
+    setSelected((prev) => (prev.includes(rowIndex) ? prev.filter((r) => r !== rowIndex) : [...prev, rowIndex]));
+  };
+
+  const selectAllOk = () => {
+    if (!result) return;
+    const allOk = result.rows.filter((r) => r.status === "OK").map((r) => r.rowIndex);
+    setSelected(allOk);
+  };
+
+  const deselectAll = () => setSelected([]);
+
+  const importSelected = async () => {
+    if (!result || !selected.length) return;
+    setCommitLoading(true);
+    setError(null);
+    setCommitResult(null);
+    const rows = result.rows
+      .filter((r) => selected.includes(r.rowIndex))
+      .map((r) => ({
+        rowIndex: r.rowIndex,
+        paidAtIso: r.paidAtIso,
+        amount: r.amount,
+        purpose: r.purpose,
+        plotIdMatched: r.plotIdMatched,
+        reference: r.reference,
+      }));
+    try {
+      const res = await fetch("/api/admin/billing/import/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows, importComment }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        setError(`Ошибка импорта: ${txt || res.statusText}`);
+        return;
+      }
+      const json = await res.json();
+      setCommitResult(json);
+      // помечаем импортированные как DUPLICATE визуально
+      const importedIndices = new Set<number>(rows.map((r) => r.rowIndex));
+      setResult({
+        ...result,
+        rows: result.rows.map((r) =>
+          importedIndices.has(r.rowIndex) ? { ...r, status: "DUPLICATE" as const, error: "Импортировано" } : r
+        ),
+      });
+      setSelected([]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCommitLoading(false);
+    }
   };
 
   return (
@@ -140,12 +210,59 @@ function ImportClient() {
               <span className="text-amber-700">Дубликаты: {result.meta.duplicateCount}</span>
               {result.meta.truncated && <span className="text-amber-700">Показаны только первые 200</span>}
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-zinc-700">
+                Комментарий к импорту:
+                <input
+                  type="text"
+                  value={importComment}
+                  onChange={(e) => setImportComment(e.target.value)}
+                  className="w-64 rounded border border-zinc-300 px-2 py-1"
+                  placeholder="необязательно"
+                />
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
+                  onClick={selectAllOk}
+                >
+                  Выбрать все OK
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
+                  onClick={deselectAll}
+                >
+                  Снять выбор
+                </button>
+                <button
+                  type="button"
+                  disabled={!selected.length || commitLoading}
+                  onClick={importSelected}
+                  className="rounded bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42] disabled:cursor-not-allowed disabled:bg-zinc-400"
+                >
+                  {commitLoading ? "Импортируем..." : `Импортировать выбранные (${selected.length})`}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
             <table className="min-w-full divide-y divide-zinc-200 text-xs sm:text-sm">
               <thead className="bg-zinc-50">
                 <tr>
+                  <th className="px-2 py-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
+                      onChange={(e) => (e.target.checked ? selectAllOk() : deselectAll())}
+                      checked={
+                        result.rows.filter((r) => r.status === "OK").every((r) => selected.includes(r.rowIndex)) &&
+                        result.rows.some((r) => r.status === "OK")
+                      }
+                    />
+                  </th>
                   <th className="px-2 py-2 text-left font-semibold text-zinc-700">Статус</th>
                   <th className="px-2 py-2 text-left font-semibold text-zinc-700">Дата</th>
                   <th className="px-2 py-2 text-left font-semibold text-zinc-700">Сумма</th>
@@ -157,8 +274,18 @@ function ImportClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-    {result.rows.map((r: (typeof result.rows)[number]) => (
+                {result.rows.map((r: (typeof result.rows)[number]) => (
                   <tr key={r.rowIndex} className={r.status !== "OK" ? "bg-red-50/40" : ""}>
+                    <td className="px-2 py-2">
+                      {r.status === "OK" && (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
+                          checked={selected.includes(r.rowIndex)}
+                          onChange={() => toggleRow(r.rowIndex)}
+                        />
+                      )}
+                    </td>
                     <td className={`px-2 py-2 font-semibold ${statusColor(r.status)}`}>{r.status}</td>
                     <td className="px-2 py-2 text-zinc-800">{r.paidAtLocalFormatted ?? "—"}</td>
                     <td className="px-2 py-2 text-zinc-800">{r.amount ?? "—"}</td>
@@ -185,6 +312,43 @@ function ImportClient() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {commitResult && (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm text-sm text-zinc-800 space-y-3">
+          <div className="font-semibold text-zinc-900">Результат импорта</div>
+          <div className="flex flex-wrap gap-4">
+            <span className="text-green-700">Создано: {commitResult.createdCount}</span>
+            <span className="text-amber-700">Пропущено: {commitResult.skippedCount}</span>
+          </div>
+          {commitResult.created.length > 0 && (
+            <div>
+              <div className="font-semibold text-zinc-900">Созданные платежи</div>
+              <ul className="list-disc pl-5 text-sm text-zinc-700">
+                {commitResult.created.slice(0, 10).map((c) => (
+                  <li key={c.paymentId}>
+                    {c.paymentId}: {c.amount} ₽, plot {c.plotId}, дата {c.paidAtIso}
+                  </li>
+                ))}
+                {commitResult.created.length > 10 && (
+                  <li className="text-zinc-600">и ещё {commitResult.created.length - 10}...</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {commitResult.skipped.length > 0 && (
+            <div>
+              <div className="font-semibold text-zinc-900">Пропущенные строки</div>
+              <ul className="list-disc pl-5 text-sm text-zinc-700">
+                {commitResult.skipped.map((s, idx) => (
+                  <li key={`${s.rowIndex}-${idx}`}>
+                    Строка {s.rowIndex}: {s.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
