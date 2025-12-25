@@ -136,11 +136,11 @@ const getDb = (): MockDb => {
       persons: [],
       accrualPeriods: [],
       accrualItems: [],
-      payments: [],
-      importBatches: [],
-      electricityMeters: [],
-      meterReadings: [],
-    };
+  payments: [],
+  importBatches: [],
+  electricityMeters: [],
+  meterReadings: [],
+};
   }
   return g.__SNT_DB__;
 };
@@ -756,6 +756,8 @@ export const createMeter = (data: { plotId: string; meterNumber?: string | null;
 export const listMetersByPlot = (plotId: string) =>
   getDb().electricityMeters.filter((m) => m.plotId === plotId);
 
+export const listAllMeters = () => getDb().electricityMeters;
+
 export const addMeterReading = (data: {
   meterId: string;
   readingDate: string;
@@ -763,7 +765,9 @@ export const addMeterReading = (data: {
   source: "manual_admin" | "import" | "owner";
 }) => {
   const db = getDb();
-  const readings = db.meterReadings.filter((r) => r.meterId === data.meterId).sort((a, b) => a.readingDate.localeCompare(b.readingDate));
+  const readings = db.meterReadings
+    .filter((r) => r.meterId === data.meterId)
+    .sort((a, b) => a.readingDate.localeCompare(b.readingDate));
   const last = readings[readings.length - 1];
   if (last && data.value < last.value) {
     throw new Error("Новое показание меньше предыдущего");
@@ -782,6 +786,11 @@ export const addMeterReading = (data: {
 
 export const listMeterReadings = (meterId: string) =>
   getDb().meterReadings.filter((r) => r.meterId === meterId).sort((a, b) => a.readingDate.localeCompare(b.readingDate));
+
+export const getLastMeterReading = (meterId: string) => {
+  const readings = listMeterReadings(meterId);
+  return readings[readings.length - 1] ?? null;
+};
 
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();

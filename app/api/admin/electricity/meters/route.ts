@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { createMeter, listMetersByPlot, logAdminAction } from "@/lib/mockDb";
+import { createMeter, getLastMeterReading, listAllMeters, listMetersByPlot } from "@/lib/mockDb";
+import { logAdminAction } from "@/lib/audit";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -9,11 +10,19 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const plotId = url.searchParams.get("plotId");
-  if (!plotId) {
-    return NextResponse.json({ error: "plotId required" }, { status: 400 });
+  const activeParam = url.searchParams.get("active");
+  if (!plotId && !activeParam) {
+    return NextResponse.json({ error: "plotId or active param required" }, { status: 400 });
   }
-  const meters = listMetersByPlot(plotId);
-  return NextResponse.json({ meters });
+  let meters = plotId ? listMetersByPlot(plotId) : listAllMeters();
+  if (activeParam) {
+    meters = meters.filter((m) => m.active);
+  }
+  const withLast = meters.map((m) => ({
+    ...m,
+    lastReading: getLastMeterReading(m.id),
+  }));
+  return NextResponse.json({ meters: withLast });
 }
 
 export async function POST(request: Request) {

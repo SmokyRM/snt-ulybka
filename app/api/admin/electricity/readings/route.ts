@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { addMeterReading, listMeterReadings, logAdminAction } from "@/lib/mockDb";
+import { addMeterReading, getLastMeterReading, listMeterReadings } from "@/lib/mockDb";
+import { logAdminAction } from "@/lib/audit";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
@@ -30,21 +31,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "meterId, readingDate, value required" }, { status: 400 });
   }
   try {
+    const last = getLastMeterReading(meterId);
+    if (last && value < last.value) {
+      return NextResponse.json({ error: "Показание меньше предыдущего" }, { status: 400 });
+    }
     const reading = addMeterReading({
       meterId,
       readingDate,
       value,
       source: source === "import" || source === "owner" ? source : "manual_admin",
     });
+    const delta = last ? value - last.value : value;
     await logAdminAction({
       action: "add_meter_reading",
       entity: "meter_reading",
       entityId: reading.id,
-      after: reading,
+      after: { reading, previousValue: last?.value ?? null, delta },
       actorUserId: user.id ?? null,
       actorRole: user.role,
     });
-    return NextResponse.json({ reading }, { status: 201 });
+    return NextResponse.json(
+      { reading, previousValue: last?.value ?? null, currentValue: value, deltaKwh: delta },
+      { status: 201 }
+    );
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
