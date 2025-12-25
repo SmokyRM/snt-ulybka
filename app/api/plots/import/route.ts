@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import {
-  addPlot,
-  existsStreetNumber,
-  findPlotByNumberStreet,
-  updatePlot,
-} from "@/lib/plotsDb";
+import { addPlot, findPlotByNumberStreet, updatePlot } from "@/lib/plotsDb";
 import { validatePlotInput } from "@/lib/plotsValidators";
 import { Plot } from "@/types/snt";
 
@@ -38,7 +33,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const rows = Array.isArray(body.rows) ? (body.rows as ImportRow[]) : [];
-  const mode = body.mode === "update" ? "update" : "skip";
+  const mode = body.mode === "upsert" ? "upsert" : "skip";
 
   if (!rows.length) {
     return NextResponse.json({ error: "Нет данных для импорта" }, { status: 400 });
@@ -47,7 +42,7 @@ export async function POST(request: Request) {
   let created = 0;
   let updated = 0;
   let skipped = 0;
-  const errors: string[] = [];
+  const errors: { rowIndex: number; message: string }[] = [];
 
   rows.forEach((row, index) => {
     const street = row.street?.trim();
@@ -55,10 +50,9 @@ export async function POST(request: Request) {
     const ownerFullName = row.ownerFullName?.trim() || null;
     const phone = row.phone?.trim() || null;
     const email = row.email?.trim() || null;
-    const membershipStatus =
-      row.membershipStatus === "MEMBER" || row.membershipStatus === "NON_MEMBER"
-        ? row.membershipStatus
-        : "UNKNOWN";
+    const membershipRaw = (row.membershipStatus ?? "UNKNOWN").toString().trim().toUpperCase();
+    const membershipStatus: Plot["membershipStatus"] =
+      membershipRaw === "MEMBER" || membershipRaw === "NON_MEMBER" ? membershipRaw : "UNKNOWN";
     const isConfirmed = normalizeBool(row.isConfirmed);
     const notes = row.notes?.trim() || null;
 
@@ -72,39 +66,34 @@ export async function POST(request: Request) {
       notes,
     });
     if (rowErrors.length) {
-      errors.push(`Строка ${index + 1}: ${rowErrors.join(" ")}`);
+      errors.push({ rowIndex: index + 1, message: rowErrors.join(" ") });
       skipped += 1;
       return;
     }
     if (!street || !number) {
-      errors.push(`Строка ${index + 1}: отсутствуют улица или номер`);
+      errors.push({ rowIndex: index + 1, message: "Отсутствуют улица или номер" });
       skipped += 1;
       return;
     }
 
     const existing = findPlotByNumberStreet(number, street);
     if (existing) {
-      if (mode === "update") {
+      if (mode === "upsert") {
         const updatedPlot = updatePlot(existing.id, {
-          street,
-          number,
-          ownerFullName,
-          phone,
-          email,
-          membershipStatus,
+          street: street || undefined,
+          number: number || undefined,
+          ownerFullName: ownerFullName || undefined,
+          phone: phone || undefined,
+          email: email || undefined,
+          membershipStatus: membershipStatus || undefined,
           isConfirmed,
-          notes,
+          notes: notes || undefined,
         });
         if (updatedPlot) {
           updated += 1;
           return;
         }
       }
-      skipped += 1;
-      return;
-    }
-
-    if (existsStreetNumber(street, number)) {
       skipped += 1;
       return;
     }
@@ -124,4 +113,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ created, updated, skipped, errors });
 }
-
