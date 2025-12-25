@@ -13,7 +13,7 @@ const parseCookie = (value: string | undefined): SessionPayload | null => {
   if (!value) return null;
   try {
     return JSON.parse(value) as SessionPayload;
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 };

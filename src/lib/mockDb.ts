@@ -42,13 +42,6 @@ const defaultUsers: User[] = [
   },
 ];
 
-const defaultDb: MockDb = {
-  users: defaultUsers,
-  plots: defaultPlots,
-  ownershipRequests: [],
-  plotOwners: [],
-};
-
 const getDb = (): MockDb => {
   const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
   if (!g.__SNT_DB__) {

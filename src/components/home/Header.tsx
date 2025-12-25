@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
@@ -25,14 +26,14 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#2F3827]/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-4 py-4 text-white sm:px-6">
-        <a href="/" className="flex items-center gap-3 text-white">
+        <Link href="/" className="flex items-center gap-3 text-white">
           <img
             src="/brand/logo.svg"
             alt="Логотип СНТ «Улыбка»"
             className="h-10 w-auto"
           />
           <span className="text-base font-semibold">СНТ «Улыбка»</span>
-        </a>
+        </Link>
         <nav className="hidden items-center gap-5 text-sm font-medium text-white/80 lg:flex">
           {navItems.map((item) => (
             <a

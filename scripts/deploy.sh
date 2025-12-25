@@ -33,12 +33,6 @@ if [[ -n "$(git status --porcelain)" ]]; then
   git commit -m "$COMMIT_MSG"
 fi
 
-# If after stash/pop/pull there is nothing to do, exit
-if [[ -z "$(git status --porcelain)" ]]; then
-  echo "Nothing to deploy"
-  exit 0
-fi
-
 # Optional lint and typecheck
 if npm run | grep -q "lint"; then
   npm run lint
@@ -51,7 +45,19 @@ else
   echo "typecheck skipped"
 fi
 
-git push origin dev
+# Push dev if ahead of origin
+DEV_AHEAD=$(git log --oneline origin/dev..dev || true)
+if [[ -n "$DEV_AHEAD" ]]; then
+  git push origin dev
+fi
+
+# Check if nothing to deploy (clean, no dev ahead, dev not ahead of main)
+DEV_DIRTY=$(git status --porcelain)
+DEV_AHEAD_MAIN=$(git log --oneline main..dev || true)
+if [[ -z "$DEV_DIRTY" && -z "$DEV_AHEAD" && -z "$DEV_AHEAD_MAIN" ]]; then
+  echo "Nothing to deploy"
+  exit 0
+fi
 
 git checkout main
 git pull --rebase origin main

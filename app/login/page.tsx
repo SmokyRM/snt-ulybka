@@ -63,15 +63,6 @@ export default function LoginPage() {
     router.push("/cabinet");
   };
 
-  const handleSendCode = () => {
-    if (!identifier) {
-      setError("Сначала укажите email или телефон.");
-      return;
-    }
-    setError(null);
-    setInfo("Код отправлен (MVP: используйте 111111).");
-  };
-
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
