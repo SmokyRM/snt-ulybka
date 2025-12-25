@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import TicketStatusActions from "../TicketStatusActions";
 import { getSessionUser } from "@/lib/session.server";
@@ -63,9 +64,22 @@ export default async function AdminTicketDetail({
             </span>
           </div>
           <p className="whitespace-pre-line text-sm text-zinc-800">{ticket.message}</p>
+          {ticket.attachments && ticket.attachments.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {ticket.attachments.map((att, idx) => (
+                <Image
+                  key={`${att.url}-${idx}`}
+                  src={att.url}
+                  alt={`Вложение ${idx + 1}`}
+                  width={320}
+                  height={200}
+                  className="h-28 w-full rounded-xl border border-zinc-200 object-cover"
+                />
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </main>
   );
 }
-

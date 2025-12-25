@@ -49,7 +49,7 @@ export type TicketStatus = "NEW" | "IN_PROGRESS" | "DONE";
 
 export interface TicketAttachment {
   url: string;
-  type: string;
+  type: "image";
 }
 
 export interface Ticket {

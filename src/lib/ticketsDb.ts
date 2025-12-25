@@ -8,6 +8,7 @@ type TicketInput = {
   authorPhone?: string | null;
   subject: string;
   message: string;
+  attachments?: { url: string; type: "image" }[];
 };
 
 interface TicketDb {
@@ -39,7 +40,7 @@ export const createTicket = (input: TicketInput): Ticket => {
     subject: input.subject,
     message: input.message,
     status: "NEW",
-    attachments: [],
+    attachments: input.attachments ?? [],
   };
   const db = getDb();
   db.tickets.unshift(ticket);

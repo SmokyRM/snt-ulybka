@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 import { findTicketById, isTicketOwnedByUser } from "@/lib/ticketsDb";
@@ -54,9 +55,22 @@ export default async function TicketDetail({
         </div>
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <p className="text-sm whitespace-pre-line text-zinc-800">{ticket.message}</p>
+          {ticket.attachments && ticket.attachments.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {ticket.attachments.map((att, idx) => (
+                <Image
+                  key={`${att.url}-${idx}`}
+                  src={att.url}
+                  alt={`Вложение ${idx + 1}`}
+                  width={320}
+                  height={200}
+                  className="h-28 w-full rounded-xl border border-zinc-200 object-cover"
+                />
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </main>
   );
 }
-
