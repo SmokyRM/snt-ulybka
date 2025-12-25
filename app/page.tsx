@@ -14,13 +14,13 @@ const actions = [
   },
   {
     title: "Документы",
-    description: "Устав, протоколы и решения будут публиковаться в этом разделе.",
-    href: "#docs",
+    description: "Устав, протоколы и решения размещаются в этом разделе.",
+    href: "/docs",
   },
   {
     title: "Контакты",
     description: "Связь с правлением и официальные каналы СНТ «Улыбка».",
-    href: "#contacts",
+    href: "/contacts",
   },
 ];
 
@@ -37,12 +37,12 @@ export default function Home() {
               Официальный портал СНТ
             </p>
             <h1 className="mt-3 text-3xl font-semibold leading-tight text-zinc-900 sm:text-4xl">
-              СНТ «Улыбка» — ознакомительная страница
+              СНТ «Улыбка» — официальный сайт
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-700">
-              Здесь публикуется официальная информация о работе товарищества: оплата
-              электроэнергии, взносы, документы, контакты правления и ссылки на
-              официальные каналы. Личный кабинет и админка доступны только после входа.
+              СНТ «Улыбка» — садоводческое некоммерческое товарищество. Здесь публикуется
+              официальная информация о работе: электроэнергия, взносы, документы и
+              контакты правления. Личный кабинет и админка доступны только после входа.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
@@ -52,7 +52,7 @@ export default function Home() {
                 Войти в кабинет
               </Link>
               <Link
-                href="#contacts"
+                href="/contacts"
                 className="rounded-full border border-[#5E704F] px-6 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
               >
                 Контакты правления
@@ -133,8 +133,14 @@ export default function Home() {
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-zinc-900">Документы</h2>
             <p className="mt-2 text-sm text-zinc-700">
-              Устав, протоколы и решения товарищества будут размещаться в этом разделе.
+              Устав, протоколы и решения товарищества размещаются в разделе документов.
             </p>
+            <Link
+              href="/docs"
+              className="mt-3 inline-flex rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
+            >
+              Перейти к документам
+            </Link>
           </div>
         </div>
       </section>
@@ -148,7 +154,7 @@ export default function Home() {
               через раздел контактов.
             </p>
             <Link
-              href="#contacts"
+              href="/contacts"
               className="mt-3 inline-flex rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
             >
               Перейти к контактам
