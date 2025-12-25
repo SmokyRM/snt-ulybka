@@ -196,4 +196,5 @@ export interface ImportBatch {
   comment?: string | null;
   status: "completed" | "rolled_back";
   rollbackAt?: string | null;
+  warnings?: Array<{ reason: string; count: number }> | null;
 }

@@ -709,6 +709,7 @@ export const createImportBatch = (payload: {
     comment: payload.comment ?? null,
     status: "completed",
     rollbackAt: null,
+    warnings: null,
   };
   db.importBatches.unshift(batch);
   return batch;

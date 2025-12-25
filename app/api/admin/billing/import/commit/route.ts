@@ -49,6 +49,7 @@ export async function POST(request: Request) {
 
   let createdCount = 0;
   let skippedCount = 0;
+  const skippedReasons: Record<string, number> = {};
   const created: Array<{
     paymentId: string;
     plotId: string;
@@ -66,13 +67,16 @@ export async function POST(request: Request) {
 
     if (!paidAt || !amount || amount <= 0 || !plotId) {
       skippedCount += 1;
-      skipped.push({ rowIndex: row.rowIndex, reason: !plotId ? "NOT_FOUND" : "INVALID" });
+      const reason = !plotId ? "NOT_FOUND" : "INVALID";
+      skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1;
+      skipped.push({ rowIndex: row.rowIndex, reason });
       continue;
     }
 
     const plot = findPlotById(plotId);
     if (!plot) {
       skippedCount += 1;
+      skippedReasons["NOT_FOUND"] = (skippedReasons["NOT_FOUND"] ?? 0) + 1;
       skipped.push({ rowIndex: row.rowIndex, reason: "NOT_FOUND" });
       continue;
     }
@@ -95,6 +99,7 @@ export async function POST(request: Request) {
 
     if (isDuplicate) {
       skippedCount += 1;
+      skippedReasons["DUPLICATE"] = (skippedReasons["DUPLICATE"] ?? 0) + 1;
       skipped.push({ rowIndex: row.rowIndex, reason: "DUPLICATE" });
       continue;
     }
@@ -133,7 +138,12 @@ export async function POST(request: Request) {
     });
   }
 
-  updateImportBatch(batch.id, { createdCount, skippedCount });
+  const warnings =
+    skippedCount > 0
+      ? Object.entries(skippedReasons).map(([reason, count]) => ({ reason, count }))
+      : null;
+
+  updateImportBatch(batch.id, { createdCount, skippedCount, warnings });
 
   await logAdminAction({
     action: "import_payments_csv",
