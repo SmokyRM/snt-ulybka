@@ -1,4 +1,3 @@
-import { use } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
@@ -23,13 +22,13 @@ const parseFilters = (params?: Record<string, string | string[] | undefined>) =>
   };
 };
 
-export default function AdminPlotsPage({
+export default async function AdminPlotsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = use(searchParams);
-  const user = use(getSessionUser());
+  const params = await searchParams;
+  const user = await getSessionUser();
   if (!isAdmin(user)) {
     redirect("/login");
   }

@@ -1,4 +1,3 @@
-import { use } from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { listAccrualPeriods, listAccrualItems, listPayments, listPlots, createAccrualPeriod } from "@/lib/mockDb";
@@ -19,13 +18,13 @@ async function createPeriodAction(formData: FormData) {
   createAccrualPeriod({ year, month, type });
 }
 
-export default function BillingPage({
+export default async function BillingPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = use(searchParams);
-  const user = use(getSessionUser());
+  const params = await searchParams;
+  const user = await getSessionUser();
   if (!isAdmin(user)) {
     redirect("/login");
   }
