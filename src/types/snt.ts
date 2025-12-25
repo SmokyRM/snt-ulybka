@@ -198,3 +198,21 @@ export interface ImportBatch {
   rollbackAt?: string | null;
   warnings?: Array<{ reason: string; count: number }> | null;
 }
+
+export interface ElectricityMeter {
+  id: string;
+  plotId: string;
+  meterNumber?: string | null;
+  installedAt?: string | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface MeterReading {
+  id: string;
+  meterId: string;
+  readingDate: string;
+  value: number;
+  source: "manual_admin" | "import" | "owner";
+  createdAt: string;
+}

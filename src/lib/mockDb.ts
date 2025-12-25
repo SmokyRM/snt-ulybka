@@ -17,6 +17,8 @@ import {
   AccrualItem,
   Payment,
   ImportBatch,
+  ElectricityMeter,
+  MeterReading,
 } from "@/types/snt";
 
 interface MockDb {
@@ -32,6 +34,8 @@ interface MockDb {
   accrualItems: AccrualItem[];
   payments: Payment[];
   importBatches: ImportBatch[];
+  electricityMeters: ElectricityMeter[];
+  meterReadings: MeterReading[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -134,6 +138,8 @@ const getDb = (): MockDb => {
       accrualItems: [],
       payments: [],
       importBatches: [],
+      electricityMeters: [],
+      meterReadings: [],
     };
   }
   return g.__SNT_DB__;
@@ -380,6 +386,8 @@ export const resetMockDb = () => {
     accrualItems: [],
     payments: [],
     importBatches: [],
+    electricityMeters: [],
+    meterReadings: [],
   };
 };
 
@@ -726,6 +734,54 @@ export const updateImportBatch = (id: string, patch: Partial<ImportBatch>) => {
 
 export const listImportBatches = () => getDb().importBatches;
 export const findImportBatch = (id: string) => getDb().importBatches.find((b) => b.id === id) ?? null;
+
+// Electricity meters & readings
+export const createMeter = (data: { plotId: string; meterNumber?: string | null; installedAt?: string | null }) => {
+  const db = getDb();
+  db.electricityMeters = db.electricityMeters.map((m) =>
+    m.plotId === data.plotId && m.active ? { ...m, active: false } : m
+  );
+  const meter: ElectricityMeter = {
+    id: createId("meter"),
+    plotId: data.plotId,
+    meterNumber: data.meterNumber ?? null,
+    installedAt: data.installedAt ?? null,
+    active: true,
+    createdAt: new Date().toISOString(),
+  };
+  db.electricityMeters.push(meter);
+  return meter;
+};
+
+export const listMetersByPlot = (plotId: string) =>
+  getDb().electricityMeters.filter((m) => m.plotId === plotId);
+
+export const addMeterReading = (data: {
+  meterId: string;
+  readingDate: string;
+  value: number;
+  source: "manual_admin" | "import" | "owner";
+}) => {
+  const db = getDb();
+  const readings = db.meterReadings.filter((r) => r.meterId === data.meterId).sort((a, b) => a.readingDate.localeCompare(b.readingDate));
+  const last = readings[readings.length - 1];
+  if (last && data.value < last.value) {
+    throw new Error("Новое показание меньше предыдущего");
+  }
+  const reading: MeterReading = {
+    id: createId("read"),
+    meterId: data.meterId,
+    readingDate: data.readingDate,
+    value: data.value,
+    source: data.source,
+    createdAt: new Date().toISOString(),
+  };
+  db.meterReadings.push(reading);
+  return reading;
+};
+
+export const listMeterReadings = (meterId: string) =>
+  getDb().meterReadings.filter((r) => r.meterId === meterId).sort((a, b) => a.readingDate.localeCompare(b.readingDate));
 
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();

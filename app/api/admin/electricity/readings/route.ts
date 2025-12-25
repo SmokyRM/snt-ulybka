@@ -1,0 +1,51 @@
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/session.server";
+import { addMeterReading, listMeterReadings, logAdminAction } from "@/lib/mockDb";
+
+export async function GET(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const url = new URL(request.url);
+  const meterId = url.searchParams.get("meterId");
+  if (!meterId) return NextResponse.json({ error: "meterId required" }, { status: 400 });
+
+  const readings = listMeterReadings(meterId);
+  return NextResponse.json({ readings });
+}
+
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const body = await request.json().catch(() => ({}));
+  const meterId = (body.meterId as string | undefined)?.trim();
+  const readingDate = (body.readingDate as string | undefined)?.trim();
+  const value = Number(body.value);
+  const source = (body.source as string | undefined) ?? "manual_admin";
+
+  if (!meterId || !readingDate || !Number.isFinite(value)) {
+    return NextResponse.json({ error: "meterId, readingDate, value required" }, { status: 400 });
+  }
+  try {
+    const reading = addMeterReading({
+      meterId,
+      readingDate,
+      value,
+      source: source === "import" || source === "owner" ? source : "manual_admin",
+    });
+    await logAdminAction({
+      action: "add_meter_reading",
+      entity: "meter_reading",
+      entityId: reading.id,
+      after: reading,
+      actorUserId: user.id ?? null,
+      actorRole: user.role,
+    });
+    return NextResponse.json({ reading }, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
+}
