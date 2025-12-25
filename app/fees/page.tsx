@@ -1,6 +1,7 @@
 import CopyToClipboard from "@/components/CopyToClipboard";
 import FeesCalculator from "@/components/FeesCalculator";
-import { FEES_FAQ } from "@/content/fees";
+import FaqSearch from "@/components/FaqSearch";
+import { FEES_FAQ, FEES_RATE_RUB_PER_SOTKA } from "@/content/fees";
 
 export const metadata = {
   title: "Взносы и долги — СНТ «Улыбка»",
@@ -31,8 +32,9 @@ export default function FeesPage() {
               Как рассчитываются взносы
             </h2>
             <p className="mt-3 text-sm text-zinc-700">
-              Площадь участка (сотки) × ставка (₽/сотка) = сумма к оплате.
-              Размер платежей определяется решениями общего собрания и применяется по правилам СНТ.
+              Площадь участка (сотки или м²) × ставка = сумма к оплате. Текущая ставка
+              (пример): {FEES_RATE_RUB_PER_SOTKA} ₽ за сотку, будет заменено решением общего
+              собрания. Размер платежей определяется решениями ОС и применяется по правилам СНТ.
             </p>
           </div>
           <FeesCalculator />
@@ -80,33 +82,7 @@ export default function FeesPage() {
         </section>
 
         <section className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-zinc-900">FAQ</h2>
-          <div className="mt-4 space-y-3">
-            {FEES_FAQ.map((item, idx) => (
-              <details
-                key={item.q}
-                className="group rounded-2xl border border-zinc-200 bg-white p-4 transition-colors"
-                open={idx === 0}
-              >
-                <summary className="cursor-pointer text-sm font-semibold text-zinc-900">
-                  {item.q}
-                </summary>
-                <p className="mt-2 text-sm leading-6 text-zinc-700">{item.a}</p>
-                {item.tags && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {item.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-[#5E704F]/10 px-3 py-1 text-xs font-semibold text-[#5E704F]"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </details>
-            ))}
-          </div>
+          <FaqSearch items={FEES_FAQ} />
         </section>
       </div>
     </main>

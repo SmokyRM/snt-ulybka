@@ -1,0 +1,21 @@
+Changelog v2025.12.25-1
+- ff77c6d Deploy: Fix lint errors for deploy
+- 750f091 Fix lint errors for deploy
+- ced680e Fix deploy script: always push ahead commits
+- b6c1911 Deploy: manual merge dev into main
+- 2076a17 Deploy script v2 (tags + changelog)
+- 28a923d Добавили страницу взносов
+- ec8e5fb Improve deploy script (v1)
+- bb8184e Deploy: merge dev into main
+- be5ca77 Deploy script ready
+- 4877c14 Deploy: merge dev into main
+- 0f2a2b0 Test deploy script
+- aac49b1 Merge branch 'dev'
+- c8c90ae Global header improvements
+- 7a5785a Merge branch 'dev'
+- 378b9d3 Make header sticky and add Home navigation
+- f00d75f Merge branch 'dev'
+- aca964f Add build marker, link to electricity page, and house favicon
+- 778053f Merge branch 'dev'
+- f68cbeb Add Electricity super page with calculator and FAQ search
+- 2a2bb02 Fix async cookies() usage for Next.js build
