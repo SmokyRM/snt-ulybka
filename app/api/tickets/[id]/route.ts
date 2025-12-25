@@ -9,15 +9,18 @@ import { TicketStatus } from "@/types/snt";
 
 const allowedStatuses: TicketStatus[] = ["NEW", "IN_PROGRESS", "DONE"];
 
+type ParamsPromise<T> = { params: Promise<T> };
+
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: ParamsPromise<{ id: string }>
 ) {
+  const { id } = await params;
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const ticket = findTicketById(params.id);
+  const ticket = findTicketById(id);
   if (!ticket) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -29,8 +32,9 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: ParamsPromise<{ id: string }>
 ) {
+  const { id } = await params;
   const user = await getSessionUser();
   if (!user || user.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -40,10 +44,9 @@ export async function PATCH(
   if (!status || !allowedStatuses.includes(status)) {
     return NextResponse.json({ error: "Недопустимый статус" }, { status: 400 });
   }
-  const updated = updateTicketStatus(params.id, status);
+  const updated = updateTicketStatus(id, status);
   if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json({ ticket: updated });
 }
-
