@@ -120,6 +120,16 @@ export function HeaderClient({ role }: HeaderClientProps) {
           )}
           {isAdmin && (
             <Link
+              href="/admin/plots"
+              className={`transition-colors hover:text-white ${
+                pathname.startsWith("/admin/plots") ? "text-white" : ""
+              }`}
+            >
+              Реестр
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
               href="/admin/tickets"
               className={`transition-colors hover:text-white ${
                 pathname.startsWith("/admin/tickets") ? "text-white" : ""
@@ -151,6 +161,16 @@ export function HeaderClient({ role }: HeaderClientProps) {
             }`}
           >
             Обращения
+          </Link>
+        )}
+        {isAdmin && (
+          <Link
+            href="/admin/plots"
+            className={`rounded-full border border-white/25 px-3 py-1 transition-colors hover:border-white hover:text-white ${
+              pathname.startsWith("/admin/plots") ? "border-white text-white" : ""
+            }`}
+          >
+            Реестр
           </Link>
         )}
         {isAdmin && (

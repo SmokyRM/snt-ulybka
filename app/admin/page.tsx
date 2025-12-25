@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listPlots } from "@/lib/plotsDb";
 import { listTickets } from "@/lib/ticketsDb";
 
 const safeFormatBuildTime = (raw?: string | null) => {
@@ -24,6 +25,9 @@ export default function AdminDashboard() {
     new Date().toISOString();
   const lastUpdate = safeFormatBuildTime(buildRaw);
   const newTicketsCount = listTickets("NEW").length;
+  const plots = listPlots();
+  const unconfirmedCount = plots.filter((p) => !p.isConfirmed).length;
+  const missingContactsCount = plots.filter((p) => !p.phone && !p.email).length;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -47,6 +51,27 @@ export default function AdminDashboard() {
             <p className="mt-2 text-sm text-zinc-700">
               Управление запросами на подтверждение и обращениями жителей.
             </p>
+          </Link>
+
+          <Link
+            href="/admin/plots"
+            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Реестр участков
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Участки и собственники</h2>
+            <p className="mt-2 text-sm text-zinc-700">
+              Участки, собственники, статусы членства.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-[#2F3827]">
+              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
+                Не подтверждено: {unconfirmedCount}
+              </span>
+              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
+                Без контактов: {missingContactsCount}
+              </span>
+            </div>
           </Link>
 
           <Link
