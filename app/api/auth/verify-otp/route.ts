@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyOtp } from "@/lib/auth";
 import { findUserByContact, upsertUser } from "@/lib/mockDb";
@@ -48,12 +47,13 @@ export async function POST(request: Request) {
     contact,
   });
 
-  cookies().set(SESSION_COOKIE, cookiePayload, {
+  const response = NextResponse.json({ ok: true, userId: user.id });
+  response.cookies.set(SESSION_COOKIE, cookiePayload, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
 
-  return NextResponse.json({ ok: true, userId: user.id });
+  return response;
 }
