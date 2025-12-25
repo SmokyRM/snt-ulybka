@@ -651,6 +651,7 @@ export const addPayment = (data: {
   createdByUserId: string | null;
   importBatchId?: string | null;
   category?: string | null;
+  fingerprint?: string | null;
 }) => {
   const now = new Date().toISOString();
   const payment: Payment = {
@@ -670,6 +671,7 @@ export const addPayment = (data: {
     voidedAt: null,
     voidedByUserId: null,
     importBatchId: data.importBatchId ?? null,
+    fingerprint: data.fingerprint ?? null,
   };
   const db = getDb();
   db.payments.push(payment);

@@ -7,7 +7,15 @@ export default function ImportClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    meta: { totalRows: number; okCount: number; errorCount: number; duplicateCount: number; truncated?: boolean; headers?: string[] };
+    meta: {
+      totalRows: number;
+      okCount: number;
+      errorCount: number;
+      duplicateCount: number;
+      truncated?: boolean;
+      headers?: string[];
+      warnings?: string[];
+    };
     rows: Array<{
       rowIndex: number;
       paidAtIso: string | null;
@@ -22,7 +30,10 @@ export default function ImportClient() {
       reference: string | null;
       status: "OK" | "ERROR" | "DUPLICATE";
       error?: string;
+      errors?: string[];
+      isDuplicate?: boolean;
       category?: string | null;
+      fingerprint?: string | null;
     }>;
   } | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -121,7 +132,7 @@ export default function ImportClient() {
       const res = await fetch("/api/admin/billing/import/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: rowsToSend, importComment }),
+        body: JSON.stringify({ rows: rowsToSend, importComment, fileName: file?.name ?? null }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -248,6 +259,11 @@ export default function ImportClient() {
             <span className="text-amber-700">Дубликаты: {result.meta.duplicateCount}</span>
             <span className="text-red-700">Ошибки: {result.meta.errorCount}</span>
             {result.meta.truncated && <span className="text-zinc-500">Показаны первые 200 строк</span>}
+            {result.meta.warnings?.length ? (
+              <span className="text-amber-700">
+                Предупреждения: {result.meta.warnings.join(", ")}
+              </span>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
@@ -299,6 +315,7 @@ export default function ImportClient() {
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Статус</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Дата</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Сумма</th>
+                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Категория</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Улица/Участок</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Участок найден</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Reference</th>
@@ -327,9 +344,13 @@ export default function ImportClient() {
                             />
                           )}
                         </td>
-                        <td className={`px-2 py-1 font-semibold ${statusColor}`}>{row.status}</td>
+                        <td className={`px-2 py-1 font-semibold ${statusColor}`}>
+                          {row.status}
+                          {row.isDuplicate ? " (dup)" : ""}
+                        </td>
                         <td className="px-2 py-1">{row.paidAtLocalFormatted ?? "—"}</td>
                         <td className="px-2 py-1">{row.amount ?? "—"}</td>
+                        <td className="px-2 py-1">{row.category ?? "—"}</td>
                         <td className="px-2 py-1">
                           {row.streetRaw} / {row.plotNumberRaw}{" "}
                           {row.streetParsed || row.plotNumberParsed ? (
@@ -340,7 +361,9 @@ export default function ImportClient() {
                         </td>
                         <td className="px-2 py-1">{row.plotIdMatched ?? "—"}</td>
                         <td className="px-2 py-1">{row.reference ?? "—"}</td>
-                        <td className="px-2 py-1">{row.error ?? ""}</td>
+                        <td className="px-2 py-1">
+                          {row.errors?.length ? row.errors.join(", ") : row.error ?? ""}
+                        </td>
                       </tr>
                     );
                   })}

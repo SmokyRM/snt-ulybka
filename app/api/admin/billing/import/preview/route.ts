@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session.server";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { getPlots, listPayments } from "@/lib/mockDb";
 import { classifyPurposeCategory } from "@/lib/paymentCategory";
+import { buildPaymentFingerprint, normalizePaymentFingerprint } from "@/lib/paymentFingerprint";
 
 const MAX_ROWS = 200;
 
@@ -217,8 +218,8 @@ export async function POST(request: Request) {
     try {
       mappingObj = JSON.parse(mappingField) as Record<string, string>;
     } catch {
-      return NextResponse.json({ error: "invalid mapping json" }, { status: 400 });
-    }
+    return NextResponse.json({ error: "invalid mapping json" }, { status: 400 });
+  }
   }
 
   const findByMapping = (name: string) => {
@@ -245,6 +246,12 @@ export async function POST(request: Request) {
     }
   }
 
+  const existingFingerprints = new Set(
+    payments
+      .map((p) => normalizePaymentFingerprint(p))
+      .filter((v): v is string => Boolean(v))
+  );
+
   const result = rows.map((cells, index) => {
     const rowIndex = index + 2; // considering header row as 1
     const dateVal = idxDate >= 0 ? cells[idxDate] : "";
@@ -259,43 +266,42 @@ export async function POST(request: Request) {
     const match = matchPlot(streetVal, plotVal, purposeVal, plots);
 
     let status: "OK" | "ERROR" | "DUPLICATE" = "OK";
-    let error: string | undefined;
+    const errors: string[] = [];
 
     if (!paidAtIso) {
-      status = "ERROR";
-      error = "Некорректная дата";
+      errors.push("Некорректная дата");
     } else if (!amount || amount <= 0) {
-      status = "ERROR";
-      error = "Некорректная сумма";
+      errors.push("Некорректная сумма");
     } else if (!match.matchedPlotId) {
-      status = "ERROR";
-      error = "Участок не найден";
+      errors.push("Участок не найден");
     }
 
+    if (errors.length) {
+      status = "ERROR";
+    }
+
+    const category = classifyPurposeCategory(purposeVal);
+    const fingerprint =
+      status === "OK"
+        ? buildPaymentFingerprint({
+            plotId: match.matchedPlotId,
+            category,
+            paidAtIso,
+            amount,
+            purpose: purposeVal,
+            reference: refVal || null,
+          })
+        : null;
+
     let duplicate = false;
-    if (status === "OK") {
-      if (refVal) {
-        const hasRef = payments.some((p) => !p.isVoided && p.reference === refVal);
-        if (hasRef) duplicate = true;
-      } else if (match.matchedPlotId && paidAtIso) {
-        const paidDay = paidAtIso.split("T")[0];
-        const hasSimilar = payments.some(
-          (p) =>
-            !p.isVoided &&
-            p.plotId === match.matchedPlotId &&
-            p.method === "bank" &&
-            Math.abs(p.amount - (amount ?? 0)) < 1e-9 &&
-            (p.paidAt ?? "").startsWith(paidDay)
-        );
-        if (hasSimilar) duplicate = true;
-      }
+    if (status === "OK" && fingerprint) {
+      duplicate = existingFingerprints.has(fingerprint);
     }
 
     if (duplicate) {
       status = "DUPLICATE";
     }
 
-    const category = classifyPurposeCategory(purposeVal);
     return {
       rowIndex,
       paidAtIso,
@@ -309,8 +315,11 @@ export async function POST(request: Request) {
       plotIdMatched: match.matchedPlotId,
       reference: refVal || null,
       status,
-      error,
-    category,
+      error: errors[0],
+      errors,
+      isDuplicate: duplicate,
+      category,
+      fingerprint,
     };
   });
 

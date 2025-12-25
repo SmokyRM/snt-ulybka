@@ -11,6 +11,7 @@ import {
   updateImportBatch,
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
+import { buildPaymentFingerprint, normalizePaymentFingerprint } from "@/lib/paymentFingerprint";
 
 type RowInput = {
   rowIndex: number;
@@ -57,8 +58,15 @@ export async function POST(request: Request) {
     amount: number;
     paidAtIso: string;
     reference: string | null;
+    fingerprint?: string | null;
   }> = [];
   const skipped: Array<{ rowIndex: number; reason: "DUPLICATE" | "INVALID" | "NOT_FOUND" }> = [];
+  const existingPayments = listPayments({});
+  const existingFingerprints = new Set(
+    existingPayments
+      .map((p) => normalizePaymentFingerprint(p))
+      .filter((v): v is string => Boolean(v))
+  );
 
   for (const row of rowsInput) {
     const paidAt = parseDate(row.paidAtIso);
@@ -81,20 +89,19 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const paidDay = paidAt.toISOString().split("T")[0];
-    const payments = listPayments({});
+    const category = row.category ?? null;
+    const fingerprint = buildPaymentFingerprint({
+      plotId,
+      category,
+      paidAtIso: paidAt.toISOString(),
+      amount,
+      purpose: row.purpose ?? null,
+      reference: row.reference ?? null,
+    });
+
     let isDuplicate = false;
-    if (row.reference) {
-      isDuplicate = payments.some((p) => !p.isVoided && p.reference === row.reference);
-    } else {
-      isDuplicate = payments.some(
-        (p) =>
-          !p.isVoided &&
-          p.plotId === plotId &&
-          p.method === "bank" &&
-          Math.abs(p.amount - amount) < 1e-9 &&
-          (p.paidAt ?? "").startsWith(paidDay)
-      );
+    if (fingerprint) {
+      isDuplicate = existingFingerprints.has(fingerprint);
     }
 
     if (isDuplicate) {
@@ -125,8 +132,12 @@ export async function POST(request: Request) {
       comment: row.purpose ? [row.purpose, importComment].filter(Boolean).join(" | ") : importComment || null,
       createdByUserId: user.id ?? null,
       importBatchId: batch.id,
-      category: row.category ?? null,
+      category,
+      fingerprint: fingerprint ?? null,
     });
+    if (fingerprint) {
+      existingFingerprints.add(fingerprint);
+    }
 
     createdCount += 1;
     created.push({
@@ -136,6 +147,7 @@ export async function POST(request: Request) {
       amount,
       paidAtIso: payment.paidAt,
       reference: payment.reference ?? null,
+      fingerprint: payment.fingerprint ?? null,
     });
   }
 

@@ -185,6 +185,7 @@ export interface Payment {
   voidedAt?: string | null;
   voidedByUserId?: string | null;
   importBatchId?: string | null;
+  fingerprint?: string | null;
 }
 
 export interface ImportBatch {
