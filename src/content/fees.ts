@@ -1,4 +1,4 @@
-export const FEES_RATE_RUB_PER_SOTKA = 0;
+export const FEES_RATE_RUB_PER_SOTKA = 100;
 
 export interface FeeFaqItem {
   q: string;

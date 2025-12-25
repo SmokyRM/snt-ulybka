@@ -1,6 +1,8 @@
+import Link from "next/link";
+
 const links = [
   { label: "Электроэнергия", href: "/electricity" },
-  { label: "Взносы", href: "#fees" },
+  { label: "Взносы", href: "/fees" },
   { label: "Оплата и реквизиты", href: "#pay" },
   { label: "Новости", href: "#news" },
   { label: "Документы", href: "#docs" },
@@ -21,7 +23,7 @@ export default function QuickLinks() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className="group rounded-2xl border border-zinc-200/70 bg-white/90 p-5 text-sm font-semibold text-zinc-900 shadow-sm transition-colors hover:border-[#5E704F]/50 hover:text-[#5E704F]"
@@ -32,7 +34,7 @@ export default function QuickLinks() {
                   →
                 </span>
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       </div>

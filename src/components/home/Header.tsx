@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -27,10 +28,13 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#2F3827]/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-4 py-4 text-white sm:px-6">
         <Link href="/" className="flex items-center gap-3 text-white">
-          <img
+          <Image
             src="/brand/logo.svg"
             alt="Логотип СНТ «Улыбка»"
+            width={44}
+            height={44}
             className="h-10 w-auto"
+            priority
           />
           <span className="text-base font-semibold">СНТ «Улыбка»</span>
         </Link>

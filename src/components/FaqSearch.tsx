@@ -1,25 +1,29 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ELECTRICITY_FAQ } from "@/content/electricity";
+import { ELECTRICITY_FAQ, FaqItem } from "@/content/electricity";
 
 const match = (value: string, term: string) =>
   value.toLowerCase().includes(term.toLowerCase());
 
-export default function FaqSearch() {
+interface Props {
+  items?: FaqItem[];
+}
+
+export default function FaqSearch({ items = ELECTRICITY_FAQ }: Props) {
   const [term, setTerm] = useState("");
 
   const filtered = useMemo(() => {
     const query = term.trim().toLowerCase();
-    if (!query) return ELECTRICITY_FAQ;
-    return ELECTRICITY_FAQ.filter((item) => {
+    if (!query) return items;
+    return items.filter((item) => {
       if (match(item.q, query) || match(item.a, query)) return true;
       if (item.tags) {
         return item.tags.some((tag) => match(tag, query));
       }
       return false;
     });
-  }, [term]);
+  }, [items, term]);
 
   return (
     <div className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm">

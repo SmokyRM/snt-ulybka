@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "deploy": "bash ./scripts/deploy.sh"
   },
   "dependencies": {
