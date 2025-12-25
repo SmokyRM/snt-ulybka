@@ -1,4 +1,10 @@
-import { addEntityVersion, getSetting, setSetting, listEntityVersions } from "@/lib/mockDb";
+import {
+  addEntityVersion,
+  getEntityVersionById,
+  getSetting,
+  listEntityVersions,
+  setSetting,
+} from "@/lib/mockDb";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { PAYMENT_DETAILS } from "@/config/paymentDetails";
 import { SettingEntry } from "@/types/snt";
@@ -68,3 +74,33 @@ export const listSettingVersions = (
   entityId: string | null = null,
   limit = 50
 ) => listEntityVersions({ entity, entityId, limit });
+
+export const restoreSettingVersion = (opts: {
+  versionId: string;
+  actorUserId?: string | null;
+  comment?: string | null;
+}) => {
+  const version = getEntityVersionById(opts.versionId);
+  if (!version) return null;
+  const entity = version.entity;
+  const after = version.after;
+  if (!after) return null;
+
+  if (entity === "requisites") {
+    const saved = updatePaymentDetailsSetting(after as typeof PAYMENT_DETAILS, {
+      actorUserId: opts.actorUserId,
+      comment: opts.comment ?? `Откат к версии #${version.version}`,
+    });
+    return { restored: saved, sourceVersion: version };
+  }
+
+  if (entity === "social_links") {
+    const saved = updateOfficialChannelsSetting(after as typeof OFFICIAL_CHANNELS, {
+      actorUserId: opts.actorUserId,
+      comment: opts.comment ?? `Откат к версии #${version.version}`,
+    });
+    return { restored: saved, sourceVersion: version };
+  }
+
+  return null;
+};

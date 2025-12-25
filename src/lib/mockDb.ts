@@ -450,3 +450,8 @@ export const listEntityVersions = (filters: {
     .filter((v) => v.entity === entity && v.entityId === entityId)
     .slice(0, limit);
 };
+
+export const getEntityVersionById = (id: string): EntityVersion | null => {
+  const db = getDb();
+  return db.entityVersions.find((v) => v.id === id) ?? null;
+};
