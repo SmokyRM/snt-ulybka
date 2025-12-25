@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     entity: "plot",
     entityId: ids.join(","),
     before: { ids },
-    after: { updated: result.updated, patch },
+    after: { updated: result.updated, patch, comment: body.comment },
     headers: request.headers,
   });
 
