@@ -1,9 +1,10 @@
-export const sanitizeNext = (value: string | null | undefined, fallback = "/cabinet"): string => {
-  if (!value) return fallback;
+export const sanitizeNext = (value: string | null | undefined): string | null => {
+  if (!value) return null;
   const trimmed = value.trim();
-  if (!trimmed.startsWith("/")) return fallback;
-  if (trimmed.startsWith("//")) return fallback;
-  if (trimmed.includes("://")) return fallback;
+  if (!trimmed.startsWith("/")) return null;
+  if (trimmed.startsWith("//")) return null;
+  if (trimmed.includes("://")) return null;
+  if (trimmed.includes("\\")) return null;
   return trimmed;
 };
 

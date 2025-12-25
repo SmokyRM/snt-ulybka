@@ -24,7 +24,9 @@ export function middleware(request: NextRequest) {
   if (isAdminPath(pathname)) {
     if (!role) {
       const url = new URL("/login", request.url);
-      url.searchParams.set("next", `${pathname}${search}`);
+      if (!pathname.startsWith("/login")) {
+        url.searchParams.set("next", `${pathname}${search}`);
+      }
       return NextResponse.redirect(url);
     }
     if (role !== "admin") {
@@ -35,7 +37,9 @@ export function middleware(request: NextRequest) {
   if (isUserPath(pathname)) {
     if (!role) {
       const url = new URL("/login", request.url);
-      url.searchParams.set("next", `${pathname}${search}`);
+      if (!pathname.startsWith("/login")) {
+        url.searchParams.set("next", `${pathname}${search}`);
+      }
       return NextResponse.redirect(url);
     }
   }
