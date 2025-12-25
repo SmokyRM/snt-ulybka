@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 import { getPlotForUser } from "@/lib/plotsDb";
 
-export default function CabinetPage() {
-  const user = getSessionUser();
+export default async function CabinetPage() {
+  const user = await getSessionUser();
   if (!user) {
     redirect("/auth");
   }

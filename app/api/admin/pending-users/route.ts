@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/session.server";
 import { getUsersByStatus } from "@/lib/mockDb";
 
 export async function GET() {
-  const user = getSessionUser();
+  const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "board")) {
     return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }

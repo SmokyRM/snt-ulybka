@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/session.server";
 import { findUserById, setUserStatus } from "@/lib/mockDb";
 
 export async function POST(request: Request) {
-  const user = getSessionUser();
+  const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "board")) {
     return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
