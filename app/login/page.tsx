@@ -1,21 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionClient } from "@/lib/session";
+import { sanitizeNext } from "@/lib/sanitizeNext";
 
 const showTestCodes = process.env.NEXT_PUBLIC_SHOW_TEST_CODES === "true";
 const testUserCode = process.env.NEXT_PUBLIC_USER_ACCESS_CODE || "USER_CODE";
 const testAdminCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE || "ADMIN_CODE";
-
-const isSafeNext = (value: string | null): string | null => {
-  if (!value) return null;
-  if (!value.startsWith("/")) return null;
-  if (value.startsWith("//")) return null;
-  if (value.includes("://")) return null;
-  return value;
-};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,15 +18,17 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const nextParam = searchParams.get("next");
-  const safeNext = useMemo(() => isSafeNext(nextParam), [nextParam]);
+  const sanitizedNext = sanitizeNext(nextParam, "/cabinet");
+  const isNextValid = sanitizedNext !== "/cabinet" || nextParam === "/cabinet";
 
   useEffect(() => {
     const session = getSessionClient();
     if (session?.role) {
-      const target = safeNext ?? (session.role === "admin" ? "/admin" : "/cabinet");
+      const fallback = session.role === "admin" ? "/admin" : "/cabinet";
+      const target = sanitizeNext(nextParam, fallback);
       router.replace(target);
     }
-  }, [router, safeNext]);
+  }, [router, nextParam]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -55,7 +50,8 @@ export default function LoginPage() {
         return;
       }
       const role: "user" | "admin" = data.role === "admin" ? "admin" : "user";
-      const target = safeNext ?? (role === "admin" ? "/admin" : "/cabinet");
+      const fallback = role === "admin" ? "/admin" : "/cabinet";
+      const target = sanitizeNext(nextParam, fallback);
       router.replace(target);
     } catch {
       setError("Ошибка входа, попробуйте позже");
@@ -76,6 +72,11 @@ export default function LoginPage() {
         <p className="mt-2 text-sm text-zinc-600">
           Введите код доступа, полученный от правления. После входа вы перейдёте в личный кабинет.
         </p>
+        {nextParam && isNextValid && (
+          <p className="mt-2 text-xs text-zinc-600">
+            После входа вернём вас на страницу: <span className="font-semibold">{sanitizedNext}</span>
+          </p>
+        )}
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
             <label className="text-sm font-medium text-zinc-800">Код доступа</label>
