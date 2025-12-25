@@ -62,3 +62,12 @@ try {
   // ignore
 }
 
+try {
+  const prodSha = require("child_process")
+    .execSync("git rev-parse HEAD", { encoding: "utf8" })
+    .toString()
+    .trim();
+  console.log("\n🚀 Production SHA:", prodSha);
+} catch {
+  // ignore
+}
