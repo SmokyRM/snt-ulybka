@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionClient } from "@/lib/session";
 import { User } from "@/types/snt";
@@ -11,7 +11,7 @@ export default function AdminRequestsPage() {
   const [pending, setPending] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPending = async () => {
+  const fetchPending = useCallback(async () => {
     const res = await fetch("/api/admin/pending-users");
     if (res.status === 403) {
       setIsAllowed(false);
@@ -24,16 +24,19 @@ export default function AdminRequestsPage() {
     const data = await res.json();
     setPending(data.users || []);
     setIsAllowed(true);
-  };
+  }, []);
 
   useEffect(() => {
-    const session = getSessionClient();
-    if (!session) {
-      router.replace("/auth");
-      return;
-    }
-    fetchPending();
-  }, [router]);
+    const run = async () => {
+      const session = getSessionClient();
+      if (!session) {
+        router.replace("/auth");
+        return;
+      }
+      await fetchPending();
+    };
+    void run();
+  }, [router, fetchPending]);
 
   const updateStatus = async (userId: string, status: "verified" | "rejected") => {
     const res = await fetch("/api/admin/user-status", {
