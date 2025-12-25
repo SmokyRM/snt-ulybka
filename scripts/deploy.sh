@@ -79,7 +79,7 @@ fi
 NEXT_N=$((MAX_N + 1))
 NEW_TAG="v${TODAY}-${NEXT_N}"
 git tag -a "$NEW_TAG" -m "Release ${NEW_TAG}: $COMMIT_MSG"
-git push origin --tags
+git push origin "$NEW_TAG"
 
 # Changelog
 LATEST_PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${NEW_TAG}$" | head -n1 || true)
