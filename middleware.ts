@@ -22,6 +22,9 @@ export function middleware(request: NextRequest) {
   const role = readSessionRole(request);
 
   if (isAdminPath(pathname)) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[middleware] admin guard role=${role ?? "none"} path=${pathname}`);
+    }
     if (!role) {
       const url = new URL("/login", request.url);
       if (!pathname.startsWith("/login")) {

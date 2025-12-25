@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSessionClient } from "@/lib/session";
@@ -22,14 +22,31 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
 
   const sanitizedNext = useMemo(() => sanitizeNext(nextParam), [nextParam]);
 
+  const allowedNextForRole = useCallback(
+    (role: "user" | "admin"): string | null => {
+      if (!sanitizedNext) return null;
+      if (role === "admin") {
+        if (sanitizedNext.startsWith("/admin") || sanitizedNext.startsWith("/cabinet")) {
+          return sanitizedNext;
+        }
+        return null;
+      }
+      if (sanitizedNext.startsWith("/cabinet")) {
+        return sanitizedNext;
+      }
+      return null;
+    },
+    [sanitizedNext]
+  );
+
   useEffect(() => {
     const session = getSessionClient();
     if (session?.role) {
       const fallback = session.role === "admin" ? "/admin" : "/cabinet";
-      const target = sanitizedNext ?? fallback;
+      const target = allowedNextForRole(session.role) ?? fallback;
       router.replace(target);
     }
-  }, [router, sanitizedNext]);
+  }, [router, sanitizedNext, allowedNextForRole]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -52,7 +69,8 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
       }
       const role: "user" | "admin" = data.role === "admin" ? "admin" : "user";
       const fallback = role === "admin" ? "/admin" : "/cabinet";
-      const target = sanitizedNext ?? fallback;
+      const nextAllowed = allowedNextForRole(role);
+      const target = nextAllowed ?? fallback;
       router.replace(target);
     } catch {
       setError("Ошибка входа, попробуйте позже");
@@ -127,4 +145,3 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     </>
   );
 }
-

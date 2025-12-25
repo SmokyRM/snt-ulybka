@@ -31,5 +31,9 @@ export async function POST(request: Request) {
     maxAge: 60 * 60 * 24 * 7,
   });
 
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[auth] login success role=${role}`);
+  }
+
   return NextResponse.json({ ok: true, role });
 }
