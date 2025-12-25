@@ -7,57 +7,65 @@ const run = (cmd) => execSync(cmd, { stdio: "inherit" });
 const runCapture = (cmd, env) =>
   execSync(cmd, { encoding: "utf8", env: { ...process.env, ...env } }).toString().trim();
 
-const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", {
-  encoding: "utf8",
-}).trim();
-
-if (currentBranch !== "dev") {
-  console.error("Release aborted: текущая ветка должна быть dev.");
-  process.exit(1);
-}
+const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+const isClean = () => runCapture("git status --porcelain") === "";
 
 let prodSha = "";
 
 try {
-  run("git pull --rebase origin dev");
-  run("npm run lint");
-  run("npm run typecheck");
-  run("npm run build");
-  run("git push origin dev");
+  if (!isClean()) {
+    throw new Error("Есть незакоммиченные изменения. Сначала закоммитьте или очистите их.");
+  }
 
-  run("git checkout main");
-  run("git pull --rebase origin main");
-  run("git merge dev");
+  if (currentBranch === "dev") {
+    run("git pull --rebase origin dev");
+    run("npm run lint");
+    run("npm run typecheck");
+    run("npm run build");
+    run("git push origin dev");
 
-  let pushed = false;
-  try {
-    run("git push origin main");
-    prodSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-    pushed = true;
-    console.log("main updated and pushed.");
-  } catch (e) {
-    const msg = String(e?.message ?? "");
-    if (msg.includes("Everything up-to-date") || msg.includes("up to date")) {
-      console.log("main уже содержит все изменения. Создаю пустой коммит для прод-деплоя...");
-      run('git commit --allow-empty -m "chore: trigger vercel prod deploy"');
+    run("git checkout main");
+    run("git pull --rebase origin main");
+    run("git merge dev");
+
+    let pushed = false;
+    try {
       run("git push origin main");
       prodSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
       pushed = true;
-      console.log("Пустой коммит отправлен, Vercel запустит прод деплой.");
-    } else {
-      throw e;
+      console.log("main updated and pushed.");
+    } catch (e) {
+      const msg = String(e?.message ?? "");
+      if (msg.includes("Everything up-to-date") || msg.includes("up to date")) {
+        console.log("main уже содержит все изменения. Создаю пустой коммит для прод-деплоя...");
+        run('git commit --allow-empty -m "chore: trigger vercel prod deploy"');
+        run("git push origin main");
+        prodSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+        pushed = true;
+        console.log("Пустой коммит отправлен, Vercel запустит прод деплой.");
+      } else {
+        throw e;
+      }
     }
-  }
 
-  if (!pushed) {
-    throw new Error("Не удалось запушить main");
-  }
+    if (!pushed) {
+      throw new Error("Не удалось запушить main");
+    }
 
-  if (prodSha) {
+    if (prodSha) {
+      console.log("\n🚀 Production SHA (main):", prodSha);
+    }
+    triggerVercelProdDeploy(prodSha);
+    run("git checkout dev");
+    console.log("Prod deploy выполнен из dev → main.");
+  } else if (currentBranch === "main") {
+    prodSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
     console.log("\n🚀 Production SHA (main):", prodSha);
+    triggerVercelProdDeploy(prodSha);
+    console.log("Prod deploy выполнен из main.");
+  } else {
+    throw new Error("Release aborted: текущая ветка должна быть dev или main.");
   }
-
-  triggerVercelProdDeploy(prodSha);
 } catch (error) {
   console.error("Release failed:", error.message);
   try {
@@ -66,12 +74,6 @@ try {
     // ignore
   }
   process.exit(1);
-}
-
-try {
-  run("git checkout dev");
-} catch {
-  // ignore
 }
 
 function triggerVercelProdDeploy(prodShaVal) {
