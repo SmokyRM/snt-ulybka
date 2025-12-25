@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listTickets } from "@/lib/ticketsDb";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -22,6 +23,7 @@ export default function AdminDashboard() {
     process.env.VERCEL_GIT_COMMIT_SHA ||
     new Date().toISOString();
   const lastUpdate = safeFormatBuildTime(buildRaw);
+  const newTicketsCount = listTickets("NEW").length;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -44,6 +46,26 @@ export default function AdminDashboard() {
             <h2 className="mt-2 text-lg font-semibold text-zinc-900">Перейти к заявкам</h2>
             <p className="mt-2 text-sm text-zinc-700">
               Управление запросами на подтверждение и обращениями жителей.
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/tickets"
+            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Обращения жителей
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-zinc-900">Перейти в тикеты</h2>
+              {newTicketsCount > 0 && (
+                <span className="rounded-full bg-[#5E704F]/10 px-2 py-1 text-xs font-bold text-[#2F3827]">
+                  {newTicketsCount}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-zinc-700">
+              Все обращения, статус и работа с тикетами.
             </p>
           </Link>
 
