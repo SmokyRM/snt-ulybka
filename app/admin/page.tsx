@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listPlots } from "@/lib/plotsDb";
 import { listTickets } from "@/lib/ticketsDb";
+import { isAdminNewUIEnabled } from "@/lib/featureFlags";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -28,15 +29,23 @@ export default function AdminDashboard() {
   const plots = listPlots();
   const unconfirmedCount = plots.filter((p) => !p.isConfirmed).length;
   const missingContactsCount = plots.filter((p) => !p.phone && !p.email).length;
+  const isNewUIEnabled = isAdminNewUIEnabled();
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Админ-панель</h1>
-          <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
-            Только для админов
-          </span>
+          <div className="flex items-center gap-3">
+            {isNewUIEnabled && (
+              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
+                Новый UI включен
+              </span>
+            )}
+            <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
+              Только для админов
+            </span>
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

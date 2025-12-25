@@ -9,9 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "deploy": "node scripts/release.js",
-    "deploy:prod": "node scripts/release.js",
-    "deploy:vercel": "npx vercel deploy --prod --yes --token $VERCEL_TOKEN",
+    "deploy": "npm run lint && npm run typecheck && npm run build && node scripts/release.js",
+    "deploy:prod": "npm run deploy",
     "deploy:dry": "node scripts/release.js --dry-run"
   },
   "dependencies": {
