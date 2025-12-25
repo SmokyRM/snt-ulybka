@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useRouter } from "next/navigation";
 import { getSessionClient } from "@/lib/session";
 
 export default function LoginPage() {
