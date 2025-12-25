@@ -63,3 +63,36 @@ MAIN_SHA=$(git rev-parse --short main)
 echo "✅ Deployed commit: $MAIN_SHA on main"
 echo "dev:  $DEV_SHA"
 echo "main: $MAIN_SHA"
+
+# Tagging
+TODAY=$(date +"%Y.%m.%d")
+EXISTING_TAGS_TODAY=$(git tag --list "v${TODAY}-*")
+MAX_N=0
+if [[ -n "$EXISTING_TAGS_TODAY" ]]; then
+  while read -r tag; do
+    n=$(echo "$tag" | awk -F- '{print $2}')
+    if [[ "$n" =~ ^[0-9]+$ ]] && (( n > MAX_N )); then
+      MAX_N=$n
+    fi
+  done <<< "$EXISTING_TAGS_TODAY"
+fi
+NEXT_N=$((MAX_N + 1))
+NEW_TAG="v${TODAY}-${NEXT_N}"
+git tag -a "$NEW_TAG" -m "Release ${NEW_TAG}: $COMMIT_MSG"
+git push origin --tags
+
+# Changelog
+LATEST_PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${NEW_TAG}$" | head -n1 || true)
+CHANGELOG=""
+if [[ -n "$LATEST_PREV_TAG" ]]; then
+  CHANGELOG=$(git log --pretty=format:"- %h %s" "${LATEST_PREV_TAG}..HEAD")
+else
+  CHANGELOG=$(git log -n 20 --pretty=format:"- %h %s")
+fi
+echo "Changelog ${NEW_TAG}"
+echo "$CHANGELOG"
+mkdir -p releases
+{
+  echo "Changelog ${NEW_TAG}"
+  echo "$CHANGELOG"
+} > "releases/CHANGELOG_${NEW_TAG}.md"
