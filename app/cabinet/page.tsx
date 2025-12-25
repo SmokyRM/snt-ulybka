@@ -34,7 +34,7 @@ export default async function CabinetPage() {
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-zinc-900">Быстрые действия</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
             <Link
               href="/fees"
               className="rounded-xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-[#5E704F] transition-colors hover:border-[#5E704F]/50"
@@ -52,6 +52,15 @@ export default async function CabinetPage() {
               className="rounded-xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-[#5E704F] transition-colors hover:border-[#5E704F]/50"
             >
               Контакты правления
+            </Link>
+            <Link
+              href="/cabinet/tickets"
+              className="rounded-xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-[#5E704F] transition-colors hover:border-[#5E704F]/50"
+            >
+              Обращения
+              <span className="mt-1 block text-xs font-normal text-zinc-600">
+                Создавайте обращения и отслеживайте статус.
+              </span>
             </Link>
           </div>
         </section>

@@ -108,6 +108,26 @@ export function HeaderClient({ role }: HeaderClientProps) {
               {item.label}
             </a>
           ))}
+          {isUser && (
+            <Link
+              href="/cabinet/tickets"
+              className={`transition-colors hover:text-white ${
+                pathname.startsWith("/cabinet/tickets") ? "text-white" : ""
+              }`}
+            >
+              Обращения
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin/tickets"
+              className={`transition-colors hover:text-white ${
+                pathname.startsWith("/admin/tickets") ? "text-white" : ""
+              }`}
+            >
+              Тикеты
+            </Link>
+          )}
         </nav>
         {action()}
       </div>
@@ -123,6 +143,26 @@ export function HeaderClient({ role }: HeaderClientProps) {
             {item.label}
           </a>
         ))}
+        {isUser && (
+          <Link
+            href="/cabinet/tickets"
+            className={`rounded-full border border-white/25 px-3 py-1 transition-colors hover:border-white hover:text-white ${
+              pathname.startsWith("/cabinet/tickets") ? "border-white text-white" : ""
+            }`}
+          >
+            Обращения
+          </Link>
+        )}
+        {isAdmin && (
+          <Link
+            href="/admin/tickets"
+            className={`rounded-full border border-white/25 px-3 py-1 transition-colors hover:border-white hover:text-white ${
+              pathname.startsWith("/admin/tickets") ? "border-white text-white" : ""
+            }`}
+          >
+            Тикеты
+          </Link>
+        )}
       </div>
     </header>
   );
