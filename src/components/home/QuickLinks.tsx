@@ -1,5 +1,5 @@
 const links = [
-  { label: "Электроэнергия", href: "#power" },
+  { label: "Электроэнергия", href: "/electricity" },
   { label: "Взносы", href: "#fees" },
   { label: "Оплата и реквизиты", href: "#pay" },
   { label: "Новости", href: "#news" },
