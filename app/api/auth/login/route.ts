@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "snt_session";
-const ADMIN_CODE = process.env.ADMIN_ACCESS_CODE || "";
-const USER_CODE = process.env.USER_ACCESS_CODE || "USER_CODE";
+const ADMIN_CODE = (process.env.ADMIN_ACCESS_CODE ?? "").trim();
+const USER_CODE = (process.env.USER_ACCESS_CODE ?? "USER_CODE").trim();
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
