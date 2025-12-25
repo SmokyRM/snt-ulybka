@@ -1,0 +1,82 @@
+import Link from "next/link";
+
+const BUILD_RAW =
+  process.env.BUILD_TIME ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  new Date().toISOString();
+
+const formatBuildTime = () => {
+  const date = new Date(BUILD_RAW);
+  const formatter = new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const formatted = formatter.format(date);
+  return formatted.replace(",", " в");
+};
+
+const lastUpdate = formatBuildTime();
+
+export default function AdminDashboard() {
+  return (
+    <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
+      <div className="mx-auto w-full max-w-6xl space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Админ-панель</h1>
+          <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
+            Только для админов
+          </span>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/admin/requests"
+            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Заявки/обращения
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Перейти к заявкам</h2>
+            <p className="mt-2 text-sm text-zinc-700">
+              Управление запросами на подтверждение и обращениями жителей.
+            </p>
+          </Link>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              Реестр участков
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Скоро</h2>
+            <p className="mt-2 text-sm text-zinc-700">
+              Работа с участками и статусами владельцев появится здесь.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              Публикации документов
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Скоро</h2>
+            <p className="mt-2 text-sm text-zinc-700">
+              Добавление протоколов, решений и объявлений для сайта.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:col-span-2 lg:col-span-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              Последнее обновление сайта
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">{lastUpdate}</h2>
+            <p className="mt-2 text-sm text-zinc-700">
+              Время сборки/деплоя. Информация видна только в админ-панели.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
