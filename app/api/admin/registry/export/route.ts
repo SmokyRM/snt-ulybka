@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { listPlotsWithFilters } from "@/lib/mockDb";
+import { listPlotsWithFilters, listPersons } from "@/lib/mockDb";
+import { formatAdminTime } from "@/lib/settings";
+import { membershipLabel } from "@/lib/membershipLabels";
 
 const parseFilters = (request: Request) => {
   const url = new URL(request.url);
@@ -27,6 +29,7 @@ export async function GET(request: Request) {
           | "PENDING"
           | "UNKNOWN")
       : null;
+  const persons = listPersons();
   const { items } = listPlotsWithFilters({
     query: filters.query,
     street: filters.street,
@@ -36,28 +39,48 @@ export async function GET(request: Request) {
     pageSize: 1000,
   });
 
-  const header = ["street", "number", "membershipStatus", "status", "ownerName", "phone", "email", "updatedAt"];
-  const rows = items.map((p) =>
-    [
+  const BOM = "\uFEFF";
+  const header = [
+    "Улица",
+    "Участок",
+    "Статус членства",
+    "Архив",
+    "Владелец",
+    "Телефон",
+    "Email",
+    "Обновлено",
+  ];
+
+  const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const rows = items.map((p) => {
+    const ownerIds = persons.filter((person) => person.fullName === p.ownerFullName);
+    const phones = [p.phone, ...ownerIds.map((o) => o.phone)].filter(Boolean).join(", ");
+    const emails = [p.email, ...ownerIds.map((o) => o.email)].filter(Boolean).join(", ");
+    return [
       p.street,
       p.plotNumber,
-      p.membershipStatus ?? "",
-      p.status ?? "active",
+      membershipLabel[(p.membershipStatus ?? "UNKNOWN") as keyof typeof membershipLabel] ?? "",
+      p.status === "archived" ? "Да" : "Нет",
       p.ownerFullName ?? "",
-      p.phone ?? "",
-      p.email ?? "",
-      p.updatedAt,
+      phones,
+      emails,
+      formatAdminTime(p.updatedAt),
     ]
-      .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const csv = [header.join(","), ...rows].join("\n");
+      .map(escapeCsv)
+      .join(";");
+  });
+
+  const filename = `registry_export_${formatAdminTime(new Date().toISOString())
+    .replace(/\s+/g, "_")
+    .replace(/[:]/g, "-")}.csv`;
+
+  const csv = BOM + [header.map(escapeCsv).join(";"), ...rows].join("\r\n");
 
   return new NextResponse(csv, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="registry.csv"',
+      "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
 }
