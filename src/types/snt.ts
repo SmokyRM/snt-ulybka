@@ -49,6 +49,7 @@ export interface AuditLog {
   after?: unknown;
   ip?: string | null;
   userAgent?: string | null;
+  comment?: string | null;
   createdAt: string;
 }
 

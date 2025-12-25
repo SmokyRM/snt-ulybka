@@ -377,6 +377,7 @@ export const logAdminAction = (entry: {
   after?: unknown;
   ip?: string | null;
   userAgent?: string | null;
+  comment?: string | null;
 }) => {
   const db = getDb();
   const log: AuditLog = {
@@ -390,6 +391,7 @@ export const logAdminAction = (entry: {
     after: entry.after,
     ip: entry.ip ?? null,
     userAgent: entry.userAgent ?? null,
+    comment: entry.comment ?? null,
     createdAt: new Date().toISOString(),
   };
   db.auditLogs.unshift(log);

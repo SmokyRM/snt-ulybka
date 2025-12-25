@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { findPlotById, listPersons } from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings";
-import { listAuditLogs } from "@/lib/mockDb";
 
 const formatMembership = (status?: string | null) => {
   switch (status) {
@@ -16,6 +15,17 @@ const formatMembership = (status?: string | null) => {
     default:
       return "—";
   }
+};
+
+const actionLabels: Record<string, string> = {
+  update_plot: "Изменение данных участка",
+  update_membership: "Изменение статуса членства",
+  archive_plot: "Архивирование",
+  unarchive_plot: "Возврат из архива",
+  bulk_archive: "Массовое архивирование",
+  bulk_unarchive: "Массовое восстановление",
+  bulk_set_membership: "Массовое изменение членства",
+  bulk_needs_review: "Массовая пометка на проверку",
 };
 
 export default async function RegistryDetail({
@@ -39,7 +49,22 @@ export default async function RegistryDetail({
     );
   }
   const currentPlot = plot;
-  const history = listAuditLogs({ entity: "plot", entityId: currentPlot.id, limit: 20 });
+  const historyRes = await fetch(
+    `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/registry/plots/${currentPlot.id}/history`,
+    { cache: "no-store" }
+  ).catch(() => null);
+  const historyJson = historyRes && historyRes.ok ? await historyRes.json() : { items: [] };
+  const history = (historyJson.items as Array<{
+    id: string;
+    createdAtIso?: string;
+    createdAtLocalFormatted?: string;
+    action: string;
+    entity?: string;
+    entityId?: string | null;
+    comment?: string | null;
+    actorUserId?: string | null;
+    actorRole?: string | null;
+  }>) ?? [];
 
   async function updateStatus(formData: FormData) {
     "use server";
@@ -187,12 +212,14 @@ export default async function RegistryDetail({
             <tbody className="divide-y divide-zinc-100">
               {history.map((h) => (
                 <tr key={h.id}>
-                  <td className="px-3 py-2 text-zinc-700">{formatAdminTime(h.createdAt)}</td>
-                  <td className="px-3 py-2 text-zinc-900">{h.action}</td>
                   <td className="px-3 py-2 text-zinc-700">
-                    {"comment" in h && (h as { comment?: string }).comment
-                      ? (h as { comment?: string }).comment
-                      : "—"}
+                    {h.createdAtLocalFormatted ?? formatAdminTime(h.createdAtIso ?? "")}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-900">
+                    {actionLabels[h.action as string] ?? h.action}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-700">
+                    {"comment" in h && h.comment ? h.comment : "—"}
                   </td>
                 </tr>
               ))}

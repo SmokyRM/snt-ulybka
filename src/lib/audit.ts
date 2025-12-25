@@ -18,6 +18,7 @@ export const logAdminAction = async (params: {
   before?: unknown;
   after?: unknown;
   headers?: ReadonlyHeaders | Headers | null;
+  comment?: string | null;
 }) => {
   const user = await getSessionUser();
   const ip =
@@ -35,6 +36,6 @@ export const logAdminAction = async (params: {
     after: params.after,
     ip,
     userAgent,
+    comment: params.comment ?? null,
   });
 };
-
