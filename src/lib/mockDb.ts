@@ -404,14 +404,18 @@ export const listAuditLogs = (filters?: {
   from?: string | null;
   to?: string | null;
   limit?: number;
+  entity?: string | null;
+  entityId?: string | null;
 }) => {
   const db = getDb();
-  const { action, from, to, limit = 50 } = filters ?? {};
+  const { action, from, to, limit = 50, entity, entityId = null } = filters ?? {};
   const fromDate = from ? new Date(from).getTime() : null;
   const toDate = to ? new Date(to).getTime() : null;
   return db.auditLogs
     .filter((log) => {
       if (action && log.action !== action) return false;
+      if (entity && log.entity !== entity) return false;
+      if (entity && entityId !== null && log.entityId !== entityId) return false;
       const ts = new Date(log.createdAt).getTime();
       if (fromDate && ts < fromDate) return false;
       if (toDate && ts > toDate) return false;
@@ -521,6 +525,23 @@ export const listPlotsWithFilters = (filters?: {
   const start = (page - 1) * pageSize;
   const items = sorted.slice(start, start + pageSize);
   return { total, items, page, pageSize };
+};
+
+export const updatePlotsBulk = (
+  ids: string[],
+  patch: Partial<Plot>
+): { updated: number; plots: Plot[] } => {
+  const db = getDb();
+  let updatedCount = 0;
+  const updatedPlots: Plot[] = [];
+  db.plots = db.plots.map((p) => {
+    if (!ids.includes(p.id)) return p;
+    const next: Plot = { ...p, ...patch, updatedAt: new Date().toISOString() };
+    updatedCount += 1;
+    updatedPlots.push(next);
+    return next;
+  });
+  return { updated: updatedCount, plots: updatedPlots };
 };
 
 export const getSetting = <T = unknown>(key: string): SettingEntry<T> | null => {

@@ -11,6 +11,7 @@ export interface Plot {
   number: string;
   street: string;
   status?: "active" | "archived";
+  needsReview?: boolean;
   ownerFullName?: string | null;
   phone?: string | null;
   email?: string | null;

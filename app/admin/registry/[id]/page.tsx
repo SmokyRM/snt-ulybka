@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { findPlotById, listPersons } from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings";
+import { listAuditLogs } from "@/lib/mockDb";
 
 const formatMembership = (status?: string | null) => {
   switch (status) {
@@ -38,6 +39,7 @@ export default async function RegistryDetail({
     );
   }
   const currentPlot = plot;
+  const history = listAuditLogs({ entity: "plot", entityId: currentPlot.id, limit: 20 });
 
   async function updateStatus(formData: FormData) {
     "use server";
@@ -170,6 +172,39 @@ export default async function RegistryDetail({
           <p className="text-xs text-zinc-600">
             Для MVP список людей статический (persons), можно расширить позже формой создания.
           </p>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
+          <h2 className="text-lg font-semibold">История изменений</h2>
+          <table className="min-w-full divide-y divide-zinc-200 text-sm">
+            <thead className="bg-zinc-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-zinc-700">Дата</th>
+                <th className="px-3 py-2 text-left font-semibold text-zinc-700">Действие</th>
+                <th className="px-3 py-2 text-left font-semibold text-zinc-700">Комментарий</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {history.map((h) => (
+                <tr key={h.id}>
+                  <td className="px-3 py-2 text-zinc-700">{formatAdminTime(h.createdAt)}</td>
+                  <td className="px-3 py-2 text-zinc-900">{h.action}</td>
+                  <td className="px-3 py-2 text-zinc-700">
+                    {"comment" in h && (h as { comment?: string }).comment
+                      ? (h as { comment?: string }).comment
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+              {history.length === 0 && (
+                <tr>
+                  <td className="px-3 py-3 text-center text-zinc-600" colSpan={3}>
+                    История пуста
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </main>

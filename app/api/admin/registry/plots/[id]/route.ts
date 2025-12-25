@@ -67,7 +67,6 @@ export async function PATCH(request: Request, { params }: ParamsPromise<{ id: st
     entityId: id,
     before,
     after: updated,
-    headers: request.headers,
   });
 
   return NextResponse.json({ plot: updated });
