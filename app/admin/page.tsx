@@ -1,13 +1,9 @@
 import Link from "next/link";
 
-const BUILD_RAW =
-  process.env.BUILD_TIME ||
-  process.env.VERCEL_DEPLOYMENT_ID ||
-  process.env.VERCEL_GIT_COMMIT_SHA ||
-  new Date().toISOString();
-
-const formatBuildTime = () => {
-  const date = new Date(BUILD_RAW);
+const safeFormatBuildTime = (raw?: string | null) => {
+  if (!raw) return "—";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "—";
   const formatter = new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
     month: "2-digit",
@@ -19,9 +15,14 @@ const formatBuildTime = () => {
   return formatted.replace(",", " в");
 };
 
-const lastUpdate = formatBuildTime();
-
 export default function AdminDashboard() {
+  const buildRaw =
+    process.env.BUILD_TIME ||
+    process.env.VERCEL_DEPLOYMENT_ID ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    new Date().toISOString();
+  const lastUpdate = safeFormatBuildTime(buildRaw);
+
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-6xl space-y-6">
