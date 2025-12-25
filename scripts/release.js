@@ -4,7 +4,10 @@
 const { execSync } = require("child_process");
 
 const run = (cmd) => execSync(cmd, { stdio: "inherit" });
-const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim();
+
+const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", {
+  encoding: "utf8",
+}).trim();
 
 if (currentBranch !== "dev") {
   console.error("Release aborted: текущая ветка должна быть dev.");
@@ -58,3 +61,4 @@ try {
 } catch {
   // ignore
 }
+
