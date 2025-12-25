@@ -4,6 +4,7 @@ import { listTickets } from "@/lib/ticketsDb";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { getFeatureFlags, isAdminNewUIEnabled, setFeatureFlag } from "@/lib/featureFlags";
+import { getSessionUser } from "@/lib/session.server";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -43,6 +44,8 @@ export default async function AdminDashboard() {
   const missingContactsCount = plots.filter((p) => !p.phone && !p.email).length;
   const isNewUIEnabled = await isAdminNewUIEnabled(cookieStore);
   const featureFlags = await getFeatureFlags(cookieStore);
+  const sessionUser = await getSessionUser();
+  const lastSeen = new Date().toISOString();
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -62,6 +65,17 @@ export default async function AdminDashboard() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Текущая сессия
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Администратор</h2>
+            <p className="mt-2 text-sm text-zinc-700">Role: {sessionUser?.role ?? "—"}</p>
+            <p className="text-sm text-zinc-700">
+              Контакт: {sessionUser?.fullName || sessionUser?.contact || "—"}
+            </p>
+            <p className="text-sm text-zinc-700">Последняя активность: {lastSeen}</p>
+          </div>
           <Link
             href="/admin/requests"
             className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"

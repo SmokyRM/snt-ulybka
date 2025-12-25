@@ -6,27 +6,30 @@ const SESSION_COOKIE = "snt_session";
 
 type SessionRole = "user" | "admin" | "board";
 
-const readSessionRole = (request: NextRequest): SessionRole | null => {
+const readSessionRole = (
+  request: NextRequest
+): { role: SessionRole | null; hasSession: boolean } => {
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!raw) return null;
+  if (!raw) return { role: null, hasSession: false };
   try {
     const parsed = JSON.parse(raw) as { role?: SessionRole };
-    return parsed.role ?? null;
+    const role: SessionRole = parsed.role ?? "user";
+    return { role, hasSession: true };
   } catch {
-    return null;
+    return { role: null, hasSession: false };
   }
 };
 
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isApiAdmin = pathname.startsWith("/api/admin");
-  const role = readSessionRole(request);
+  const { role, hasSession } = readSessionRole(request);
 
   if (isAdminPath(pathname) || isApiAdmin) {
     if (process.env.NODE_ENV !== "production") {
       console.log(`[middleware] admin guard role=${role ?? "none"} path=${pathname}`);
     }
-    if (!role) {
+    if (!hasSession) {
       if (isApiAdmin) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
       }
@@ -38,19 +41,22 @@ export function middleware(request: NextRequest) {
     }
     if (role !== "admin") {
       if (isApiAdmin) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
       }
-      return NextResponse.redirect(new URL("/cabinet", request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
   }
 
   if (isUserPath(pathname)) {
-    if (!role) {
+    if (!hasSession) {
       const url = new URL("/login", request.url);
       if (!pathname.startsWith("/login")) {
         url.searchParams.set("next", `${pathname}${search}`);
       }
       return NextResponse.redirect(url);
+    }
+    if (role !== "user" && role !== "admin") {
+      return NextResponse.redirect(new URL("/", request.url));
     }
   }
 
