@@ -7,6 +7,8 @@ import {
   findAccrualPeriod,
   findPlotById,
   listPayments,
+  createImportBatch,
+  updateImportBatch,
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 
@@ -36,6 +38,14 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const rowsInput = Array.isArray(body.rows) ? (body.rows as RowInput[]) : [];
   const importComment = typeof body.importComment === "string" ? body.importComment : "";
+  const fileName = typeof body.fileName === "string" ? body.fileName : null;
+
+  const batch = createImportBatch({
+    fileName,
+    importedByUserId: user.id ?? null,
+    totalRows: rowsInput.length,
+    comment: importComment,
+  });
 
   let createdCount = 0;
   let skippedCount = 0;
@@ -109,6 +119,7 @@ export async function POST(request: Request) {
       reference: row.reference ?? null,
       comment: row.purpose ? [row.purpose, importComment].filter(Boolean).join(" | ") : importComment || null,
       createdByUserId: user.id ?? null,
+      importBatchId: batch.id,
     });
 
     createdCount += 1;
@@ -122,10 +133,12 @@ export async function POST(request: Request) {
     });
   }
 
+  updateImportBatch(batch.id, { createdCount, skippedCount });
+
   await logAdminAction({
     action: "import_payments_csv",
     entity: "payment",
-    entityId: null,
+    entityId: batch.id,
     before: null,
     after: { createdCount, skippedCount },
     comment: importComment || null,
@@ -133,4 +146,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, createdCount, skippedCount, created, skipped });
 }
-

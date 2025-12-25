@@ -16,6 +16,7 @@ import {
   AccrualPeriod,
   AccrualItem,
   Payment,
+  ImportBatch,
 } from "@/types/snt";
 
 interface MockDb {
@@ -30,6 +31,7 @@ interface MockDb {
   accrualPeriods: AccrualPeriod[];
   accrualItems: AccrualItem[];
   payments: Payment[];
+  importBatches: ImportBatch[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -131,6 +133,7 @@ const getDb = (): MockDb => {
       accrualPeriods: [],
       accrualItems: [],
       payments: [],
+      importBatches: [],
     };
   }
   return g.__SNT_DB__;
@@ -376,6 +379,7 @@ export const resetMockDb = () => {
     accrualPeriods: [],
     accrualItems: [],
     payments: [],
+    importBatches: [],
   };
 };
 
@@ -624,6 +628,7 @@ export const addPayment = (data: {
   reference?: string | null;
   comment?: string | null;
   createdByUserId: string | null;
+  importBatchId?: string | null;
 }) => {
   const now = new Date().toISOString();
   const payment: Payment = {
@@ -636,11 +641,12 @@ export const addPayment = (data: {
     reference: data.reference ?? null,
     comment: data.comment ?? null,
     createdByUserId: data.createdByUserId,
-  createdAt: now,
-  isVoided: false,
+    createdAt: now,
+    isVoided: false,
     voidReason: null,
     voidedAt: null,
     voidedByUserId: null,
+    importBatchId: data.importBatchId ?? null,
   };
   const db = getDb();
   db.payments.push(payment);
@@ -661,6 +667,64 @@ export const voidPayment = (id: string, reason: string | null, voidedBy: string 
   db.payments = db.payments.map((p) => (p.id === id ? updated : p));
   return updated;
 };
+
+export const voidPaymentsByBatch = (
+  batchId: string,
+  reason: string | null,
+  voidedBy: string | null
+): number => {
+  const db = getDb();
+  let count = 0;
+  db.payments = db.payments.map((p) => {
+    if (p.importBatchId === batchId && !p.isVoided) {
+      count += 1;
+      return {
+        ...p,
+        isVoided: true,
+        voidReason: reason ?? null,
+        voidedAt: new Date().toISOString(),
+        voidedByUserId: voidedBy,
+      };
+    }
+    return p;
+  });
+  return count;
+};
+
+export const createImportBatch = (payload: {
+  fileName?: string | null;
+  importedByUserId: string | null;
+  totalRows: number;
+  comment?: string | null;
+}) => {
+  const db = getDb();
+  const batch: ImportBatch = {
+    id: createId("batch"),
+    fileName: payload.fileName ?? null,
+    importedAt: new Date().toISOString(),
+    importedByUserId: payload.importedByUserId,
+    totalRows: payload.totalRows,
+    createdCount: 0,
+    skippedCount: 0,
+    comment: payload.comment ?? null,
+    status: "completed",
+    rollbackAt: null,
+  };
+  db.importBatches.unshift(batch);
+  return batch;
+};
+
+export const updateImportBatch = (id: string, patch: Partial<ImportBatch>) => {
+  const db = getDb();
+  const batch = db.importBatches.find((b) => b.id === id);
+  if (!batch) return null;
+  const updated = { ...batch, ...patch } as ImportBatch;
+  db.importBatches = db.importBatches.map((b) => (b.id === id ? updated : b));
+  return updated;
+};
+
+export const listImportBatches = () => getDb().importBatches;
+export const findImportBatch = (id: string) => getDb().importBatches.find((b) => b.id === id) ?? null;
 
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();

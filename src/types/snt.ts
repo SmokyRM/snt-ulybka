@@ -182,4 +182,18 @@ export interface Payment {
   voidReason?: string | null;
   voidedAt?: string | null;
   voidedByUserId?: string | null;
+  importBatchId?: string | null;
+}
+
+export interface ImportBatch {
+  id: string;
+  fileName?: string | null;
+  importedAt: string;
+  importedByUserId: string | null;
+  totalRows: number;
+  createdCount: number;
+  skippedCount: number;
+  comment?: string | null;
+  status: "completed" | "rolled_back";
+  rollbackAt?: string | null;
 }
