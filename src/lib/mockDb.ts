@@ -24,6 +24,8 @@ interface MockDb {
   settings: SettingEntry[];
   entityVersions: EntityVersion[];
   persons: Person[];
+  accrualPeriods: AccrualPeriod[];
+  accrualItems: AccrualItem[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();

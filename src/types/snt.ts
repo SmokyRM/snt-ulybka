@@ -133,3 +133,36 @@ export interface Person {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface AuditLog {
+  id: string;
+  actorUserId: string | null;
+  actorRole: UserRole | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  before?: unknown;
+  after?: unknown;
+  ip?: string | null;
+  userAgent?: string | null;
+  comment?: string | null;
+  createdAt: string;
+}
+
+export interface AccrualPeriod {
+  id: string;
+  year: number;
+  month: number;
+  type: string;
+  createdAt: string;
+}
+
+export interface AccrualItem {
+  id: string;
+  periodId: string;
+  plotId: string;
+  amountAccrued: number;
+  amountPaid: number;
+  note?: string | null;
+  updatedAt: string;
+}
