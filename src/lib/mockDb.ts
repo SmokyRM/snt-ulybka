@@ -875,6 +875,47 @@ export const accrueElectricityForPeriod = (payload: { year: number; month: numbe
     deltasByPlot,
   };
 };
+
+export const getElectricityReport = (year: number, month: number) => {
+  const db = getDb();
+  const period = findAccrualPeriod(year, month, "electricity");
+  const paymentsByPlot: Record<string, number> = {};
+  if (period) {
+    listPayments({ periodId: period.id, includeVoided: false }).forEach((p) => {
+      paymentsByPlot[p.plotId] = (paymentsByPlot[p.plotId] ?? 0) + p.amount;
+    });
+  }
+  const accruals = period ? listAccrualItems(period.id) : [];
+  const accrualMap: Record<string, AccrualItem> = {};
+  accruals.forEach((a) => {
+    accrualMap[a.plotId] = a;
+  });
+  const parseDelta = (note?: string | null) => {
+    if (!note) return 0;
+    const m = note.match(/ΔкВт\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i);
+    if (m && m[1]) {
+      const v = Number(m[1].replace(",", "."));
+      return Number.isFinite(v) ? v : 0;
+    }
+    return 0;
+  };
+
+  return db.plots.map((plot) => {
+    const accrual = accrualMap[plot.id];
+    const amountAccrued = accrual?.amountAccrued ?? 0;
+    const amountPaid = paymentsByPlot[plot.id] ?? 0;
+    const deltaKwh = accrual ? parseDelta(accrual.note) : 0;
+    return {
+      plotId: plot.id,
+      street: plot.street,
+      number: plot.plotNumber,
+      deltaKwh,
+      amountAccrued,
+      amountPaid,
+      debt: amountAccrued - amountPaid,
+    };
+  });
+};
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();
   return db.accrualPeriods.find((p) => p.year === year && p.month === month && p.type === type) ?? null;
