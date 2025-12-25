@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const requisites =
-  "СНТ «Улыбка», ИНН 0000000000, КПП 000000000, р/с 00000000000000000000";
+import { PAYMENT_DETAILS } from "@/config/paymentDetails";
 
 export default function Contacts() {
   const [copied, setCopied] = useState(false);
@@ -12,7 +10,8 @@ export default function Contacts() {
     if (!navigator?.clipboard) {
       return;
     }
-    await navigator.clipboard.writeText(requisites);
+    const shortReq = `${PAYMENT_DETAILS.receiver}, ИНН ${PAYMENT_DETAILS.inn}, КПП ${PAYMENT_DETAILS.kpp}, р/с ${PAYMENT_DETAILS.account}, БИК ${PAYMENT_DETAILS.bic}`;
+    await navigator.clipboard.writeText(shortReq);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
@@ -48,7 +47,8 @@ export default function Contacts() {
               Реквизиты (кратко)
             </h3>
             <p className="mt-4 text-sm leading-6 text-zinc-700">
-              {requisites}
+              {PAYMENT_DETAILS.receiver}, ИНН {PAYMENT_DETAILS.inn}, КПП {PAYMENT_DETAILS.kpp},
+              р/с {PAYMENT_DETAILS.account}, БИК {PAYMENT_DETAILS.bic}
             </p>
             <button
               type="button"

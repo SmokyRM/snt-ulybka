@@ -2,6 +2,7 @@ import CopyToClipboard from "@/components/CopyToClipboard";
 import FeesCalculator from "@/components/FeesCalculator";
 import FaqSearch from "@/components/FaqSearch";
 import { FEES_FAQ, FEES_RATE_RUB_PER_SOTKA } from "@/content/fees";
+import { PAYMENT_DETAILS } from "@/config/paymentDetails";
 
 export const metadata = {
   title: "Взносы и долги — СНТ «Улыбка»",
@@ -57,12 +58,13 @@ export default function FeesPage() {
             <div>
               <p className="font-semibold text-zinc-800">Реквизиты</p>
               <ul className="mt-2 space-y-1">
-                <li>Получатель: СНТ «Улыбка»</li>
-                <li>ИНН/КПП: —</li>
-                <li>Банк: —</li>
-                <li>Р/с: —</li>
-                <li>Кор/с: —</li>
-                <li>БИК: —</li>
+                <li>Получатель: {PAYMENT_DETAILS.receiver}</li>
+                <li>ИНН/КПП: {PAYMENT_DETAILS.inn} / {PAYMENT_DETAILS.kpp}</li>
+                <li>Р/с: {PAYMENT_DETAILS.account}</li>
+                <li>Банк: {PAYMENT_DETAILS.bank}</li>
+                <li>ИНН банка: {PAYMENT_DETAILS.bankInn}</li>
+                <li>БИК: {PAYMENT_DETAILS.bic}</li>
+                <li>Корр. счёт: {PAYMENT_DETAILS.corr}</li>
               </ul>
             </div>
             <div>
