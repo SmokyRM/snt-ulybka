@@ -223,3 +223,28 @@ export const updatePlot = (id: string, input: PlotUpdateInput) => {
 
 export const existsStreetNumber = (street: string, number: string, excludeId?: string) =>
   streetNumberExists(street, number, excludeId);
+
+export const bulkUpdatePlots = (
+  ids: string[],
+  patch: { isConfirmed?: boolean; membershipStatus?: Plot["membershipStatus"]; clearContacts?: boolean }
+) => {
+  const db = getDb();
+  let updated = 0;
+  db.forEach((plot, idx) => {
+    if (!ids.includes(plot.id) && !ids.includes(plot.plotId)) return;
+    const next: Plot = { ...plot, updatedAt: nowIso() };
+    if (typeof patch.isConfirmed === "boolean") {
+      next.isConfirmed = patch.isConfirmed;
+    }
+    if (patch.membershipStatus) {
+      next.membershipStatus = patch.membershipStatus;
+    }
+    if (patch.clearContacts) {
+      next.phone = null;
+      next.email = null;
+    }
+    db[idx] = next;
+    updated += 1;
+  });
+  return updated;
+};
