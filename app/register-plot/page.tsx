@@ -16,7 +16,7 @@ export default function RegisterPlotPage() {
     const session = getSessionClient();
     if (session) {
       const contact = session.contact;
-      if (contact.includes("@")) {
+      if (contact && contact.includes("@")) {
         setSessionEmail(contact);
       }
       setHasSession(true);

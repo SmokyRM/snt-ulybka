@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LogoutButton } from "@/components/LogoutButton";
 import { getSessionClient } from "@/lib/session";
 import { User } from "@/types/snt";
 
@@ -90,13 +91,20 @@ export default function AdminRequestsPage() {
             <h1 className="text-2xl font-semibold">Заявки на подтверждение</h1>
             <p className="text-sm text-zinc-600">Доступ только для правления</p>
           </div>
-          <button
-            type="button"
-            onClick={fetchPending}
-            className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
-          >
-            Обновить список
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchPending}
+              className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
+            >
+              Обновить список
+            </button>
+            <LogoutButton
+              redirectTo="/"
+              className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+              busyLabel="Выходим..."
+            />
+          </div>
         </div>
 
         {error && (

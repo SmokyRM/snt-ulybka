@@ -1,8 +1,9 @@
 const SESSION_COOKIE = "snt_session";
 
 interface SessionPayload {
-  userId: string;
-  contact: string;
+  userId?: string;
+  contact?: string;
+  role?: "user" | "admin";
 }
 
 const parseCookie = (value: string | undefined): SessionPayload | null => {
