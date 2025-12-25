@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { getFeatureFlags, isAdminNewUIEnabled, setFeatureFlag } from "@/lib/featureFlags";
 import { getSessionUser } from "@/lib/session.server";
+import { formatAdminTime, getOfficialChannelsSetting, getPaymentDetailsSetting } from "@/lib/settings";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -46,6 +47,8 @@ export default async function AdminDashboard() {
   const featureFlags = await getFeatureFlags(cookieStore);
   const sessionUser = await getSessionUser();
   const lastSeen = new Date().toISOString();
+  const requisites = getPaymentDetailsSetting();
+  const channels = getOfficialChannelsSetting();
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -140,6 +143,30 @@ export default async function AdminDashboard() {
             <h2 className="mt-2 text-lg font-semibold text-zinc-900">Скоро</h2>
             <p className="mt-2 text-sm text-zinc-700">
               Добавление протоколов, решений и объявлений для сайта.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Реквизиты
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">
+              Последнее обновление
+            </h2>
+            <p className="mt-1 text-sm text-zinc-700">
+              {formatAdminTime(requisites.updatedAt)} (по местному времени)
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Официальные каналы
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900">
+              Последнее обновление
+            </h2>
+            <p className="mt-1 text-sm text-zinc-700">
+              {formatAdminTime(channels.updatedAt)} (по местному времени)
             </p>
           </div>
 

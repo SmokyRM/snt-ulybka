@@ -50,6 +50,13 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export interface SettingEntry<T = unknown> {
+  key: string;
+  value: T;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface OwnershipRequest {
   id: string;
   plotNumber: string;

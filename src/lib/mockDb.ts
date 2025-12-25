@@ -3,6 +3,7 @@
 import {
   OwnershipRequest,
   AuditLog,
+  SettingEntry,
   Plot,
   PlotOwner,
   RequestStatus,
@@ -16,6 +17,7 @@ interface MockDb {
   ownershipRequests: OwnershipRequest[];
   plotOwners: PlotOwner[];
   auditLogs: AuditLog[];
+  settings: SettingEntry[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -59,12 +61,40 @@ const defaultUsers: User[] = [
 const getDb = (): MockDb => {
   const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
   if (!g.__SNT_DB__) {
+    const now = new Date().toISOString();
     g.__SNT_DB__ = {
       users: [...defaultUsers],
       plots: [...defaultPlots],
       ownershipRequests: [],
       plotOwners: [],
       auditLogs: [],
+      settings: [
+        {
+          key: "payment_details",
+          value: {
+            receiver: "СК «Улыбка»",
+            inn: "7423007708",
+            kpp: "745901001",
+            account: "40703810407950000058",
+            bank: "ПАО «Челиндбанк»",
+            bankInn: "7453002182",
+            bic: "047501711",
+            corr: "30101810400000000711",
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          key: "official_channels",
+          value: {
+            vk: "https://vk.com/snt_smile?t2fs=07b664f4ccd18da444_3",
+            telegram: "https://t.me/snt_smile",
+            email: "",
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
     };
   }
   return g.__SNT_DB__;
@@ -253,12 +283,40 @@ export const rejectRequest = (id: string, reason: string) => {
 
 export const resetMockDb = () => {
   const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
+  const now = new Date().toISOString();
   g.__SNT_DB__ = {
     users: [...defaultUsers],
     plots: [...defaultPlots],
     ownershipRequests: [],
     plotOwners: [],
     auditLogs: [],
+    settings: [
+      {
+        key: "payment_details",
+        value: {
+          receiver: "СК «Улыбка»",
+          inn: "7423007708",
+          kpp: "745901001",
+          account: "40703810407950000058",
+          bank: "ПАО «Челиндбанк»",
+          bankInn: "7453002182",
+          bic: "047501711",
+          corr: "30101810400000000711",
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        key: "official_channels",
+        value: {
+          vk: "https://vk.com/snt_smile?t2fs=07b664f4ccd18da444_3",
+          telegram: "https://t.me/snt_smile",
+          email: "",
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
   };
 };
 
@@ -313,4 +371,33 @@ export const listAuditLogs = (filters?: {
       return true;
     })
     .slice(0, limit);
+};
+
+export const getSetting = <T = unknown>(key: string): SettingEntry<T> | null => {
+  const db = getDb();
+  const found = db.settings.find((s) => s.key === key);
+  return (found as SettingEntry<T> | undefined) ?? null;
+};
+
+export const setSetting = <T = unknown>(key: string, value: T): SettingEntry<T> => {
+  const db = getDb();
+  const existing = db.settings.find((s) => s.key === key);
+  const now = new Date().toISOString();
+  if (existing) {
+    const updated: SettingEntry<T> = {
+      ...existing,
+      value,
+      updatedAt: now,
+    };
+    db.settings = db.settings.map((s) => (s.key === key ? (updated as SettingEntry) : s));
+    return updated;
+  }
+  const created: SettingEntry<T> = {
+    key,
+    value,
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.settings.push(created as SettingEntry);
+  return created;
 };
