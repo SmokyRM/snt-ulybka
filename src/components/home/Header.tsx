@@ -5,6 +5,7 @@ const navItems = [
   { label: "Взносы", href: "#fees" },
   { label: "Обращения", href: "#appeal" },
   { label: "Контакты", href: "#contacts" },
+  { label: "Кабинет", href: "/auth" },
 ];
 
 export default function Header() {
