@@ -135,6 +135,31 @@ export default function DebtorsClient() {
         >
           Экспорт CSV
         </button>
+        <button
+          type="button"
+          onClick={async () => {
+            setLoading(true);
+            setError(null);
+            try {
+              const res = await fetch("/api/admin/notifications/debtors/send-telegram", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type, period }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                setError((data as { error?: string }).error ?? "Не удалось отправить в Telegram");
+              }
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setLoading(false);
+            }
+          }}
+          className="rounded border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
+        >
+          Отправить в Telegram
+        </button>
         <label className="flex items-center gap-2 text-sm text-zinc-700">
           <input
             type="checkbox"
