@@ -18,17 +18,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const nextParam = searchParams.get("next");
-  const sanitizedNext = sanitizeNext(nextParam, "/cabinet");
-  const isNextValid = sanitizedNext !== "/cabinet" || nextParam === "/cabinet";
+  const sanitizedNext = sanitizeNext(nextParam);
 
   useEffect(() => {
     const session = getSessionClient();
     if (session?.role) {
       const fallback = session.role === "admin" ? "/admin" : "/cabinet";
-      const target = sanitizeNext(nextParam, fallback);
+      const target = sanitizedNext ?? fallback;
       router.replace(target);
     }
-  }, [router, nextParam]);
+  }, [router, sanitizedNext]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -51,7 +50,7 @@ export default function LoginPage() {
       }
       const role: "user" | "admin" = data.role === "admin" ? "admin" : "user";
       const fallback = role === "admin" ? "/admin" : "/cabinet";
-      const target = sanitizeNext(nextParam, fallback);
+      const target = sanitizedNext ?? fallback;
       router.replace(target);
     } catch {
       setError("Ошибка входа, попробуйте позже");
@@ -72,9 +71,10 @@ export default function LoginPage() {
         <p className="mt-2 text-sm text-zinc-600">
           Введите код доступа, полученный от правления. После входа вы перейдёте в личный кабинет.
         </p>
-        {nextParam && isNextValid && (
+        {sanitizedNext && (
           <p className="mt-2 text-xs text-zinc-600">
-            После входа вернём вас на страницу: <span className="font-semibold">{sanitizedNext}</span>
+            После входа вернём вас на страницу:{" "}
+            <span className="font-semibold">{sanitizedNext}</span>
           </p>
         )}
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
