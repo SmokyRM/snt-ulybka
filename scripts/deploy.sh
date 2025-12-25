@@ -33,11 +33,66 @@ if [[ -n "$(git status --porcelain)" ]]; then
   git commit -m "$COMMIT_MSG"
 fi
 
+# If after stash/pop/pull there is nothing to do, exit
+if [[ -z "$(git status --porcelain)" ]]; then
+  echo "Nothing to deploy"
+  exit 0
+fi
+
+# Optional lint and typecheck
+if npm run | grep -q "lint"; then
+  npm run lint
+else
+  echo "lint skipped"
+fi
+if npm run | grep -q "typecheck"; then
+  npm run typecheck
+else
+  echo "typecheck skipped"
+fi
+
 git push origin dev
 
 git checkout main
 git pull --rebase origin main
-git merge --no-ff dev -m "Deploy: merge dev into main"
+git merge --no-ff dev -m "Deploy: $COMMIT_MSG"
 git push origin main
 
-echo "✅ Deployed commit: $(git rev-parse --short HEAD) on main"
+DEV_SHA=$(git rev-parse --short dev)
+MAIN_SHA=$(git rev-parse --short main)
+echo "✅ Deployed commit: $MAIN_SHA on main"
+echo "dev:  $DEV_SHA"
+echo "main: $MAIN_SHA"
+
+# Tagging
+TODAY=$(date +"%Y.%m.%d")
+EXISTING_TAGS_TODAY=$(git tag --list "v${TODAY}-*")
+MAX_N=0
+if [[ -n "$EXISTING_TAGS_TODAY" ]]; then
+  while read -r tag; do
+    n=$(echo "$tag" | awk -F- '{print $2}')
+    if [[ "$n" =~ ^[0-9]+$ ]] && (( n > MAX_N )); then
+      MAX_N=$n
+    fi
+  done <<< "$EXISTING_TAGS_TODAY"
+fi
+NEXT_N=$((MAX_N + 1))
+NEW_TAG="v${TODAY}-${NEXT_N}"
+git tag -a "$NEW_TAG" -m "Release ${NEW_TAG}: $COMMIT_MSG"
+git push origin "$NEW_TAG"
+
+# Changelog
+LATEST_PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${NEW_TAG}$" | head -n1 || true)
+CHANGELOG=""
+if [[ -n "$LATEST_PREV_TAG" ]]; then
+  CHANGELOG=$(git log --pretty=format:"- %h %s" "${LATEST_PREV_TAG}..HEAD")
+else
+  CHANGELOG=$(git log -n 20 --pretty=format:"- %h %s")
+fi
+echo "Changelog ${NEW_TAG}"
+echo "$CHANGELOG"
+mkdir -p releases
+{
+  echo "Changelog ${NEW_TAG}"
+  echo "$CHANGELOG"
+} > "releases/CHANGELOG_${NEW_TAG}.md"
