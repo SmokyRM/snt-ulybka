@@ -57,6 +57,18 @@ export interface SettingEntry<T = unknown> {
   updatedAt: string;
 }
 
+export interface EntityVersion<TBefore = unknown, TAfter = unknown> {
+  id: string;
+  entity: string;
+  entityId?: string | null;
+  version: number;
+  before?: TBefore | null;
+  after?: TAfter | null;
+  actorUserId?: string | null;
+  createdAt: string;
+  comment?: string | null;
+}
+
 export interface OwnershipRequest {
   id: string;
   plotNumber: string;

@@ -9,6 +9,7 @@ import {
   RequestStatus,
   User,
   UserStatus,
+  EntityVersion,
 } from "@/types/snt";
 
 interface MockDb {
@@ -18,6 +19,7 @@ interface MockDb {
   plotOwners: PlotOwner[];
   auditLogs: AuditLog[];
   settings: SettingEntry[];
+  entityVersions: EntityVersion[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -95,6 +97,7 @@ const getDb = (): MockDb => {
           updatedAt: now,
         },
       ],
+      entityVersions: [],
     };
   }
   return g.__SNT_DB__;
@@ -317,6 +320,7 @@ export const resetMockDb = () => {
         updatedAt: now,
       },
     ],
+    entityVersions: [],
   };
 };
 
@@ -400,4 +404,49 @@ export const setSetting = <T = unknown>(key: string, value: T): SettingEntry<T> 
   };
   db.settings.push(created as SettingEntry);
   return created;
+};
+
+export const addEntityVersion = (entry: {
+  entity: string;
+  entityId?: string | null;
+  before?: unknown;
+  after?: unknown;
+  actorUserId?: string | null;
+  comment?: string | null;
+}) => {
+  const db = getDb();
+  const versionsForEntity = db.entityVersions.filter(
+    (v) => v.entity === entry.entity && v.entityId === (entry.entityId ?? null)
+  );
+  const nextVersion = versionsForEntity.length
+    ? Math.max(...versionsForEntity.map((v) => v.version)) + 1
+    : 1;
+  const version: EntityVersion = {
+    id: createId("ver"),
+    entity: entry.entity,
+    entityId: entry.entityId ?? null,
+    version: nextVersion,
+    before: entry.before ?? null,
+    after: entry.after ?? null,
+    actorUserId: entry.actorUserId ?? null,
+    createdAt: new Date().toISOString(),
+    comment: entry.comment ?? null,
+  };
+  db.entityVersions.unshift(version);
+  if (db.entityVersions.length > 1000) {
+    db.entityVersions = db.entityVersions.slice(0, 1000);
+  }
+  return version;
+};
+
+export const listEntityVersions = (filters: {
+  entity: string;
+  entityId?: string | null;
+  limit?: number;
+}) => {
+  const db = getDb();
+  const { entity, entityId = null, limit = 50 } = filters;
+  return db.entityVersions
+    .filter((v) => v.entity === entity && v.entityId === entityId)
+    .slice(0, limit);
 };
