@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { findUserByContact, findUserById } from "@/lib/mockDb";
 
@@ -23,12 +22,13 @@ export async function POST(request: Request) {
 
   const payload = { userId: user.id, contact: contact || user.email || user.phone };
 
-  cookies().set(SESSION_COOKIE, JSON.stringify(payload), {
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set(SESSION_COOKIE, JSON.stringify(payload), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
 
-  return NextResponse.json({ ok: true });
+  return response;
 }
