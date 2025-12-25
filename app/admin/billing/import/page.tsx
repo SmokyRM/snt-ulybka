@@ -20,7 +20,7 @@ export default async function BillingImportPage() {
             Назад
           </a>
         </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm space-y-2">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm space-y-3">
           <div className="flex flex-wrap gap-3">
             <a
               href="/api/admin/billing/import/template.csv"
@@ -64,6 +64,15 @@ function ImportClient() {
       error?: string;
     }>;
   } | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<{
+    paidAt?: string;
+    amount?: string;
+    purpose?: string;
+    street?: string;
+    plotNumber?: string;
+    reference?: string;
+  }>({});
   const [selected, setSelected] = useState<number[]>([]);
   const [importComment, setImportComment] = useState("");
   const [commitLoading, setCommitLoading] = useState(false);
@@ -83,6 +92,16 @@ function ImportClient() {
     setCommitResult(null);
     const form = new FormData();
     form.append("file", file);
+    const hasMapping =
+      mapping.paidAt || mapping.amount || mapping.purpose || mapping.street || mapping.plotNumber || mapping.reference;
+    if (hasMapping) {
+      if (!mapping.paidAt || !mapping.amount || !mapping.purpose) {
+        setError("Заполните соответствие колонок: Дата, Сумма, Назначение");
+        setLoading(false);
+        return;
+      }
+      form.append("mapping", JSON.stringify(mapping));
+    }
     try {
       const res = await fetch("/api/admin/billing/import/preview", {
         method: "POST",
@@ -99,6 +118,9 @@ function ImportClient() {
       }
       const json = await res.json();
       setResult(json);
+      if (Array.isArray(json?.meta?.headers)) {
+        setHeaders(json.meta.headers as string[]);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -196,9 +218,30 @@ function ImportClient() {
           <input
             type="file"
             accept=".csv,text/csv"
-            onChange={(e) => {
+            onChange={async (e) => {
               const f = e.target.files?.[0] ?? null;
               setFile(f);
+              setHeaders([]);
+              setMapping({});
+              if (f) {
+                // fetch headers quickly
+                const form = new FormData();
+                form.append("file", f);
+                try {
+                  const res = await fetch("/api/admin/billing/import/preview", {
+                    method: "POST",
+                    body: form,
+                  });
+                  if (res.ok) {
+                    const json = await res.json();
+                    if (Array.isArray(json?.meta?.headers)) {
+                      setHeaders(json.meta.headers as string[]);
+                    }
+                  }
+                } catch {
+                  // ignore header preview errors
+                }
+              }
             }}
             className="text-sm"
           />
@@ -213,6 +256,54 @@ function ImportClient() {
           {error && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </div>
+
+      {headers.length > 0 && (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-2">
+          <div className="text-sm font-semibold text-zinc-900">Сопоставление колонок</div>
+          <div className="grid gap-3 rounded-lg border border-zinc-100 bg-zinc-50 p-3 sm:grid-cols-3">
+            {[
+              { key: "paidAt", label: "Дата (обяз.)", hint: "DD.MM.YYYY" },
+              { key: "amount", label: "Сумма (обяз.)", hint: "1500 или 1500,00" },
+              { key: "purpose", label: "Назначение (обяз.)", hint: "текст назначения" },
+              { key: "street", label: "Улица (опц.)" },
+              { key: "plotNumber", label: "Участок (опц.)" },
+              { key: "reference", label: "Номер операции (опц.)" },
+            ].map((field) => (
+              <label key={field.key} className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-zinc-800">
+                  {field.label} {field.hint ? <span className="text-xs text-zinc-600">({field.hint})</span> : null}
+                </span>
+                <select
+                  value={(mapping as Record<string, string | undefined>)[field.key] ?? ""}
+                  onChange={(e) =>
+                    setMapping((prev) => ({
+                      ...prev,
+                      [field.key]: e.target.value || undefined,
+                    }))
+                  }
+                  className="rounded border border-zinc-300 px-2 py-1"
+                >
+                  <option value="">Авто</option>
+                  {headers.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
+                onClick={() => setMapping({})}
+              >
+                Авто-распознавание
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {result && (
         <div className="space-y-4">

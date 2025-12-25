@@ -192,7 +192,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "empty file" }, { status: 400 });
   }
 
-  const headerRow = rowsRaw[0].map(normalizeHeader);
+  if (!rowsRaw.length) {
+    return NextResponse.json({ error: "no rows found" }, { status: 400 }) as never;
+  }
+
+  const headerRowRaw = rowsRaw[0];
+  const headerRow = headerRowRaw.map(normalizeHeader);
   const rows = rowsRaw.slice(1, MAX_ROWS + 1);
   const plots = getPlots();
   const payments = listPayments({});
@@ -205,12 +210,39 @@ export async function POST(request: Request) {
     return -1;
   };
 
-  const idxDate = col(["date"]);
-  const idxAmount = col(["amount"]);
-  const idxPurpose = col(["purpose"]);
-  const idxStreet = col(["street"]);
-  const idxPlot = col(["plot"]);
-  const idxRef = col(["reference"]);
+  let mappingObj: Record<string, string> | null = null;
+  const mappingField = form.get("mapping");
+  if (mappingField && typeof mappingField === "string") {
+    try {
+      mappingObj = JSON.parse(mappingField) as Record<string, string>;
+    } catch {
+      return NextResponse.json({ error: "invalid mapping json" }, { status: 400 });
+    }
+  }
+
+  const findByMapping = (name: string) => {
+    if (!mappingObj) return -1;
+    const target = mappingObj[name];
+    if (!target) return -1;
+    const idx = headerRowRaw.findIndex((h) => h.trim() === target.trim());
+    return idx;
+  };
+
+  const idxDate = mappingObj ? findByMapping("paidAt") : col(["date"]);
+  const idxAmount = mappingObj ? findByMapping("amount") : col(["amount"]);
+  const idxPurpose = mappingObj ? findByMapping("purpose") : col(["purpose"]);
+  const idxStreet = mappingObj ? findByMapping("street") : col(["street"]);
+  const idxPlot = mappingObj ? findByMapping("plotNumber") : col(["plot"]);
+  const idxRef = mappingObj ? findByMapping("reference") : col(["reference"]);
+
+  if (mappingObj) {
+    if (idxDate < 0 || idxAmount < 0 || idxPurpose < 0) {
+      return NextResponse.json(
+        { error: "mapping must include paidAt, amount, purpose columns" },
+        { status: 400 }
+      );
+    }
+  }
 
   const result = rows.map((cells, index) => {
     const rowIndex = index + 2; // considering header row as 1
@@ -294,6 +326,7 @@ export async function POST(request: Request) {
       detectedDelimiter: parsed.delimiter,
       detectedEncoding: "utf-8",
       warnings: parsed.warnings,
+      headers: headerRowRaw,
     },
     rows: result,
   });
