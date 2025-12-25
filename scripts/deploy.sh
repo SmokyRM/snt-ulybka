@@ -33,11 +33,33 @@ if [[ -n "$(git status --porcelain)" ]]; then
   git commit -m "$COMMIT_MSG"
 fi
 
+# If after stash/pop/pull there is nothing to do, exit
+if [[ -z "$(git status --porcelain)" ]]; then
+  echo "Nothing to deploy"
+  exit 0
+fi
+
+# Optional lint and typecheck
+if npm run | grep -q "lint"; then
+  npm run lint
+else
+  echo "lint skipped"
+fi
+if npm run | grep -q "typecheck"; then
+  npm run typecheck
+else
+  echo "typecheck skipped"
+fi
+
 git push origin dev
 
 git checkout main
 git pull --rebase origin main
-git merge --no-ff dev -m "Deploy: merge dev into main"
+git merge --no-ff dev -m "Deploy: $COMMIT_MSG"
 git push origin main
 
-echo "✅ Deployed commit: $(git rev-parse --short HEAD) on main"
+DEV_SHA=$(git rev-parse --short dev)
+MAIN_SHA=$(git rev-parse --short main)
+echo "✅ Deployed commit: $MAIN_SHA on main"
+echo "dev:  $DEV_SHA"
+echo "main: $MAIN_SHA"
