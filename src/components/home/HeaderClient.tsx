@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
+import { siteCity, siteName } from "@/config/site";
 
 type HeaderClientProps = {
   role?: "user" | "admin" | "board" | null;
@@ -90,7 +91,10 @@ export function HeaderClient({ role }: HeaderClientProps) {
             className="h-10 w-auto"
             priority
           />
-          <span className="text-base font-semibold">СНТ «Улыбка»</span>
+          <span className="flex flex-col leading-tight">
+            <span className="text-base font-semibold">{siteName}</span>
+            <span className="text-[11px] font-medium text-white/70">{siteCity}</span>
+          </span>
         </Link>
         <nav className="hidden items-center gap-5 text-sm font-medium text-white/80 lg:flex">
           {navItems.map((item) => (
