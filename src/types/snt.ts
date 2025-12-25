@@ -166,3 +166,20 @@ export interface AccrualItem {
   note?: string | null;
   updatedAt: string;
 }
+
+export interface Payment {
+  id: string;
+  periodId: string;
+  plotId: string;
+  amount: number;
+  paidAt: string;
+  method: string;
+  reference?: string | null;
+  comment?: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  isVoided: boolean;
+  voidReason?: string | null;
+  voidedAt?: string | null;
+  voidedByUserId?: string | null;
+}

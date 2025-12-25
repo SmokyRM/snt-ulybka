@@ -13,6 +13,9 @@ import {
   ContactsSetting,
   ScheduleSetting,
   Person,
+  AccrualPeriod,
+  AccrualItem,
+  Payment,
 } from "@/types/snt";
 
 interface MockDb {
@@ -26,6 +29,7 @@ interface MockDb {
   persons: Person[];
   accrualPeriods: AccrualPeriod[];
   accrualItems: AccrualItem[];
+  payments: Payment[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -124,6 +128,9 @@ const getDb = (): MockDb => {
       ],
       entityVersions: [],
       persons: [],
+      accrualPeriods: [],
+      accrualItems: [],
+      payments: [],
     };
   }
   return g.__SNT_DB__;
@@ -366,6 +373,9 @@ export const resetMockDb = () => {
     ],
     entityVersions: [],
     persons: [],
+    accrualPeriods: [],
+    accrualItems: [],
+    payments: [],
   };
 };
 
@@ -546,6 +556,109 @@ export const updatePlotsBulk = (
     return next;
   });
   return { updated: updatedCount, plots: updatedPlots };
+};
+
+// Billing helpers (MVP)
+export const listAccrualPeriods = () => getDb().accrualPeriods;
+
+export const createAccrualPeriod = (payload: { year: number; month: number; type: string }) => {
+  const db = getDb();
+  const exists = db.accrualPeriods.find(
+    (p) => p.year === payload.year && p.month === payload.month && p.type === payload.type
+  );
+  if (exists) return exists;
+  const period: AccrualPeriod = {
+    id: createId("period"),
+    year: payload.year,
+    month: payload.month,
+    type: payload.type,
+    createdAt: new Date().toISOString(),
+  };
+  db.accrualPeriods.push(period);
+  // create items for active plots
+  const activePlots = db.plots.filter((p) => p.status !== "archived");
+  activePlots.forEach((plot) => {
+    db.accrualItems.push({
+      id: createId("accrual"),
+      periodId: period.id,
+      plotId: plot.id,
+      amountAccrued: 0,
+      amountPaid: 0,
+      note: null,
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  return period;
+};
+
+export const listAccrualItems = (periodId: string) => {
+  const db = getDb();
+  return db.accrualItems.filter((i) => i.periodId === periodId);
+};
+
+export const updateAccrualItem = (id: string, patch: Partial<AccrualItem>) => {
+  const db = getDb();
+  const item = db.accrualItems.find((i) => i.id === id);
+  if (!item) return null;
+  const updated: AccrualItem = { ...item, ...patch, updatedAt: new Date().toISOString() };
+  db.accrualItems = db.accrualItems.map((i) => (i.id === id ? updated : i));
+  return updated;
+};
+
+export const listPayments = (filters?: { periodId?: string; plotId?: string }) => {
+  const db = getDb();
+  return db.payments.filter((p) => {
+    if (filters?.periodId && p.periodId !== filters.periodId) return false;
+    if (filters?.plotId && p.plotId !== filters.plotId) return false;
+    return true;
+  });
+};
+
+export const addPayment = (data: {
+  periodId: string;
+  plotId: string;
+  amount: number;
+  paidAt?: string;
+  method?: string;
+  reference?: string | null;
+  comment?: string | null;
+  createdByUserId: string | null;
+}) => {
+  const now = new Date().toISOString();
+  const payment: Payment = {
+    id: createId("pay"),
+    periodId: data.periodId,
+    plotId: data.plotId,
+    amount: data.amount,
+    paidAt: data.paidAt ?? now,
+    method: data.method ?? "other",
+    reference: data.reference ?? null,
+    comment: data.comment ?? null,
+    createdByUserId: data.createdByUserId,
+    createdAt: now,
+    isVoided: false,
+    voidReason: null,
+    voidedAt: null,
+    voidedByUserId: null,
+  };
+  const db = getDb();
+  db.payments.push(payment);
+  return payment;
+};
+
+export const voidPayment = (id: string, reason: string | null, voidedBy: string | null) => {
+  const db = getDb();
+  const payment = db.payments.find((p) => p.id === id);
+  if (!payment || payment.isVoided) return null;
+  const updated: Payment = {
+    ...payment,
+    isVoided: true,
+    voidReason: reason ?? null,
+    voidedAt: new Date().toISOString(),
+    voidedByUserId: voidedBy,
+  };
+  db.payments = db.payments.map((p) => (p.id === id ? updated : p));
+  return updated;
 };
 
 export const getSetting = <T = unknown>(key: string): SettingEntry<T> | null => {
