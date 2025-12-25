@@ -86,6 +86,7 @@ export const upsertUser = (user: {
   phone?: string;
   email?: string;
   plotNumber?: string;
+  street?: string;
   role?: User["role"];
   status?: UserStatus;
 }) => {
@@ -98,6 +99,7 @@ export const upsertUser = (user: {
       phone: user.phone ?? existing.phone,
       email: user.email ?? existing.email,
       plotNumber: user.plotNumber ?? existing.plotNumber,
+      street: user.street ?? existing.street,
       role: user.role ?? existing.role,
       status: user.status ?? existing.status,
     };
