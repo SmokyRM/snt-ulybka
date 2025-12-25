@@ -26,8 +26,10 @@ try {
   run("git merge dev");
 
   let pushed = false;
+  let prodSha = "";
   try {
     run("git push origin main");
+    prodSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
     pushed = true;
     console.log("main updated and pushed.");
   } catch (e) {
@@ -36,6 +38,7 @@ try {
       console.log("main уже содержит все изменения. Создаю пустой коммит для прод-деплоя...");
       run('git commit --allow-empty -m "chore: trigger vercel prod deploy"');
       run("git push origin main");
+      prodSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
       pushed = true;
       console.log("Пустой коммит отправлен, Vercel запустит прод деплой.");
     } else {
@@ -45,6 +48,10 @@ try {
 
   if (!pushed) {
     throw new Error("Не удалось запушить main");
+  }
+
+  if (prodSha) {
+    console.log("\n🚀 Production SHA (main):", prodSha);
   }
 } catch (error) {
   console.error("Release failed:", error.message);
@@ -58,16 +65,6 @@ try {
 
 try {
   run("git checkout dev");
-} catch {
-  // ignore
-}
-
-try {
-  const prodSha = require("child_process")
-    .execSync("git rev-parse HEAD", { encoding: "utf8" })
-    .toString()
-    .trim();
-  console.log("\n🚀 Production SHA:", prodSha);
 } catch {
   // ignore
 }
