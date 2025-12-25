@@ -126,10 +126,10 @@ export default async function ContactsRequestPage({
                     <div className="col-span-2 text-zinc-800">{plot.number}</div>
                     <div className="col-span-3 text-zinc-800">{plot.ownerFullName || "—"}</div>
                     <div className="col-span-2 text-zinc-700">{plot.phone || "—"}</div>
-                    <div className="col-span-2 text-zinc-700">{plot.email || "—"}</div>
-                    <div className="col-span-1 text-xs font-semibold text-zinc-700">
-                      {membershipLabel[plot.membershipStatus]}
-                    </div>
+                <div className="col-span-2 text-zinc-700">{plot.email || "—"}</div>
+                <div className="col-span-1 text-xs font-semibold text-zinc-700">
+                  {membershipLabel(plot.membershipStatus)}
+                </div>
                     <div className="col-span-1 text-xs font-semibold text-zinc-700">
                       {plot.isConfirmed ? "Да" : "Нет"}
                     </div>
@@ -147,4 +147,3 @@ export default async function ContactsRequestPage({
     </main>
   );
 }
-

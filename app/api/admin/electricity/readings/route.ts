@@ -47,8 +47,6 @@ export async function POST(request: Request) {
       entity: "meter_reading",
       entityId: reading.id,
       after: { reading, previousValue: last?.value ?? null, delta },
-      actorUserId: user.id ?? null,
-      actorRole: user.role,
     });
     return NextResponse.json(
       { reading, previousValue: last?.value ?? null, currentValue: value, deltaKwh: delta },

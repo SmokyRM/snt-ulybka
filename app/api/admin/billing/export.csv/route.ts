@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { listAccrualItems, listAccrualPeriods, listPayments, listPlots } from "@/lib/mockDb";
 import { categoryForAccrualType } from "@/lib/paymentCategory";
+import type { Payment, Plot } from "@/types/snt";
 
 const toCsvValue = (value: string | number) => {
   const str = typeof value === "number" ? value.toString() : value;
@@ -21,10 +22,14 @@ export async function GET(request: Request) {
   const period = listAccrualPeriods().find((p) => p.id === periodId);
   if (!period) return NextResponse.json({ error: "period not found" }, { status: 404 });
 
-  const plots = listPlots();
+  const plots: Plot[] = listPlots();
   const items = listAccrualItems(periodId);
   const paymentsByPlot: Record<string, number> = {};
-  listPayments({ periodId, includeVoided: false, category: categoryForAccrualType(period.type) }).forEach((p) => {
+  listPayments({
+    periodId,
+    includeVoided: false,
+    category: categoryForAccrualType(period.type),
+  }).forEach((p: Payment) => {
     paymentsByPlot[p.plotId] = (paymentsByPlot[p.plotId] ?? 0) + p.amount;
   });
 

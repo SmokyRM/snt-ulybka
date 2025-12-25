@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { getAccrualDebtors } from "@/api/admin/notifications/debtors/utils";
+import { getAccrualDebtors } from "../utils";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { logAdminAction } from "@/lib/audit";
 
@@ -43,8 +43,6 @@ export async function POST(request: Request) {
     action: "send_debt_notifications_telegram",
     entity: "debt_notifications",
     after: { type, period: periodLabel, count: items.length, totalDebt, sentMessages: sent },
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
 
   return NextResponse.json({ ok: true, sentMessages: sent });

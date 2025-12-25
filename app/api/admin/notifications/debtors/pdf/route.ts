@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { getAccrualDebtors } from "@/api/admin/notifications/debtors/utils";
+import { getAccrualDebtors } from "../utils";
 import { createSimplePdf } from "@/lib/simplePdf";
 import { logAdminAction } from "@/lib/audit";
 
@@ -44,11 +44,9 @@ export async function GET(request: Request) {
     action: "export_debt_notifications_pdf",
     entity: "debt_notifications",
     after: { type, period: periodLabel, count: items.length },
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
 
-  return new NextResponse(pdfBuffer, {
+  return new NextResponse(new Uint8Array(pdfBuffer), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",

@@ -1,40 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
-import { findPlotById, listPersons } from "@/lib/mockDb";
+import {
+  findPlotById,
+  listAccrualItems,
+  listAccrualPeriods,
+  listDebtNotificationsByPlot,
+  listPayments,
+  listPersons,
+  updatePlotStatus,
+} from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings.shared";
+import { membershipLabel } from "@/lib/membershipLabels";
+import { categoryForAccrualType } from "@/lib/paymentCategory";
+import { NotificationStatusActions } from "./NotificationStatusActions";
 
-const formatMembership = (status?: string | null) => {
-  switch (status) {
-    case "MEMBER":
-      return "Член";
-    case "NON_MEMBER":
-      return "Не член";
-    case "PENDING":
-      return "На проверке";
-    default:
-      return "—";
-  }
-};
+const formatCurrency = (value: number) => `${value.toFixed(2)} ₽`;
 
-const actionLabels: Record<string, string> = {
-  update_plot: "Изменение данных участка",
-  update_membership: "Изменение статуса членства",
-  archive_plot: "Архивирование",
-  unarchive_plot: "Возврат из архива",
-  bulk_archive: "Массовое архивирование",
-  bulk_unarchive: "Массовое восстановление",
-  bulk_set_membership: "Массовое изменение членства",
-  bulk_needs_review: "Массовая пометка на проверку",
-};
-
-export default async function RegistryDetail({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function RegistryDetail({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
   if (!isAdmin(user)) redirect("/login");
+
   const plot = findPlotById(params.id);
   if (!plot) {
     return (
@@ -48,54 +34,60 @@ export default async function RegistryDetail({
       </main>
     );
   }
+
   const currentPlot = plot;
-  const historyRes = await fetch(
-    `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/registry/plots/${currentPlot.id}/history`,
-    { cache: "no-store" }
-  ).catch(() => null);
-  const historyJson = historyRes && historyRes.ok ? await historyRes.json() : { items: [] };
-  const history = (historyJson.items as Array<{
-    id: string;
-    createdAtIso?: string;
-    createdAtLocalFormatted?: string;
-    action: string;
-    entity?: string;
-    entityId?: string | null;
-    comment?: string | null;
-    actorUserId?: string | null;
-    actorRole?: string | null;
-  }>) ?? [];
+  const persons = listPersons();
+  const periods = listAccrualPeriods();
+  const accrualItems = periods
+    .flatMap((p) => listAccrualItems(p.id).map((a) => ({ ...a, period: p })))
+    .filter((a) => a.plotId === currentPlot.id)
+    .sort((a, b) => (b.period.year - a.period.year) || b.period.month - a.period.month)
+    .slice(0, 36);
+
+  const payments = listPayments({ plotId: currentPlot.id, includeVoided: true }).sort((a, b) =>
+    (b.paidAt ?? "").localeCompare(a.paidAt ?? "")
+  );
+
+  const notifications = listDebtNotificationsByPlot(currentPlot.id).sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+  );
+
+  const accrualRows = accrualItems.map((acc) => {
+    const category = categoryForAccrualType(acc.period.type);
+    const paid = payments
+      .filter((p) => !p.isVoided && p.periodId === acc.periodId && p.category === category)
+      .reduce((sum, p) => sum + p.amount, 0);
+    const debt = acc.amountAccrued - paid;
+    return {
+      period: `${acc.period.year}-${String(acc.period.month).padStart(2, "0")}`,
+      type: acc.period.type,
+      amountAccrued: acc.amountAccrued,
+      amountPaid: paid,
+      debt,
+    };
+  });
+
+  const owners = persons.filter((p) => p.id === currentPlot.ownerUserId);
 
   async function updateStatus(formData: FormData) {
     "use server";
-    const status = formData.get("status") as string;
-    const membershipStatus = formData.get("membershipStatus") as string;
-    await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/registry/plots/${currentPlot.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, membershipStatus }),
-      cache: "no-store",
-    });
-    // no revalidate to keep minimal
-  }
-
-  async function changeOwner(formData: FormData) {
-    "use server";
-    const ownerId = formData.get("ownerId") as string;
-    if (!ownerId) return;
-    await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/registry/plots/${currentPlot.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ownerId }),
-      cache: "no-store",
+    const status = (formData.get("status") as string) ?? currentPlot.status;
+    const membershipStatus = (formData.get("membershipStatus") as string) ?? currentPlot.membershipStatus;
+    updatePlotStatus(currentPlot.id, {
+      status: status === "archived" ? "archived" : "active",
+      membershipStatus:
+        membershipStatus === "MEMBER" ||
+        membershipStatus === "NON_MEMBER" ||
+        membershipStatus === "PENDING" ||
+        membershipStatus === "UNKNOWN"
+          ? membershipStatus
+          : currentPlot.membershipStatus,
     });
   }
-
-  const persons = listPersons();
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
-      <div className="mx-auto w-full max-w-4xl space-y-6">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">
             Участок {currentPlot.street}, {currentPlot.plotNumber}
@@ -108,8 +100,9 @@ export default async function RegistryDetail({
           </Link>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="grid gap-3 text-sm text-zinc-800 sm:grid-cols-2">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">Профиль</h2>
+          <div className="mt-3 grid gap-3 text-sm text-zinc-800 sm:grid-cols-2">
             <div>
               <p className="font-semibold">Улица</p>
               <p>{currentPlot.street}</p>
@@ -120,7 +113,7 @@ export default async function RegistryDetail({
             </div>
             <div>
               <p className="font-semibold">Членство</p>
-              <p>{formatMembership(currentPlot.membershipStatus)}</p>
+              <p>{membershipLabel(currentPlot.membershipStatus)}</p>
             </div>
             <div>
               <p className="font-semibold">Архив</p>
@@ -128,25 +121,21 @@ export default async function RegistryDetail({
             </div>
             <div>
               <p className="font-semibold">Владелец</p>
-              <p>{currentPlot.ownerFullName ?? "—"}</p>
+              <p>{currentPlot.ownerFullName ?? owners[0]?.fullName ?? "—"}</p>
+            </div>
+            <div>
+              <p className="font-semibold">Контакты</p>
+              <p>{currentPlot.phone ?? owners[0]?.phone ?? currentPlot.email ?? owners[0]?.email ?? "—"}</p>
             </div>
             <div>
               <p className="font-semibold">Обновлено</p>
               <p>{formatAdminTime(currentPlot.updatedAt)}</p>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-4">
-          <h2 className="text-lg font-semibold">Изменить статус</h2>
-          <form action={updateStatus} className="grid gap-3 text-sm sm:grid-cols-3 sm:items-end">
+          <form action={updateStatus} className="mt-4 grid gap-3 text-sm sm:grid-cols-3 sm:items-end">
             <label className="flex flex-col gap-1">
               <span className="font-medium text-zinc-800">Статус</span>
-              <select
-                name="status"
-                defaultValue={currentPlot.status ?? "active"}
-                className="rounded border border-zinc-300 px-3 py-2"
-              >
+              <select name="status" defaultValue={plot.status} className="rounded border border-zinc-300 px-3 py-2">
                 <option value="active">Активен</option>
                 <option value="archived">В архиве</option>
               </select>
@@ -155,7 +144,7 @@ export default async function RegistryDetail({
               <span className="font-medium text-zinc-800">Членство</span>
               <select
                 name="membershipStatus"
-                defaultValue={currentPlot.membershipStatus ?? "UNKNOWN"}
+                defaultValue={plot.membershipStatus}
                 className="rounded border border-zinc-300 px-3 py-2"
               >
                 <option value="MEMBER">Член</option>
@@ -171,68 +160,84 @@ export default async function RegistryDetail({
               Сохранить
             </button>
           </form>
-        </div>
+        </section>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-4">
-          <h2 className="text-lg font-semibold">Привязать владельца</h2>
-          <form action={changeOwner} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-zinc-800">Владелец</span>
-              <select name="ownerId" defaultValue="" className="rounded border border-zinc-300 px-3 py-2">
-                <option value="">Не выбран</option>
-                {persons.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.fullName} {p.phone ? `(${p.phone})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="submit"
-              className="rounded bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42]"
-            >
-              Сохранить владельца
-            </button>
-          </form>
-          <p className="text-xs text-zinc-600">
-            Для MVP список людей статический (persons), можно расширить позже формой создания.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
-          <h2 className="text-lg font-semibold">История изменений</h2>
-          <table className="min-w-full divide-y divide-zinc-200 text-sm">
-            <thead className="bg-zinc-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-zinc-700">Дата</th>
-                <th className="px-3 py-2 text-left font-semibold text-zinc-700">Действие</th>
-                <th className="px-3 py-2 text-left font-semibold text-zinc-700">Комментарий</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {history.map((h) => (
-                <tr key={h.id}>
-                  <td className="px-3 py-2 text-zinc-700">
-                    {h.createdAtLocalFormatted ?? formatAdminTime(h.createdAtIso ?? "")}
-                  </td>
-                  <td className="px-3 py-2 text-zinc-900">
-                    {actionLabels[h.action as string] ?? h.action}
-                  </td>
-                  <td className="px-3 py-2 text-zinc-700">
-                    {"comment" in h && h.comment ? h.comment : "—"}
-                  </td>
-                </tr>
-              ))}
-              {history.length === 0 && (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
+          <h2 className="text-lg font-semibold">Начисления</h2>
+          <div className="overflow-auto">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-50">
                 <tr>
-                  <td className="px-3 py-3 text-center text-zinc-600" colSpan={3}>
-                    История пуста
-                  </td>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Период</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Тип</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Начислено</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Оплачено</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Долг</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {accrualRows.map((row, idx) => (
+                  <tr key={`${row.period}-${row.type}-${idx}`}>
+                    <td className="px-3 py-2">{row.period}</td>
+                    <td className="px-3 py-2">{row.type}</td>
+                    <td className="px-3 py-2">{formatCurrency(row.amountAccrued)}</td>
+                    <td className="px-3 py-2">{formatCurrency(row.amountPaid)}</td>
+                    <td className="px-3 py-2 font-semibold text-red-700">{formatCurrency(row.debt)}</td>
+                  </tr>
+                ))}
+                {accrualRows.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-zinc-600" colSpan={5}>
+                      Нет начислений
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
+          <h2 className="text-lg font-semibold">Платежи</h2>
+          <div className="overflow-auto">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Дата</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Сумма</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Категория</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Назначение</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Импорт</th>
+                  <th className="px-3 py-2 text-left font-semibold text-zinc-700">Статус</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {payments.map((p) => (
+                  <tr key={p.id} className={p.isVoided ? "text-zinc-500" : ""}>
+                    <td className="px-3 py-2">{formatAdminTime(p.paidAt)}</td>
+                    <td className="px-3 py-2">{formatCurrency(p.amount)}</td>
+                    <td className="px-3 py-2">{p.category ?? "—"}</td>
+                    <td className="px-3 py-2">{p.comment ?? "—"}</td>
+                    <td className="px-3 py-2">{p.importBatchId ?? "—"}</td>
+                    <td className="px-3 py-2">{p.isVoided ? "Аннулирован" : "Активен"}</td>
+                  </tr>
+                ))}
+                {payments.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-zinc-600" colSpan={6}>
+                      Платежей нет
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
+          <h2 className="text-lg font-semibold">Уведомления</h2>
+          <NotificationStatusActions plotId={plot.id} notifications={notifications} />
+        </section>
       </div>
     </main>
   );

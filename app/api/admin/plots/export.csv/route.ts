@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { listPlots } from "@/lib/plotsDb";
 import { membershipLabel } from "@/lib/membershipLabels";
+import type { MembershipStatus } from "@/types/snt";
 
 const toCsvValue = (value: string | number) => {
   const str = typeof value === "number" ? value.toString() : value;
@@ -18,7 +19,7 @@ const parseFilters = (params: URLSearchParams) => {
     confirmed: confirmedParam === "1" ? true : confirmedParam === "0" ? false : undefined,
     membership:
       membershipParam === "UNKNOWN" || membershipParam === "MEMBER" || membershipParam === "NON_MEMBER"
-        ? membershipParam
+        ? (membershipParam as MembershipStatus)
         : undefined,
     q,
     missingContacts,

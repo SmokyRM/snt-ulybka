@@ -52,8 +52,6 @@ export async function GET(request: Request) {
     action: "export_electricity_report",
     entity: "electricity_report",
     after: { year, month, count: items.length },
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
   return res;
 }

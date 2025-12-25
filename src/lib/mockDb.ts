@@ -559,6 +559,23 @@ export const listPlotsWithFilters = (filters?: {
   return { total, items, page, pageSize };
 };
 
+export const listPlots = (filters?: {
+  query?: string | null;
+  street?: string | null;
+  membershipStatus?: Plot["membershipStatus"] | null;
+  archived?: boolean | null;
+}) => {
+  const { items } = listPlotsWithFilters({
+    query: filters?.query ?? null,
+    street: filters?.street ?? null,
+    membershipStatus: filters?.membershipStatus ?? null,
+    archived: filters?.archived ?? null,
+    page: 1,
+    pageSize: Number.MAX_SAFE_INTEGER,
+  });
+  return items;
+};
+
 export const updatePlotsBulk = (
   ids: string[],
   patch: Partial<Plot>
@@ -975,6 +992,11 @@ export const upsertDebtNotification = (data: {
 export const listDebtNotifications = (filters: { periodId: string; type: DebtNotification["type"] }) => {
   const db = getDb();
   return db.debtNotifications.filter((n) => n.periodId === filters.periodId && n.type === filters.type);
+};
+
+export const listDebtNotificationsByPlot = (plotId: string) => {
+  const db = getDb();
+  return db.debtNotifications.filter((n) => n.plotId === plotId);
 };
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();

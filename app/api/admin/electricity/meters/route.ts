@@ -44,8 +44,6 @@ export async function POST(request: Request) {
     entity: "electricity_meter",
     entityId: meter.id,
     after: meter,
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
   return NextResponse.json({ meter }, { status: 201 });
 }

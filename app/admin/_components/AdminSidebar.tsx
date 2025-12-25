@@ -13,6 +13,7 @@ const links = [
   { href: "/admin/electricity/tariffs", label: "Тарифы" },
   { href: "/admin/electricity/report", label: "Отчёт по электро" },
   { href: "/admin/notifications/debtors", label: "Должники" },
+  { href: "/admin/debts", label: "Долги" },
 ];
 
 export default function AdminSidebar() {

@@ -20,8 +20,6 @@ export async function GET(request: Request) {
     action: "view_electricity_report",
     entity: "electricity_report",
     after: { year, month, count: report.length },
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
   return NextResponse.json({ items: report });
 }

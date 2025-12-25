@@ -34,8 +34,6 @@ export async function POST(request: Request) {
     entity: "debt_notification",
     entityId: saved.id,
     after: saved,
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
 
   return NextResponse.json({ notification: saved });

@@ -27,8 +27,6 @@ export async function POST(request: Request) {
         tariff: result.tariff,
         updatedCount: result.updatedCount,
       },
-      actorUserId: user.id ?? null,
-      actorRole: user.role,
     });
     return NextResponse.json({
       ok: true,

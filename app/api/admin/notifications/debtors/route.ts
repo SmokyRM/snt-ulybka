@@ -19,8 +19,6 @@ export async function GET(request: Request) {
     action: "generate_debt_notifications",
     entity: "debt_notifications",
     after: { type: typeParam, period: periodLabel, count: items.length },
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
 
   return NextResponse.json({ items });

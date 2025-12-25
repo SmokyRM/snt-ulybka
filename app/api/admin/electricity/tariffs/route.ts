@@ -28,8 +28,6 @@ export async function POST(request: Request) {
     entity: "electricity_tariff",
     entityId: tariff.id,
     after: tariff,
-    actorUserId: user.id ?? null,
-    actorRole: user.role,
   });
   return NextResponse.json({ tariff }, { status: 201 });
 }
