@@ -19,6 +19,7 @@ import {
   ImportBatch,
   ElectricityMeter,
   MeterReading,
+  ElectricityTariff,
 } from "@/types/snt";
 
 interface MockDb {
@@ -36,6 +37,7 @@ interface MockDb {
   importBatches: ImportBatch[];
   electricityMeters: ElectricityMeter[];
   meterReadings: MeterReading[];
+  electricityTariffs: ElectricityTariff[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -136,11 +138,12 @@ const getDb = (): MockDb => {
       persons: [],
       accrualPeriods: [],
       accrualItems: [],
-  payments: [],
-  importBatches: [],
-  electricityMeters: [],
-  meterReadings: [],
-};
+      payments: [],
+      importBatches: [],
+      electricityMeters: [],
+      meterReadings: [],
+      electricityTariffs: [],
+    };
   }
   return g.__SNT_DB__;
 };
@@ -388,6 +391,7 @@ export const resetMockDb = () => {
     importBatches: [],
     electricityMeters: [],
     meterReadings: [],
+    electricityTariffs: [],
   };
 };
 
@@ -792,6 +796,85 @@ export const getLastMeterReading = (meterId: string) => {
   return readings[readings.length - 1] ?? null;
 };
 
+const getLastReadingOnOrBefore = (meterId: string, dateIso: string) => {
+  const limit = new Date(dateIso).getTime();
+  return listMeterReadings(meterId)
+    .filter((r) => new Date(r.readingDate).getTime() <= limit)
+    .sort((a, b) => a.readingDate.localeCompare(b.readingDate))
+    .pop() ?? null;
+};
+
+export const listElectricityTariffs = () => getDb().electricityTariffs;
+
+export const addElectricityTariff = (data: { pricePerKwh: number; validFrom: string }) => {
+  const db = getDb();
+  const tariff: ElectricityTariff = {
+    id: createId("tariff"),
+    pricePerKwh: data.pricePerKwh,
+    validFrom: data.validFrom,
+    createdAt: new Date().toISOString(),
+  };
+  db.electricityTariffs.push(tariff);
+  db.electricityTariffs.sort(
+    (a, b) => new Date(b.validFrom).getTime() - new Date(a.validFrom).getTime()
+  );
+  return tariff;
+};
+
+export const findTariffForPeriod = (year: number, month: number) => {
+  const endOfMonth = new Date(Date.UTC(year, month, 0));
+  return listElectricityTariffs().find(
+    (t) => new Date(t.validFrom).getTime() <= endOfMonth.getTime()
+  ) ?? null;
+};
+
+export const accrueElectricityForPeriod = (payload: { year: number; month: number }) => {
+  const { year, month } = payload;
+  const db = getDb();
+  const period = createAccrualPeriod({ year, month, type: "electricity" });
+  const tariff = findTariffForPeriod(year, month);
+  if (!tariff) {
+    throw new Error("Нет тарифа для указанного периода");
+  }
+  const endOfMonth = new Date(Date.UTC(year, month, 0));
+  const endOfPrev = new Date(Date.UTC(year, month - 1, 0));
+  const activeMeters = db.electricityMeters.filter((m) => m.active);
+
+  const deltasByPlot: Record<string, { delta: number; details: Array<{ meterId: string; delta: number }> }> = {};
+
+  activeMeters.forEach((meter) => {
+    const current = getLastReadingOnOrBefore(meter.id, endOfMonth.toISOString());
+    if (!current) return;
+    const prev = getLastReadingOnOrBefore(meter.id, endOfPrev.toISOString());
+    const delta = prev ? current.value - prev.value : current.value;
+    if (delta < 0) return;
+    if (!deltasByPlot[meter.plotId]) {
+      deltasByPlot[meter.plotId] = { delta: 0, details: [] };
+    }
+    deltasByPlot[meter.plotId].delta += delta;
+    deltasByPlot[meter.plotId].details.push({ meterId: meter.id, delta });
+  });
+
+  const updatedItems: AccrualItem[] = [];
+  Object.entries(deltasByPlot).forEach(([plotId, info]) => {
+    const item = ensureAccrualItem(period.id, plotId);
+    const updated: AccrualItem = {
+      ...item,
+      amountAccrued: info.delta * tariff.pricePerKwh,
+      note: `ΔкВт=${info.delta}, тариф=${tariff.pricePerKwh}`,
+      updatedAt: new Date().toISOString(),
+    };
+    db.accrualItems = db.accrualItems.map((i) => (i.id === item.id ? updated : i));
+    updatedItems.push(updated);
+  });
+
+  return {
+    period,
+    tariff,
+    updatedCount: updatedItems.length,
+    deltasByPlot,
+  };
+};
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();
   return db.accrualPeriods.find((p) => p.year === year && p.month === month && p.type === type) ?? null;

@@ -216,3 +216,10 @@ export interface MeterReading {
   source: "manual_admin" | "import" | "owner";
   createdAt: string;
 }
+
+export interface ElectricityTariff {
+  id: string;
+  pricePerKwh: number;
+  validFrom: string;
+  createdAt: string;
+}
