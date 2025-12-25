@@ -1,15 +1,3 @@
-const buildLabel = () => {
-  const formatter = new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const formatted = formatter.format(new Date());
-  return `Обновлено: ${formatted.replace(",", " в")}`;
-};
-
 export default function Footer() {
   return (
     <footer className="border-t border-[#5E704F]/15 py-8">
@@ -18,11 +6,10 @@ export default function Footer() {
           <div className="text-zinc-900">
             <span className="font-semibold">СНТ «Улыбка»</span>
           </div>
-        <div className="flex flex-col items-start gap-1 text-xs text-zinc-600 sm:items-end">
-          <span>© {new Date().getFullYear()} Официальный сайт СНТ</span>
-          <span>{buildLabel()}</span>
+          <div className="flex flex-col items-start gap-1 text-xs text-zinc-600 sm:items-end">
+            <span>© {new Date().getFullYear()} Официальный сайт СНТ</span>
+          </div>
         </div>
-      </div>
       </div>
     </footer>
   );
