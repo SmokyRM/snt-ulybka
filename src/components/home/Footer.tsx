@@ -1,4 +1,5 @@
 export default function Footer() {
+  const year = new Date().getFullYear();
   return (
     <footer className="border-t border-[#5E704F]/15 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 text-sm text-zinc-600 sm:px-6">
@@ -7,7 +8,9 @@ export default function Footer() {
             <span className="font-semibold">СНТ «Улыбка»</span>
           </div>
           <div className="flex flex-col items-start gap-1 text-xs text-zinc-600 sm:items-end">
-            <span>© {new Date().getFullYear()} Официальный сайт СНТ</span>
+            <span>
+              © {year} Официальный сайт СНТ «Улыбка», г. Снежинск
+            </span>
           </div>
         </div>
       </div>
