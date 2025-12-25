@@ -2,9 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadSession, saveSession } from "@/lib/session";
-
-const MAGIC_CODE = "111111";
+import { useRouter } from "next/navigation";
+import { getSessionClient } from "@/lib/session";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,25 +11,56 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [step, setStep] = useState<"request" | "verify">("request");
 
   useEffect(() => {
-    const session = loadSession();
+    const session = getSessionClient();
     if (session) {
       router.replace("/cabinet");
     }
   }, [router]);
 
-  const handleSubmit = (event: FormEvent) => {
+  const requestCode = async () => {
+    if (!identifier) {
+      setError("Сначала укажите email или телефон.");
+      return;
+    }
+    setError(null);
+    setInfo(null);
+    const res = await fetch("/api/auth/request-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contact: identifier }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Не удалось отправить код");
+      return;
+    }
+    setInfo(`Тестовый код: ${data.code}`);
+    setStep("verify");
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!identifier) {
       setError("Укажите email или телефон.");
       return;
     }
-    if (code !== MAGIC_CODE) {
-      setError("Неверный код. Используйте 111111 для входа.");
+    if (!code) {
+      setError("Введите код из сообщения.");
       return;
     }
-    saveSession(identifier);
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contact: identifier, code }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Не удалось выполнить вход");
+      return;
+    }
     router.push("/cabinet");
   };
 
@@ -63,20 +93,22 @@ export default function LoginPage() {
               className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-800">
-              Код подтверждения
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              required
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="111111"
-              className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
-            />
-          </div>
+          {step === "verify" && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-800">
+                Код подтверждения
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Введите код"
+                className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
+              />
+            </div>
+          )}
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
               {error}
@@ -90,14 +122,15 @@ export default function LoginPage() {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={handleSendCode}
+              onClick={requestCode}
               className="rounded-full border border-[#5E704F] px-5 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
             >
               Получить код
             </button>
             <button
               type="submit"
-              className="rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
+              disabled={step !== "verify"}
+              className="rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Войти
             </button>

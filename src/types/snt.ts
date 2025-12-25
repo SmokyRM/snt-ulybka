@@ -1,17 +1,26 @@
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface Plot {
-  id: string;
-  number: string;
-  street?: string;
+  plotId: string;
+  plotNumber: string;
+  street: string;
   cadastral?: string;
+  plotCode: string;
+  ownerUserId?: string | null;
 }
+
+export type UserRole = "user" | "board" | "admin";
+export type UserStatus = "pending" | "verified" | "rejected";
 
 export interface User {
   id: string;
   email?: string;
   phone?: string;
   fullName?: string;
+  plotNumber?: string;
+  street?: string;
+  role: UserRole;
+  status: UserStatus;
 }
 
 export interface OwnershipRequest {

@@ -1,55 +1,26 @@
-"use client";
+const SESSION_COOKIE = "snt_session";
 
-export interface Session {
-  identifier: string;
-  isAdmin: boolean;
+interface SessionPayload {
+  userId: string;
+  contact: string;
 }
 
-const SESSION_KEY = "snt_session";
-
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
-const normalizePhone = (value: string) => value.replace(/\D/g, "");
-const normalizeIdentifier = (value: string) =>
-  value.includes("@") ? normalizeEmail(value) : normalizePhone(value);
-
-const getAdminIdentifiers = (): string[] => {
-  const raw =
-    process.env.NEXT_PUBLIC_ADMIN_EMAILS ??
-    process.env.ADMIN_EMAILS ??
-    process.env.NEXT_PUBLIC_ADMIN_PHONES ??
-    process.env.ADMIN_PHONES ??
-    "";
-  return raw
-    .split(",")
-    .map((item) => normalizeIdentifier(item))
-    .filter(Boolean);
-};
-
-const isAdminIdentifier = (identifier: string) =>
-  getAdminIdentifiers().includes(normalizeIdentifier(identifier));
-
-export const loadSession = (): Session | null => {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
+const parseCookie = (value: string | undefined): SessionPayload | null => {
+  if (!value) return null;
   try {
-    return JSON.parse(raw) as Session;
+    return JSON.parse(value) as SessionPayload;
   } catch (error) {
-    window.localStorage.removeItem(SESSION_KEY);
     return null;
   }
 };
 
-export const saveSession = (identifier: string) => {
-  if (typeof window === "undefined") return;
-  const session: Session = {
-    identifier,
-    isAdmin: isAdminIdentifier(identifier),
-  };
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-};
-
-export const clearSession = () => {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(SESSION_KEY);
+export const getSessionClient = (): SessionPayload | null => {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  if (!match) return null;
+  const value = decodeURIComponent(match.split("=", 2)[1] ?? "");
+  return parseCookie(value);
 };

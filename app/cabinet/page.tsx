@@ -1,67 +1,15 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { clearSession, loadSession } from "@/lib/session";
-import {
-  getApprovedForIdentifier,
-  getRequestsByIdentifier,
-} from "@/lib/mockDb";
-import { OwnershipRequest } from "@/types/snt";
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/session.server";
+import { getPlotForUser } from "@/lib/plotsDb";
 
 export default function CabinetPage() {
-  const router = useRouter();
-  const session = useMemo(() => loadSession(), []);
-  const [requests, setRequests] = useState<OwnershipRequest[]>([]);
-  const [approved, setApproved] = useState<OwnershipRequest | undefined>();
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (!session) {
-      router.replace("/login");
-      return;
-    }
-    setRequests(getRequestsByIdentifier(session.identifier));
-    setApproved(getApprovedForIdentifier(session.identifier));
-    setReady(true);
-  }, [router, session]);
-
-  if (!ready || !session) {
-    return (
-      <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
-        <div className="mx-auto w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <p className="text-sm text-zinc-700">Загрузка...</p>
-        </div>
-      </main>
-    );
+  const user = getSessionUser();
+  if (!user) {
+    redirect("/auth");
   }
 
-  const latestRequest = [...requests].sort((a, b) =>
-    a.createdAt.localeCompare(b.createdAt)
-  )[requests.length ? requests.length - 1 : -1];
-
-  const statusBadge = (status: OwnershipRequest["status"]) => {
-    switch (status) {
-      case "APPROVED":
-        return (
-          <span className="rounded-full bg-[#5E704F]/10 px-3 py-1 text-xs font-semibold text-[#5E704F]">
-            Подтверждено
-          </span>
-        );
-      case "REJECTED":
-        return (
-          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-            Отклонено
-          </span>
-        );
-      default:
-        return (
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-            В ожидании
-          </span>
-        );
-    }
-  };
+  const isVerified = user.status === "verified";
+  const plot = user.id ? getPlotForUser(user.id) : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -69,36 +17,44 @@ export default function CabinetPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Личный кабинет</h1>
-            <p className="text-sm text-zinc-600">{session.identifier}</p>
+            <p className="text-sm text-zinc-600">
+              {user.email || user.phone || "Профиль"}
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              clearSession();
-              router.replace("/login");
-            }}
+          <a
+            href="/auth"
             className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
           >
             Выйти
-          </button>
+          </a>
         </div>
 
-        {approved ? (
+        {isVerified ? (
           <section className="rounded-2xl border border-[#5E704F]/30 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3">
-              {statusBadge("APPROVED")}
+              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1 text-xs font-semibold text-[#5E704F]">
+                Доступ открыт
+              </span>
               <p className="text-sm text-zinc-600">
-                Доступ к участку подтвержден администратором.
+                Правление подтвердило ваши данные.
               </p>
             </div>
             <h2 className="mt-3 text-xl font-semibold text-zinc-900">
               Полный кабинет
             </h2>
-            <ul className="mt-4 space-y-2 text-sm text-zinc-700">
-              <li>Участок: {approved.plotNumber}</li>
-              {approved.street && <li>Улица: {approved.street}</li>}
-              {approved.cadastral && <li>Кадастровый номер: {approved.cadastral}</li>}
-            </ul>
+            {plot ? (
+              <ul className="mt-4 space-y-2 text-sm text-zinc-700">
+                <li>
+                  Мой участок: {plot.street}, {plot.plotNumber}
+                </li>
+                {plot.cadastral && <li>Кадастровый номер: {plot.cadastral}</li>}
+                <li>Код участка: {plot.plotCode}</li>
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-zinc-700">
+                Данные участка будут доступны после обновления реестра.
+              </p>
+            )}
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <a
                 href="/"
@@ -117,31 +73,23 @@ export default function CabinetPage() {
         ) : (
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3">
-              {statusBadge(latestRequest?.status ?? "PENDING")}
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                {user.status === "rejected" ? "Отклонено" : "На проверке"}
+              </span>
               <p className="text-sm text-zinc-700">
-                Заявка на подтверждение права
+                {user.status === "rejected"
+                  ? "Доступ отклонен"
+                  : "На проверке правлением"}
               </p>
             </div>
-            {latestRequest ? (
-              <div className="mt-4 space-y-2 text-sm text-zinc-700">
-                <p>
-                  Участок: {latestRequest.plotNumber}
-                  {latestRequest.street ? `, ${latestRequest.street}` : ""}
-                </p>
-                <p>
-                  Дата подачи:{" "}
-                  {new Date(latestRequest.createdAt).toLocaleDateString("ru-RU")}
-                </p>
-                {latestRequest.status === "REJECTED" &&
-                  latestRequest.rejectionReason && (
-                    <p className="text-red-700">
-                      Причина отказа: {latestRequest.rejectionReason}
-                    </p>
-                  )}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-zinc-700">
-                Заявка ещё не отправлена.
+            <p className="mt-3 text-sm text-zinc-700">
+              {user.status === "rejected"
+                ? "Свяжитесь с правлением для уточнения причин и повторной заявки."
+                : "Доступ ограничен до подтверждения данных правлением."}
+            </p>
+            {user.status === "rejected" && (
+              <p className="mt-2 text-sm text-zinc-700">
+                Контакты правления: info@snt-ulybka.ru, +7 (900) 000-00-00
               </p>
             )}
             <div className="mt-6 flex flex-wrap gap-3">
