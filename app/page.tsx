@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
+import { telegramUrl, vkUrl } from "@/config/publicLinks";
 
 const actions = [
   {
@@ -25,9 +25,6 @@ const actions = [
 ];
 
 export default function Home() {
-  const vkUrl = OFFICIAL_CHANNELS.vk;
-  const tgUrl = OFFICIAL_CHANNELS.telegram;
-
   return (
     <main className="space-y-12 bg-[#F8F1E9] pb-16 pt-8 sm:space-y-16 sm:pb-20 sm:pt-12">
       <section className="pt-4">
@@ -180,7 +177,7 @@ export default function Home() {
                 VK: vk.com/snt_smile
               </a>
               <a
-                href={tgUrl}
+                href={telegramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-[#5E704F] transition-colors hover:border-[#5E704F]/50"
