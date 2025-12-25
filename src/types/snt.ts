@@ -57,6 +57,16 @@ export interface SettingEntry<T = unknown> {
   updatedAt: string;
 }
 
+export interface ContactsSetting {
+  phone?: string;
+  email?: string;
+  address?: string;
+}
+
+export interface ScheduleSetting {
+  items: Array<{ day: string; hours: string }>;
+}
+
 export interface EntityVersion<TBefore = unknown, TAfter = unknown> {
   id: string;
   entity: string;

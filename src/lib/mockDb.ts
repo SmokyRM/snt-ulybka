@@ -10,17 +10,19 @@ import {
   User,
   UserStatus,
   EntityVersion,
+  ContactsSetting,
+  ScheduleSetting,
 } from "@/types/snt";
 
 interface MockDb {
   users: User[];
   plots: Plot[];
   ownershipRequests: OwnershipRequest[];
-  plotOwners: PlotOwner[];
-  auditLogs: AuditLog[];
-  settings: SettingEntry[];
-  entityVersions: EntityVersion[];
-}
+    plotOwners: PlotOwner[];
+    auditLogs: AuditLog[];
+    settings: SettingEntry[];
+    entityVersions: EntityVersion[];
+  }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizePhone = (value: string) => value.replace(/\D/g, "");
@@ -93,6 +95,24 @@ const getDb = (): MockDb => {
             telegram: "https://t.me/snt_smile",
             email: "",
           },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          key: "contacts",
+          value: {
+            phone: "",
+            email: "",
+            address: "",
+          } satisfies ContactsSetting,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          key: "schedule",
+          value: {
+            items: [],
+          } satisfies ScheduleSetting,
           createdAt: now,
           updatedAt: now,
         },
@@ -316,6 +336,24 @@ export const resetMockDb = () => {
           telegram: "https://t.me/snt_smile",
           email: "",
         },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        key: "contacts",
+        value: {
+          phone: "",
+          email: "",
+          address: "",
+        } satisfies ContactsSetting,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        key: "schedule",
+        value: {
+          items: [],
+        } satisfies ScheduleSetting,
         createdAt: now,
         updatedAt: now,
       },
