@@ -1,6 +1,6 @@
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
-export type MembershipStatus = "UNKNOWN" | "MEMBER" | "NON_MEMBER";
+export type MembershipStatus = "UNKNOWN" | "MEMBER" | "NON_MEMBER" | "PENDING";
 
 export interface Plot {
   id: string;
@@ -10,6 +10,7 @@ export interface Plot {
   plotNumber: string;
   number: string;
   street: string;
+  status?: "active" | "archived";
   ownerFullName?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -120,4 +121,13 @@ export interface Ticket {
   message: string;
   status: TicketStatus;
   attachments?: TicketAttachment[];
+}
+
+export interface Person {
+  id: string;
+  fullName: string;
+  phone?: string | null;
+  email?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
