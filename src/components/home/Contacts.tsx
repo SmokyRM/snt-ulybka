@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PAYMENT_DETAILS } from "@/config/paymentDetails";
+import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 
 export default function Contacts() {
   const [copied, setCopied] = useState(false);
@@ -32,7 +33,26 @@ export default function Contacts() {
             </h3>
             <div className="mt-4 space-y-2 text-sm text-zinc-700">
               <p>Телефон: +7 (900) 000-00-00</p>
-              <p>Почта: info@snt-ulybka.ru</p>
+              <p>VK:{" "}
+                <a
+                  href={OFFICIAL_CHANNELS.vk}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#5E704F] underline decoration-[#5E704F]/50 underline-offset-4"
+                >
+                  vk.com/snt_smile
+                </a>
+              </p>
+              <p>Telegram:{" "}
+                <a
+                  href={OFFICIAL_CHANNELS.telegram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#5E704F] underline decoration-[#5E704F]/50 underline-offset-4"
+                >
+                  t.me/snt_smile
+                </a>
+              </p>
               <p>Часы приема: пн–ср, 18:00–20:00</p>
             </div>
             <div
