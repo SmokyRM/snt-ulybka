@@ -6,7 +6,7 @@ import { FEES_FAQ, FEES_RATE_RUB_PER_SOTKA } from "@/content/fees";
 export const metadata = {
   title: "Взносы и долги — СНТ «Улыбка»",
   description:
-    "Формула расчёта взносов, сроки оплаты, реквизиты и ответы на частые вопросы.",
+    "Порядок оплаты, формула расчёта, сроки и ответы на частые вопросы.",
 };
 
 export default function FeesPage() {
@@ -22,9 +22,17 @@ export default function FeesPage() {
           </p>
           <h1 className="text-3xl font-semibold">Взносы и долги</h1>
           <p className="text-sm text-zinc-700">
-            Формула расчёта, сроки, реквизиты и ответы на частые вопросы.
+            Порядок оплаты, формула, сроки и ответы на частые вопросы.
           </p>
         </header>
+
+        <section className="rounded-3xl border border-[#5E704F]/20 bg-[#5E704F]/10 p-6 text-sm text-zinc-900 shadow-sm">
+          <h2 className="text-lg font-semibold text-[#2F3827]">Ключевое правило</h2>
+          <p className="mt-2 text-sm text-zinc-800">
+            Членские и целевые взносы обязательны для всех собственников участков. Статус “член/не
+            член” не влияет на обязанность оплаты.
+          </p>
+        </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm">
@@ -79,6 +87,10 @@ export default function FeesPage() {
             договорным условиям. По вопросам задолженности и реструктуризации обращайтесь в
             правление.
           </p>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+            <li>Уточнить начисления можно через обращение в правление.</li>
+            <li>Квитанции лучше сохранять для сверки.</li>
+          </ul>
         </section>
 
         <section className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm">
