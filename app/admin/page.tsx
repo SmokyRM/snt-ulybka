@@ -71,6 +71,9 @@ export default function AdminDashboard() {
               <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
                 Без контактов: {missingContactsCount}
               </span>
+              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
+                Импорт CSV →
+              </span>
             </div>
           </Link>
 

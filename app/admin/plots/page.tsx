@@ -60,6 +60,12 @@ export default async function AdminPlotsPage({
           >
             Добавить участок
           </Link>
+          <Link
+            href="/admin/plots/import"
+            className="rounded-full border border-white/30 bg-white px-4 py-2 text-sm font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
+          >
+            Импорт CSV
+          </Link>
         </div>
 
         <form className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
@@ -174,4 +180,3 @@ export default async function AdminPlotsPage({
     </main>
   );
 }
-

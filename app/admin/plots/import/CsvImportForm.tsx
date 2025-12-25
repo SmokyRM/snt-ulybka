@@ -77,10 +77,11 @@ const headers = [
 export default function CsvImportForm({ existingKeys }: { existingKeys: string[] }) {
   const router = useRouter();
   const [rows, setRows] = useState<ParsedRow[]>([]);
-  const [mode, setMode] = useState<"skip" | "update">("skip");
+  const [mode, setMode] = useState<"skip" | "upsert">("skip");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rowErrors, setRowErrors] = useState<string[]>([]);
 
   const existingSet = useMemo(() => new Set(existingKeys), [existingKeys]);
 
@@ -111,25 +112,30 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
           else if (h === "ownerFullName") row.ownerFullName = value || null;
           else if (h === "phone") row.phone = value || null;
           else if (h === "email") row.email = value || null;
-          else if (h === "membershipStatus") row.membershipStatus = value || "UNKNOWN";
+          else if (h === "membershipStatus") row.membershipStatus = value.toUpperCase() || "UNKNOWN";
           else if (h === "isConfirmed") row.isConfirmed = value;
           else if (h === "notes") row.notes = value || null;
         });
         return row;
       });
     setRows(mapped);
+    setRowErrors([]);
   };
 
   const counts = useMemo(() => {
     let duplicates = 0;
     let fresh = 0;
-    rows.forEach((row) => {
+    const errorsLocal: string[] = [];
+    rows.forEach((row, idx) => {
       if (!row.street || !row.number) return;
       const key = normalizeKey(row.street, row.number);
       if (existingSet.has(key)) duplicates += 1;
       else fresh += 1;
+      if (row.membershipStatus && !["UNKNOWN", "MEMBER", "NON_MEMBER"].includes(row.membershipStatus)) {
+        errorsLocal.push(`Строка ${idx + 2}: некорректный membershipStatus`);
+      }
     });
-    return { duplicates, fresh };
+    return { duplicates, fresh, errorsLocal };
   }, [rows, existingSet]);
 
   const handleImport = async () => {
@@ -149,6 +155,7 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "Не удалось импортировать");
+        setRowErrors(data.errors?.map((e: { rowIndex: number; message: string }) => `Строка ${e.rowIndex}: ${e.message}`) ?? []);
         return;
       }
       setResult(
@@ -156,9 +163,10 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
           data.skipped ?? 0
         }`
       );
-      if (data.errors?.length) {
-        setError(data.errors.join(" | "));
-      }
+      setRowErrors(
+        data.errors?.map((e: { rowIndex: number; message: string }) => `Строка ${e.rowIndex}: ${e.message}`) ??
+          []
+      );
       router.refresh();
     } catch {
       setError("Ошибка сети");
@@ -168,6 +176,8 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
   };
 
   const preview = rows.slice(0, 20);
+  const errorsToShow = [...rowErrors, ...counts.errorsLocal].slice(0, 10);
+  const validRows = rows.length - counts.errorsLocal.length;
 
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -190,6 +200,11 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
         </p>
       </div>
 
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-xs text-zinc-700">
+        Формат CSV: street, number, ownerFullName?, phone?, email?, membershipStatus (UNKNOWN|MEMBER|NON_MEMBER), isConfirmed (0/1), notes?.
+        Разделитель — запятая. Кодировка UTF-8.
+      </div>
+
       <div className="flex flex-wrap gap-4 text-sm font-semibold text-[#2F3827]">
         <label className="flex items-center gap-2">
           <input
@@ -205,16 +220,17 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
           <input
             type="radio"
             name="mode"
-            value="update"
-            checked={mode === "update"}
-            onChange={() => setMode("update")}
+            value="upsert"
+            checked={mode === "upsert"}
+            onChange={() => setMode("upsert")}
           />
           Обновлять существующие
         </label>
       </div>
 
       <div className="text-sm text-zinc-700">
-        Новых: <span className="font-semibold">{counts.fresh}</span>; Дубликатов:{" "}
+        Всего строк: <span className="font-semibold">{rows.length}</span> · Валидных (по базовой
+        проверке): <span className="font-semibold">{validRows}</span> · Дубликатов существующих:{" "}
         <span className="font-semibold">{counts.duplicates}</span>
       </div>
 
@@ -237,6 +253,16 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
       {result && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           {result}
+        </div>
+      )}
+      {errorsToShow.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          Ошибки (первые {errorsToShow.length}):
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {errorsToShow.map((e, idx) => (
+              <li key={idx}>{e}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -272,4 +298,3 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
     </div>
   );
 }
-
