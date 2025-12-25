@@ -4,6 +4,7 @@ import { membershipLabel } from "@/lib/membershipLabels";
 import { listPlots } from "@/lib/plotsDb";
 import { getSessionUser } from "@/lib/session.server";
 import { Plot } from "@/types/snt";
+import { useState } from "react";
 
 const parseFilters = (searchParams?: { [key: string]: string | string[] | undefined }) => {
   const confirmedParam = typeof searchParams?.confirmed === "string" ? searchParams?.confirmed : undefined;
@@ -45,6 +46,7 @@ export default async function AdminPlotsPage({
 
   const filters = parseFilters(searchParams);
   const plots = listPlots(filters);
+  const selectedInitial: string[] = [];
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -145,38 +147,157 @@ export default async function AdminPlotsPage({
             </Link>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-            <div className="grid grid-cols-12 gap-3 border-b border-zinc-100 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              <div className="col-span-3">Улица</div>
-              <div className="col-span-2">Участок</div>
-              <div className="col-span-3">ФИО</div>
-              <div className="col-span-2">Контакты</div>
-              <div className="col-span-1">Статус</div>
-              <div className="col-span-1">Подтв.</div>
-            </div>
-            <div className="divide-y divide-zinc-100">
-              {plots.map((plot) => (
-                <Link
-                  key={plot.id}
-                  href={`/admin/plots/${plot.id}`}
-                  className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#F8F1E9]"
-                >
-                  <div className="col-span-3 font-semibold text-zinc-900">{plot.street}</div>
-                  <div className="col-span-2 text-zinc-800">{plot.number}</div>
-                  <div className="col-span-3 text-zinc-800">{plot.ownerFullName || "—"}</div>
-                  <div className="col-span-2 text-zinc-700">{contactShort(plot)}</div>
-                  <div className="col-span-1 text-xs font-semibold text-zinc-700">
-                    {membershipLabel[plot.membershipStatus]}
-                  </div>
-                  <div className="col-span-1 text-xs font-semibold text-zinc-700">
-                    {statusConfirmed(plot)}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
+          <ClientTable plots={plots} initialSelected={selectedInitial} />
         )}
       </div>
     </main>
+  );
+}
+
+function ClientTable({
+  plots,
+  initialSelected,
+}: {
+  plots: Plot[];
+  initialSelected: string[];
+}) {
+  const [selected, setSelected] = useState<string[]>(initialSelected);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const toggleAll = (checked: boolean) => {
+    setSelected(checked ? plots.map((p) => p.id) : []);
+  };
+  const toggleOne = (id: string, checked: boolean) => {
+    setSelected((prev) => {
+      if (checked) return Array.from(new Set([...prev, id]));
+      return prev.filter((v) => v !== id);
+    });
+  };
+
+  const applyBulk = async (patch: { isConfirmed?: boolean; membershipStatus?: Plot["membershipStatus"]; clearContacts?: boolean }) => {
+    if (!selected.length) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/plots/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selected, patch }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(data.error || "Не удалось применить");
+      } else {
+        setMessage(`Готово: обновлено ${data.updated ?? 0}`);
+        setSelected([]);
+      }
+      // reload page data
+      location.reload();
+    } catch {
+      setMessage("Ошибка сети");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#5E704F]/20 bg-[#5E704F]/5 px-4 py-3 text-sm">
+          <span className="font-semibold">Выбрано: {selected.length}</span>
+          <button
+            type="button"
+            onClick={() => applyBulk({ isConfirmed: true })}
+            disabled={busy}
+            className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10 disabled:opacity-60"
+          >
+            Подтвердить
+          </button>
+          <button
+            type="button"
+            onClick={() => applyBulk({ isConfirmed: false })}
+            disabled={busy}
+            className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10 disabled:opacity-60"
+          >
+            Снять подтверждение
+          </button>
+          <select
+            onChange={(e) => {
+              const val = e.target.value as Plot["membershipStatus"];
+              if (val) {
+                void applyBulk({ membershipStatus: val });
+                e.target.value = "";
+              }
+            }}
+            defaultValue=""
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs"
+          >
+            <option value="">Статус членства...</option>
+            <option value="UNKNOWN">Не определён</option>
+            <option value="MEMBER">Член</option>
+            <option value="NON_MEMBER">Не член</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => applyBulk({ clearContacts: true })}
+            disabled={busy}
+            className="rounded-full border border-amber-400 px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-60"
+          >
+            Очистить контакты
+          </button>
+          {message && <span className="text-xs text-zinc-700">{message}</span>}
+        </div>
+      )}
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        <div className="grid grid-cols-12 gap-3 border-b border-zinc-100 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+          <div className="col-span-1">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-zinc-300"
+              checked={selected.length === plots.length}
+              onChange={(e) => toggleAll(e.target.checked)}
+            />
+          </div>
+          <div className="col-span-3">Улица</div>
+          <div className="col-span-2">Участок</div>
+          <div className="col-span-3">ФИО</div>
+          <div className="col-span-2">Контакты</div>
+          <div className="col-span-1">Статус</div>
+          <div className="col-span-0.5">Подтв.</div>
+        </div>
+        <div className="divide-y divide-zinc-100">
+          {plots.map((plot) => (
+            <div
+              key={plot.id}
+              className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-[#F8F1E9]"
+            >
+              <div className="col-span-1">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-zinc-300"
+                  checked={selected.includes(plot.id)}
+                  onChange={(e) => toggleOne(plot.id, e.target.checked)}
+                />
+              </div>
+              <Link
+                href={`/admin/plots/${plot.id}`}
+                className="col-span-3 font-semibold text-zinc-900 hover:underline"
+              >
+                {plot.street}
+              </Link>
+              <div className="col-span-2 text-zinc-800">{plot.number}</div>
+              <div className="col-span-3 text-zinc-800">{plot.ownerFullName || "—"}</div>
+              <div className="col-span-2 text-zinc-700">{contactShort(plot)}</div>
+              <div className="col-span-1 text-xs font-semibold text-zinc-700">
+                {membershipLabel[plot.membershipStatus]}
+              </div>
+              <div className="col-span-0.5 text-xs font-semibold text-zinc-700">
+                {statusConfirmed(plot)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
