@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "@/components/home/Header";
-import Footer from "@/components/home/Footer";
 
 export const metadata: Metadata = {
   title: "СНТ «Улыбка» — официальный сайт",
-  description:
-    "Официальная информация, объявления и документы для членов СНТ «Улыбка».",
+  description: "Официальная информация, объявления и документы для членов СНТ «Улыбка».",
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
@@ -24,12 +21,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className="antialiased">
-        <div className="min-h-screen bg-[#F8F1E9] text-zinc-900">
-          <Header />
-          <main className="pt-24">{children}</main>
-          <Footer />
-        </div>
+      <body className="antialiased bg-[#F8F1E9] text-zinc-900">
+        {children}
       </body>
     </html>
   );

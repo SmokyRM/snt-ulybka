@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             href="/"
             className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
           >
-            На сайт
+            Режим: Пользователь
           </Link>
         </header>
         <main className="px-6 py-6">{children}</main>
