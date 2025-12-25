@@ -20,6 +20,20 @@ export default async function BillingImportPage() {
             Назад
           </a>
         </div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm space-y-2">
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="/api/admin/billing/import/template.csv"
+              className="rounded-full border border-[#5E704F] px-3 py-1 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
+            >
+              Скачать шаблон CSV
+            </a>
+            <div className="text-sm text-zinc-700">
+              Как подготовить: разделитель ;, UTF-8, колонки: Дата, Сумма, Назначение, Улица, Участок, Номер операции.
+              Пример назначения: &quot;ул. Березовая уч.12 за ноябрь 2025&quot;.
+            </div>
+          </div>
+        </div>
         <ImportClient />
       </div>
     </main>

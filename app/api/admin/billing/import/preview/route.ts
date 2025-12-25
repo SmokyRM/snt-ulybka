@@ -13,6 +13,8 @@ const headerMap: Record<string, string> = {
   "назначение": "purpose",
   "purpose": "purpose",
   "comment": "purpose",
+  "комментарий": "purpose",
+  "назначение платежа": "purpose",
   "улица": "street",
   "street": "street",
   "участок": "plot",
@@ -20,11 +22,24 @@ const headerMap: Record<string, string> = {
   "number": "plot",
   "номер операции": "reference",
   "reference": "reference",
+  "operationid": "reference",
+  "id операции": "reference",
 };
 
 const normalizeHeader = (h: string) => h.trim().toLowerCase();
 
-const parseCsv = (content: string): string[][] => {
+const detectDelimiter = (firstLine: string) => {
+  const semicolons = (firstLine.match(/;/g) || []).length;
+  const commas = (firstLine.match(/,/g) || []).length;
+  return commas > semicolons ? "," : ";";
+};
+
+const parseCsv = (content: string): { rows: string[][]; delimiter: string; warnings: string[] } => {
+  const warnings: string[] = [];
+  const firstLine = content.split(/\r?\n/)[0] ?? "";
+  const delimiter = detectDelimiter(firstLine);
+  if (delimiter === ",") warnings.push("Delimiter auto-detected as comma");
+
   const rows: string[][] = [];
   let row: string[] = [];
   let current = "";
@@ -58,7 +73,7 @@ const parseCsv = (content: string): string[][] => {
     } else {
       if (ch === '"') {
         inQuotes = true;
-      } else if (ch === ";") {
+      } else if (ch === delimiter) {
         pushCell();
       } else if (ch === "\n") {
         pushRow();
@@ -77,7 +92,7 @@ const parseCsv = (content: string): string[][] => {
     pushCell();
     rows.push(row);
   }
-  return rows;
+  return { rows, delimiter, warnings };
 };
 
 const parseDate = (raw?: string | null): string | null => {
@@ -85,10 +100,17 @@ const parseDate = (raw?: string | null): string | null => {
   const value = raw.trim();
   if (!value) return null;
   // DD.MM.YYYY or DD.MM.YYYY HH:mm[:ss]
-  const dm = value.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  const dm = value.match(/^(\d{2})[./](\d{2})[./](\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
   if (dm) {
     const [, d, m, y, hh = "00", mm = "00", ss = "00"] = dm;
     const iso = `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  const ymd = value.match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    const iso = `${y}-${m}-${d}T00:00:00`;
     const date = new Date(iso);
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
@@ -164,7 +186,8 @@ export async function POST(request: Request) {
   }
   const textRaw = await file.text();
   const content = textRaw.replace(/^\uFEFF/, ""); // remove BOM if any
-  const rowsRaw = parseCsv(content);
+  const parsed = parseCsv(content);
+  const rowsRaw = parsed.rows;
   if (!rowsRaw.length) {
     return NextResponse.json({ error: "empty file" }, { status: 400 });
   }
@@ -268,6 +291,9 @@ export async function POST(request: Request) {
       errorCount,
       duplicateCount,
       truncated: rowsRaw.length - 1 > MAX_ROWS,
+      detectedDelimiter: parsed.delimiter,
+      detectedEncoding: "utf-8",
+      warnings: parsed.warnings,
     },
     rows: result,
   });
