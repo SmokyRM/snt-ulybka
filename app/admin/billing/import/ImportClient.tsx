@@ -22,6 +22,7 @@ export default function ImportClient() {
       reference: string | null;
       status: "OK" | "ERROR" | "DUPLICATE";
       error?: string;
+      category?: string | null;
     }>;
   } | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -110,6 +111,7 @@ export default function ImportClient() {
           purpose: r.purpose,
           plotIdMatched: r.plotIdMatched,
           reference: r.reference,
+          category: r.category ?? null,
         })) ?? [];
     if (!rowsToSend.length) return;
     setCommitLoading(true);

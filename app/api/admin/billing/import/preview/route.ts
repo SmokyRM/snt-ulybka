@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { getPlots, listPayments } from "@/lib/mockDb";
+import { classifyPurposeCategory } from "@/lib/paymentCategory";
 
 const MAX_ROWS = 200;
 
@@ -294,6 +295,7 @@ export async function POST(request: Request) {
       status = "DUPLICATE";
     }
 
+    const category = classifyPurposeCategory(purposeVal);
     return {
       rowIndex,
       paidAtIso,
@@ -308,6 +310,7 @@ export async function POST(request: Request) {
       reference: refVal || null,
       status,
       error,
+    category,
     };
   });
 

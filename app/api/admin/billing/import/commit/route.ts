@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
     const year = paidAt.getUTCFullYear();
     const month = paidAt.getUTCMonth() + 1;
-    const type = "membership_fee";
+    const type = row.category ?? "membership_fee";
     let period = findAccrualPeriod(year, month, type);
     if (!period) {
       period = createAccrualPeriod({ year, month, type });
@@ -125,6 +125,7 @@ export async function POST(request: Request) {
       comment: row.purpose ? [row.purpose, importComment].filter(Boolean).join(" | ") : importComment || null,
       createdByUserId: user.id ?? null,
       importBatchId: batch.id,
+      category: row.category ?? null,
     });
 
     createdCount += 1;

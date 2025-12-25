@@ -6,6 +6,7 @@ import {
   listPlots,
   listDebtNotifications,
 } from "@/lib/mockDb";
+import { categoryForAccrualType } from "@/lib/paymentCategory";
 
 type NotificationType = "membership" | "electricity";
 
@@ -21,10 +22,18 @@ const parsePeriod = (value: string | null) => {
 
 const buildText = (
   type: NotificationType,
-  args: { ownerName: string; street: string; number: string; period: string; debt: number; amountAccrued: number; amountPaid: number }
+  args: {
+    ownerName: string;
+    street: string;
+    number: string;
+    period: string;
+    debt: number;
+    amountAccrued: number;
+    amountPaid: number;
+  }
 ) => {
   if (type === "membership") {
-    return `Уважаемый(ая) ${args.ownerName}, по участку ${args.street}, ${args.number} у вас задолженность по членским взносам за ${args.period} в размере ${args.debt} ₽.`;
+    return `Уважаемый(ая) ${args.ownerName}, по участку ${args.street}, ${args.number} у вас задолженность по членским взносам за ${args.period} в размере ${args.debt} ₽. Начислено: ${args.amountAccrued} ₽, оплачено: ${args.amountPaid} ₽.`;
   }
   return `Уважаемый(ая) ${args.ownerName}, по участку ${args.street}, ${args.number} у вас задолженность за электроэнергию за ${args.period} в размере ${args.debt} ₽. Начислено: ${args.amountAccrued} ₽, оплачено: ${args.amountPaid} ₽.`;
 };
@@ -41,7 +50,11 @@ export const getAccrualDebtors = (type: NotificationType, periodRaw: string | nu
   if (!period) return { items: [], periodLabel, error: null };
 
   const accruals = listAccrualItems(period.id);
-  const paymentsAll = listPayments({ periodId: period.id, includeVoided: false });
+  const paymentsAll = listPayments({
+    periodId: period.id,
+    includeVoided: false,
+    category: categoryForAccrualType(type === "membership" ? "membership_fee" : type),
+  });
 
   const existingStatuses = listDebtNotifications({ periodId: period.id, type });
 

@@ -176,6 +176,7 @@ export interface Payment {
   method: string;
   reference?: string | null;
   comment?: string | null;
+  category?: string | null;
   createdByUserId: string | null;
   createdAt: string;
   isVoided: boolean;

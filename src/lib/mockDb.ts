@@ -623,12 +623,18 @@ export const updateAccrualItem = (id: string, patch: Partial<AccrualItem>) => {
   return updated;
 };
 
-export const listPayments = (filters?: { periodId?: string; plotId?: string; includeVoided?: boolean }) => {
+export const listPayments = (filters?: {
+  periodId?: string;
+  plotId?: string;
+  includeVoided?: boolean;
+  category?: string | null;
+}) => {
   const db = getDb();
   return db.payments.filter((p) => {
     if (!filters?.includeVoided && p.isVoided) return false;
     if (filters?.periodId && p.periodId !== filters.periodId) return false;
     if (filters?.plotId && p.plotId !== filters.plotId) return false;
+    if (filters?.category && p.category !== filters.category) return false;
     return true;
   });
 };
@@ -643,6 +649,7 @@ export const addPayment = (data: {
   comment?: string | null;
   createdByUserId: string | null;
   importBatchId?: string | null;
+  category?: string | null;
 }) => {
   const now = new Date().toISOString();
   const payment: Payment = {
@@ -654,6 +661,7 @@ export const addPayment = (data: {
     method: data.method ?? "other",
     reference: data.reference ?? null,
     comment: data.comment ?? null,
+    category: data.category ?? null,
     createdByUserId: data.createdByUserId,
     createdAt: now,
     isVoided: false,
@@ -883,7 +891,7 @@ export const getElectricityReport = (year: number, month: number) => {
   const period = findAccrualPeriod(year, month, "electricity");
   const paymentsByPlot: Record<string, number> = {};
   if (period) {
-    listPayments({ periodId: period.id, includeVoided: false }).forEach((p) => {
+    listPayments({ periodId: period.id, includeVoided: false, category: "electricity" }).forEach((p) => {
       paymentsByPlot[p.plotId] = (paymentsByPlot[p.plotId] ?? 0) + p.amount;
     });
   }
