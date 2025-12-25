@@ -44,3 +44,24 @@ export interface PlotOwner {
   plotNumber: string;
   userIdentifier: string;
 }
+
+export type TicketStatus = "NEW" | "IN_PROGRESS" | "DONE";
+
+export interface TicketAttachment {
+  url: string;
+  type: string;
+}
+
+export interface Ticket {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  authorId: string;
+  authorContact?: string | null;
+  authorName?: string | null;
+  authorPhone?: string | null;
+  subject: string;
+  message: string;
+  status: TicketStatus;
+  attachments?: TicketAttachment[];
+}
