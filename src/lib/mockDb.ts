@@ -579,7 +579,7 @@ export const updatePlotsBulk = (
 // Billing helpers (MVP)
 export const listAccrualPeriods = () => getDb().accrualPeriods;
 
-export const createAccrualPeriod = (payload: { year: number; month: number; type: string }) => {
+export const createAccrualPeriod = (payload: { year: number; month: number; type: string; title?: string | null }) => {
   const db = getDb();
   const exists = db.accrualPeriods.find(
     (p) => p.year === payload.year && p.month === payload.month && p.type === payload.type
@@ -590,6 +590,7 @@ export const createAccrualPeriod = (payload: { year: number; month: number; type
     year: payload.year,
     month: payload.month,
     type: payload.type,
+    title: payload.title ?? null,
     createdAt: new Date().toISOString(),
   };
   db.accrualPeriods.push(period);

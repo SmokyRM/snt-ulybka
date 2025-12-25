@@ -154,6 +154,7 @@ export interface AccrualPeriod {
   year: number;
   month: number;
   type: string;
+  title?: string | null;
   createdAt: string;
 }
 
