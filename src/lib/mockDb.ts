@@ -12,17 +12,19 @@ import {
   EntityVersion,
   ContactsSetting,
   ScheduleSetting,
+  Person,
 } from "@/types/snt";
 
 interface MockDb {
   users: User[];
   plots: Plot[];
   ownershipRequests: OwnershipRequest[];
-    plotOwners: PlotOwner[];
-    auditLogs: AuditLog[];
-    settings: SettingEntry[];
-    entityVersions: EntityVersion[];
-  }
+  plotOwners: PlotOwner[];
+  auditLogs: AuditLog[];
+  settings: SettingEntry[];
+  entityVersions: EntityVersion[];
+  persons: Person[];
+}
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizePhone = (value: string) => value.replace(/\D/g, "");
@@ -39,6 +41,7 @@ const defaultPlots: Plot[] = Array.from({ length: 20 }, (_, idx) => {
     plotNumber: num,
     number: num,
     street,
+    status: "active",
     createdAt: now,
     updatedAt: now,
     membershipStatus: "UNKNOWN",
@@ -118,6 +121,7 @@ const getDb = (): MockDb => {
         },
       ],
       entityVersions: [],
+      persons: [],
     };
   }
   return g.__SNT_DB__;
@@ -359,6 +363,7 @@ export const resetMockDb = () => {
       },
     ],
     entityVersions: [],
+    persons: [],
   };
 };
 
@@ -413,6 +418,109 @@ export const listAuditLogs = (filters?: {
       return true;
     })
     .slice(0, limit);
+};
+
+export const listPersons = () => getDb().persons;
+
+export const addPerson = (data: { fullName: string; phone?: string | null; email?: string | null }) => {
+  const now = new Date().toISOString();
+  const person: Person = {
+    id: createId("person"),
+    fullName: data.fullName,
+    phone: data.phone ?? null,
+    email: data.email ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const db = getDb();
+  db.persons.push(person);
+  return person;
+};
+
+export const findPerson = (id: string) => getDb().persons.find((p) => p.id === id) ?? null;
+
+export const linkOwnerToPlot = (plotId: string, personId: string) => {
+  const db = getDb();
+  const plot = db.plots.find((p) => p.id === plotId);
+  const person = db.persons.find((p) => p.id === personId);
+  if (!plot || !person) return null;
+  db.plotOwners = [
+    ...db.plotOwners.filter((po) => po.plotNumber !== plot.plotNumber),
+    { id: createId("owner"), plotNumber: plot.plotNumber, userIdentifier: personId },
+  ];
+  plot.ownerFullName = person.fullName;
+  plot.phone = person.phone ?? null;
+  plot.email = person.email ?? null;
+  plot.updatedAt = new Date().toISOString();
+  return { plot, person };
+};
+
+export const findPlotById = (id: string) => getDb().plots.find((p) => p.id === id) ?? null;
+
+export const updatePlotStatus = (id: string, patch: Partial<Plot>) => {
+  const db = getDb();
+  const plot = db.plots.find((p) => p.id === id);
+  if (!plot) return null;
+  const updated: Plot = {
+    ...plot,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  db.plots = db.plots.map((p) => (p.id === id ? updated : p));
+  return updated;
+};
+
+export const listPlotsWithFilters = (filters?: {
+  query?: string | null;
+  street?: string | null;
+  membershipStatus?: Plot["membershipStatus"] | null;
+  archived?: boolean | null;
+  page?: number;
+  pageSize?: number;
+}) => {
+  const {
+    query,
+    street,
+    membershipStatus,
+    archived = null,
+    page = 1,
+    pageSize = 50,
+  } = filters ?? {};
+  const db = getDb();
+  const q = query?.trim().toLowerCase() ?? "";
+  const filtered = db.plots.filter((plot) => {
+    if (street && plot.street !== street) return false;
+    if (membershipStatus && plot.membershipStatus !== membershipStatus) return false;
+    if (archived !== null && (plot.status === "archived") !== archived) return false;
+    if (!q) return true;
+    const ownerLink = db.plotOwners.find((po) => po.plotNumber === plot.plotNumber);
+    const owner =
+      ownerLink && ownerLink.userIdentifier
+        ? db.persons.find((p) => p.id === ownerLink.userIdentifier)
+        : null;
+    const haystack = [
+      plot.street,
+      plot.plotNumber,
+      plot.ownerFullName ?? "",
+      plot.phone ?? "",
+      plot.email ?? "",
+      owner?.fullName ?? "",
+      owner?.phone ?? "",
+      owner?.email ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+  const sorted = filtered.sort((a, b) => {
+    const streetCmp = a.street.localeCompare(b.street, "ru");
+    if (streetCmp !== 0) return streetCmp;
+    return a.plotNumber.localeCompare(b.plotNumber, "ru", { numeric: true });
+  });
+  const total = sorted.length;
+  const start = (page - 1) * pageSize;
+  const items = sorted.slice(start, start + pageSize);
+  return { total, items, page, pageSize };
 };
 
 export const getSetting = <T = unknown>(key: string): SettingEntry<T> | null => {
