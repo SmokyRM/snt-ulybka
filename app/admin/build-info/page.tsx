@@ -2,7 +2,12 @@ import { execSync } from "node:child_process";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ADMIN_FEATURE_COOKIE, isAdminFeatureEnabled, isAdminNewUIEnabled } from "@/lib/featureFlags";
+import {
+  ADMIN_FEATURE_COOKIE,
+  getFeatureFlags,
+  isAdminNewUIEnabled,
+  setFeatureFlag,
+} from "@/lib/featureFlags";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 
 const safeCapture = (cmd: string): string | null => {
@@ -23,10 +28,7 @@ async function toggleFeature(formData: FormData) {
   "use server";
   const enable = formData.get("feature") === "on";
   const store = await Promise.resolve(cookies());
-  store.set(ADMIN_FEATURE_COOKIE, enable ? "1" : "0", {
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
+  await setFeatureFlag("ADMIN_FEATURE_NEW_UI", enable, store);
   revalidatePath("/admin/build-info");
 }
 
@@ -43,7 +45,8 @@ export default async function AdminBuildInfoPage() {
   const serverTime = new Date().toISOString();
   const featureFromEnv = process.env.ADMIN_FEATURE_NEW_UI === "1" || process.env.ADMIN_FEATURE_NEW_UI === "true";
   const featureCookie = cookieStore.get(ADMIN_FEATURE_COOKIE)?.value === "1";
-  const featureEffective = await isAdminFeatureEnabled(cookieStore);
+  const featureFlags = await getFeatureFlags(cookieStore);
+  const featureEffective = featureFlags.ADMIN_FEATURE_NEW_UI;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

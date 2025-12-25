@@ -19,13 +19,17 @@ const readSessionRole = (request: NextRequest): SessionRole | null => {
 
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const isApiAdmin = pathname.startsWith("/api/admin");
   const role = readSessionRole(request);
 
-  if (isAdminPath(pathname)) {
+  if (isAdminPath(pathname) || isApiAdmin) {
     if (process.env.NODE_ENV !== "production") {
       console.log(`[middleware] admin guard role=${role ?? "none"} path=${pathname}`);
     }
     if (!role) {
+      if (isApiAdmin) {
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      }
       const url = new URL("/login", request.url);
       if (!pathname.startsWith("/login")) {
         url.searchParams.set("next", `${pathname}${search}`);
@@ -33,6 +37,9 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     if (role !== "admin") {
+      if (isApiAdmin) {
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      }
       return NextResponse.redirect(new URL("/cabinet", request.url));
     }
   }
@@ -56,5 +63,7 @@ export const config = {
     "/cabinet/:path*",
     "/admin",
     "/admin/:path*",
+    "/api/admin",
+    "/api/admin/:path*",
   ],
 };

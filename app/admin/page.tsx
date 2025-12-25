@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { listPlots } from "@/lib/plotsDb";
 import { listTickets } from "@/lib/ticketsDb";
-import { isAdminNewUIEnabled } from "@/lib/featureFlags";
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { getFeatureFlags, isAdminNewUIEnabled, setFeatureFlag } from "@/lib/featureFlags";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -19,6 +20,15 @@ const safeFormatBuildTime = (raw?: string | null) => {
   return formatted.replace(",", " в");
 };
 
+async function toggleNewUi(formData: FormData) {
+  "use server";
+  const enable = formData.get("newUi") === "on";
+  const store = await Promise.resolve(cookies());
+  await setFeatureFlag("ADMIN_FEATURE_NEW_UI", enable, store);
+  revalidatePath("/admin");
+  revalidatePath("/admin/build-info");
+}
+
 export default async function AdminDashboard() {
   const cookieStore = await Promise.resolve(cookies());
   const buildRaw =
@@ -32,6 +42,7 @@ export default async function AdminDashboard() {
   const unconfirmedCount = plots.filter((p) => !p.isConfirmed).length;
   const missingContactsCount = plots.filter((p) => !p.phone && !p.email).length;
   const isNewUIEnabled = await isAdminNewUIEnabled(cookieStore);
+  const featureFlags = await getFeatureFlags(cookieStore);
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -110,16 +121,6 @@ export default async function AdminDashboard() {
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Реестр участков
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Скоро</h2>
-            <p className="mt-2 text-sm text-zinc-700">
-              Работа с участками и статусами владельцев появится здесь.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
               Публикации документов
             </p>
             <h2 className="mt-2 text-lg font-semibold text-zinc-900">Скоро</h2>
@@ -136,6 +137,37 @@ export default async function AdminDashboard() {
             <p className="mt-2 text-sm text-zinc-700">
               Время сборки/деплоя. Информация видна только в админ-панели.
             </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:col-span-2 lg:col-span-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
+              Feature flags
+            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-900">Новый UI</h3>
+                <p className="text-sm text-zinc-700">
+                  Активен: {featureFlags.ADMIN_FEATURE_NEW_UI ? "Да" : "Нет"} (env+file+cookie)
+                </p>
+              </div>
+              <form action={toggleNewUi} className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-zinc-800">
+                  <input
+                    type="checkbox"
+                    name="newUi"
+                    defaultChecked={featureFlags.ADMIN_FEATURE_NEW_UI}
+                    className="h-4 w-4 rounded border-zinc-300 text-[#5E704F] focus:ring-[#5E704F]"
+                  />
+                  Включить
+                </label>
+                <button
+                  type="submit"
+                  className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42]"
+                >
+                  Сохранить
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </div>
