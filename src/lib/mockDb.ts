@@ -23,12 +23,24 @@ const normalizeIdentifier = (value: string) =>
 
 const defaultPlots: Plot[] = Array.from({ length: 20 }, (_, idx) => {
   const num = (idx + 1).toString();
+  const street = idx < 10 ? "Центральная" : "Лесная";
+  const now = new Date().toISOString();
   return {
+    id: `plot-${num}`,
     plotId: `plot-${num}`,
     plotNumber: num,
-    street: idx < 10 ? "Центральная" : "Лесная",
+    number: num,
+    street,
+    createdAt: now,
+    updatedAt: now,
+    membershipStatus: "UNKNOWN",
+    isConfirmed: false,
     plotCode: `CODE${num.padStart(2, "0")}`,
     ownerUserId: null,
+    ownerFullName: null,
+    phone: null,
+    email: null,
+    notes: null,
   };
 });
 

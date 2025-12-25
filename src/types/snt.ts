@@ -1,11 +1,24 @@
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export type MembershipStatus = "UNKNOWN" | "MEMBER" | "NON_MEMBER";
+
 export interface Plot {
+  id: string;
   plotId: string;
+  createdAt: string;
+  updatedAt: string;
   plotNumber: string;
+  number: string;
   street: string;
+  ownerFullName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  membershipStatus: MembershipStatus;
+  isConfirmed: boolean;
+  notes?: string | null;
+  // legacy/compat fields
   cadastral?: string;
-  plotCode: string;
+  plotCode?: string;
   ownerUserId?: string | null;
 }
 

@@ -34,14 +34,14 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (isPlotTaken(plot.plotId)) {
+  if (isPlotTaken(plot.plotId || plot.id)) {
     return NextResponse.json(
       { error: "Участок уже занят другим пользователем." },
       { status: 400 }
     );
   }
   const codeMatch = findPlotByCode(plotCode);
-  if (!codeMatch || codeMatch.plotId !== plot.plotId) {
+  if (!codeMatch || codeMatch.plotId !== (plot.plotId || plot.id)) {
     return NextResponse.json({ error: "Неверный код участка." }, { status: 400 });
   }
 
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     status: "pending",
   });
 
-  const claimed = claimPlot(plot.plotId, user.id);
+  const claimed = claimPlot(plot.plotId || plot.id, user.id);
   if (!claimed) {
     return NextResponse.json(
       { error: "Не удалось закрепить участок. Попробуйте снова." },
