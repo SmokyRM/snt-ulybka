@@ -1,217 +1,187 @@
 import Link from "next/link";
-import { listPlots } from "@/lib/plotsDb";
-import { listTickets } from "@/lib/ticketsDb";
-import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { getFeatureFlags, isAdminNewUIEnabled, setFeatureFlag } from "@/lib/featureFlags";
-import { getSessionUser } from "@/lib/session.server";
-import { formatAdminTime, getOfficialChannelsSettingServer, getPaymentDetailsSettingServer } from "@/lib/settings.server";
+import { redirect } from "next/navigation";
+import { getSessionUser, isAdmin } from "@/lib/session.server";
 
-const safeFormatBuildTime = (raw?: string | null) => {
-  if (!raw) return "—";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return "—";
-  const formatter = new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const formatted = formatter.format(date);
-  return formatted.replace(",", " в");
+type DashboardData = {
+  registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
+  billing: {
+    membership: { period: string; accruedSum: number; paidSum: number; debtSum: number } | null;
+    target: { period: string; accruedSum: number; paidSum: number; debtSum: number } | null;
+  };
+  electricity: {
+    currentPeriod: string;
+    missingReadingsCount: number;
+    totals: { period: string; accruedSum: number; paidSum: number; debtSum: number } | null;
+  };
+  imports: { lastImportBatch: { importedAt: string; fileName?: string | null; createdCount: number; skippedCount: number; status: string } | null };
+  debtors: {
+    membership: { count: number; sumDebt: number };
+    electricity: { count: number; sumDebt: number };
+  };
 };
 
-async function toggleNewUi(formData: FormData) {
-  "use server";
-  const enable = formData.get("newUi") === "on";
-  const store = await Promise.resolve(cookies());
-  await setFeatureFlag("ADMIN_FEATURE_NEW_UI", enable, store);
-  revalidatePath("/admin");
-  revalidatePath("/admin/build-info");
-}
+const fetchDashboard = async (): Promise<DashboardData> => {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/dashboard`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error("Failed to load dashboard");
+  }
+  return (await res.json()) as DashboardData;
+};
+
+const formatAmount = (n?: number | null) => (typeof n === "number" ? n.toFixed(2) : "—");
 
 export default async function AdminDashboard() {
-  const cookieStore = await Promise.resolve(cookies());
-  const buildRaw =
-    process.env.BUILD_TIME ||
-    process.env.VERCEL_DEPLOYMENT_ID ||
-    process.env.VERCEL_GIT_COMMIT_SHA ||
-    new Date().toISOString();
-  const lastUpdate = safeFormatBuildTime(buildRaw);
-  const newTicketsCount = listTickets("NEW").length;
-  const plots = listPlots();
-  const unconfirmedCount = plots.filter((p) => !p.isConfirmed).length;
-  const missingContactsCount = plots.filter((p) => !p.phone && !p.email).length;
-  const isNewUIEnabled = await isAdminNewUIEnabled(cookieStore);
-  const featureFlags = await getFeatureFlags(cookieStore);
-  const sessionUser = await getSessionUser();
-  const lastSeen = new Date().toISOString();
-  const requisites = getPaymentDetailsSettingServer();
-  const channels = getOfficialChannelsSettingServer();
+  const user = await getSessionUser();
+  if (!isAdmin(user)) {
+    redirect("/login");
+  }
+
+  const data = await fetchDashboard().catch(() => null);
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Админ-панель</h1>
-          <div className="flex items-center gap-3">
-            {isNewUIEnabled && (
-              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
-                Новый UI включен
-              </span>
-            )}
-            <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
-              Только для админов
-            </span>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Текущая сессия
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Администратор</h2>
-            <p className="mt-2 text-sm text-zinc-700">Role: {sessionUser?.role ?? "—"}</p>
-            <p className="text-sm text-zinc-700">
-              Контакт: {sessionUser?.fullName || sessionUser?.contact || "—"}
-            </p>
-            <p className="text-sm text-zinc-700">Последняя активность: {lastSeen}</p>
-          </div>
-          <Link
-            href="/admin/requests"
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"
-          >
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Заявки/обращения
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Перейти к заявкам</h2>
-            <p className="mt-2 text-sm text-zinc-700">
-              Управление запросами на подтверждение и обращениями жителей.
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/plots"
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"
-          >
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Реестр участков
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Участки и собственники</h2>
-            <p className="mt-2 text-sm text-zinc-700">
-              Участки, собственники, статусы членства.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-[#2F3827]">
-              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
-                Не подтверждено: {unconfirmedCount}
-              </span>
-              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
-                Без контактов: {missingContactsCount}
-              </span>
-              <span className="rounded-full bg-[#5E704F]/10 px-3 py-1">
-                Импорт CSV →
-              </span>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/tickets"
-            className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-colors hover:border-[#5E704F]/50"
-          >
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Обращения жителей
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-zinc-900">Перейти в тикеты</h2>
-              {newTicketsCount > 0 && (
-                <span className="rounded-full bg-[#5E704F]/10 px-2 py-1 text-xs font-bold text-[#2F3827]">
-                  {newTicketsCount}
-                </span>
-              )}
-            </div>
-            <p className="mt-2 text-sm text-zinc-700">
-              Все обращения, статус и работа с тикетами.
-            </p>
-          </Link>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Публикации документов
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">Скоро</h2>
-            <p className="mt-2 text-sm text-zinc-700">
-              Добавление протоколов, решений и объявлений для сайта.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Реквизиты
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">
-              Последнее обновление
-            </h2>
-            <p className="mt-1 text-sm text-zinc-700">
-              {formatAdminTime(requisites.updatedAt)} (по местному времени)
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Официальные каналы
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">
-              Последнее обновление
-            </h2>
-            <p className="mt-1 text-sm text-zinc-700">
-              {formatAdminTime(channels.updatedAt)} (по местному времени)
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:col-span-2 lg:col-span-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              Последнее обновление сайта
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-zinc-900">{lastUpdate}</h2>
-            <p className="mt-2 text-sm text-zinc-700">
-              Время сборки/деплоя. Информация видна только в админ-панели.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:col-span-2 lg:col-span-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">
-              Feature flags
-            </p>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-900">Новый UI</h3>
-                <p className="text-sm text-zinc-700">
-                  Активен: {featureFlags.ADMIN_FEATURE_NEW_UI ? "Да" : "Нет"} (env+file+cookie)
-                </p>
-              </div>
-              <form action={toggleNewUi} className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-800">
-                  <input
-                    type="checkbox"
-                    name="newUi"
-                    defaultChecked={featureFlags.ADMIN_FEATURE_NEW_UI}
-                    className="h-4 w-4 rounded border-zinc-300 text-[#5E704F] focus:ring-[#5E704F]"
-                  />
-                  Включить
-                </label>
-                <button
-                  type="submit"
-                  className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42]"
-                >
-                  Сохранить
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Админ-панель</h1>
+        <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
+          Только для админов
+        </span>
       </div>
-    </main>
+
+      {!data ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Не удалось загрузить данные</div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card title="Реестр">
+            <div className="space-y-1 text-sm text-zinc-800">
+              <div>Всего участков: {data.registry.totalPlots}</div>
+              <div>Не подтверждено: {data.registry.unconfirmedPlots}</div>
+              <div>Без контактов: {data.registry.missingContactsPlots}</div>
+            </div>
+            <LinkBtn href="/admin/plots">Открыть реестр</LinkBtn>
+          </Card>
+
+          <Card title="Взносы (членские)">
+            {data.billing.membership ? (
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Период: {data.billing.membership.period}</div>
+                <div>Начислено: {formatAmount(data.billing.membership.accruedSum)} ₽</div>
+                <div>Оплачено: {formatAmount(data.billing.membership.paidSum)} ₽</div>
+                <div>Долг: {formatAmount(data.billing.membership.debtSum)} ₽</div>
+              </div>
+            ) : (
+              <Placeholder />
+            )}
+            <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
+          </Card>
+
+          <Card title="Взносы (целевые)">
+            {data.billing.target ? (
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Период: {data.billing.target.period}</div>
+                <div>Начислено: {formatAmount(data.billing.target.accruedSum)} ₽</div>
+                <div>Оплачено: {formatAmount(data.billing.target.paidSum)} ₽</div>
+                <div>Долг: {formatAmount(data.billing.target.debtSum)} ₽</div>
+              </div>
+            ) : (
+              <Placeholder />
+            )}
+            <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
+          </Card>
+
+          <Card title="Электроэнергия">
+            {data.electricity.totals ? (
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Период: {data.electricity.totals.period}</div>
+                <div>Начислено: {formatAmount(data.electricity.totals.accruedSum)} ₽</div>
+                <div>Оплачено: {formatAmount(data.electricity.totals.paidSum)} ₽</div>
+                <div>Долг: {formatAmount(data.electricity.totals.debtSum)} ₽</div>
+                <div>Нет показаний: {data.electricity.missingReadingsCount}</div>
+              </div>
+            ) : (
+              <Placeholder />
+            )}
+            <div className="flex gap-2">
+              <LinkBtn href="/admin/electricity/readings">Показания</LinkBtn>
+              <LinkBtn href="/admin/electricity/report" variant="secondary">
+                Отчёт
+              </LinkBtn>
+            </div>
+          </Card>
+
+          <Card title="Импорты">
+            {data.imports.lastImportBatch ? (
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Дата: {new Date(data.imports.lastImportBatch.importedAt).toLocaleString("ru-RU")}</div>
+                <div>Файл: {data.imports.lastImportBatch.fileName || "—"}</div>
+                <div>
+                  Итог: {data.imports.lastImportBatch.createdCount} / Ошибки: {data.imports.lastImportBatch.skippedCount}
+                </div>
+                <div>Статус: {data.imports.lastImportBatch.status}</div>
+              </div>
+            ) : (
+              <Placeholder />
+            )}
+            <div className="flex gap-2">
+              <LinkBtn href="/admin/billing/import">Импорт</LinkBtn>
+              <LinkBtn href="/admin/billing/imports" variant="secondary">
+                История
+              </LinkBtn>
+            </div>
+          </Card>
+
+          <Card title="Должники (членские)">
+            <div className="space-y-1 text-sm text-zinc-800">
+              <div>Кол-во: {data.debtors.membership.count}</div>
+              <div>Сумма долга: {formatAmount(data.debtors.membership.sumDebt)} ₽</div>
+            </div>
+            <LinkBtn href="/admin/notifications/debtors?type=membership">Открыть</LinkBtn>
+          </Card>
+
+          <Card title="Должники (электро)">
+            <div className="space-y-1 text-sm text-zinc-800">
+              <div>Кол-во: {data.debtors.electricity.count}</div>
+              <div>Сумма долга: {formatAmount(data.debtors.electricity.sumDebt)} ₽</div>
+            </div>
+            <LinkBtn href="/admin/notifications/debtors?type=electricity">Открыть</LinkBtn>
+          </Card>
+        </div>
+      )}
+    </div>
   );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function LinkBtn({
+  href,
+  children,
+  variant = "primary",
+}: {
+  href: string;
+  children: React.ReactNode;
+  variant?: "primary" | "secondary";
+}) {
+  const base = "inline-flex rounded-full px-4 py-2 text-sm font-semibold transition";
+  const cls =
+    variant === "secondary"
+      ? `${base} border border-[#5E704F] text-[#5E704F] hover:bg-[#5E704F] hover:text-white`
+      : `${base} bg-[#5E704F] text-white hover:bg-[#4f5f42]`;
+  return (
+    <Link href={href} className={cls}>
+      {children}
+    </Link>
+  );
+}
+
+function Placeholder() {
+  return <div className="rounded border border-dashed border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">Нет данных</div>;
 }
