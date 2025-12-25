@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "deploy": "bash ./scripts/deploy.sh"
+    "deploy": "node scripts/release.js"
   },
   "dependencies": {
     "next": "16.1.1",
