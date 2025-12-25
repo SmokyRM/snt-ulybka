@@ -54,4 +54,8 @@ npm run deploy
 
 ### Dry-run
 - `npm run deploy:dry` — выводит информацию о текущем коммите/ветке без каких-либо git/Vercel действий.
+
+### Админ-фичи и build-info
+- ENV-флаг `ADMIN_FEATURE_NEW_UI=1` + cookie `admin_feature_new_ui=1` включает новый UI в админке (переключатель на странице `/admin/build-info`).
+- Страница `/admin/build-info` показывает текущее окружение/commit SHA/ветку/DEPLOYMENT_ID и позволяет включить фичу через cookie.
 # snt-ulybka

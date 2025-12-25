@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listPlots } from "@/lib/plotsDb";
 import { listTickets } from "@/lib/ticketsDb";
 import { isAdminNewUIEnabled } from "@/lib/featureFlags";
+import { cookies } from "next/headers";
 
 const safeFormatBuildTime = (raw?: string | null) => {
   if (!raw) return "—";
@@ -18,7 +19,8 @@ const safeFormatBuildTime = (raw?: string | null) => {
   return formatted.replace(",", " в");
 };
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+  const cookieStore = await Promise.resolve(cookies());
   const buildRaw =
     process.env.BUILD_TIME ||
     process.env.VERCEL_DEPLOYMENT_ID ||
@@ -29,7 +31,7 @@ export default function AdminDashboard() {
   const plots = listPlots();
   const unconfirmedCount = plots.filter((p) => !p.isConfirmed).length;
   const missingContactsCount = plots.filter((p) => !p.phone && !p.email).length;
-  const isNewUIEnabled = isAdminNewUIEnabled();
+  const isNewUIEnabled = await isAdminNewUIEnabled(cookieStore);
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
