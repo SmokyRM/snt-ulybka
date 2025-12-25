@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
+import { LogoutButton } from "@/components/LogoutButton";
+import { getSessionUser, SessionUser } from "@/lib/session.server";
 import { getPlotForUser } from "@/lib/plotsDb";
 
 export default async function CabinetPage() {
@@ -9,7 +10,8 @@ export default async function CabinetPage() {
     redirect("/auth");
   }
 
-  const isVerified = user.status === "verified";
+  const status = (user.status as SessionUser["status"]) ?? "pending";
+  const isVerified = status === "verified";
   const plot = user.id ? getPlotForUser(user.id) : null;
 
   return (
@@ -19,15 +21,14 @@ export default async function CabinetPage() {
           <div>
             <h1 className="text-2xl font-semibold">Личный кабинет</h1>
             <p className="text-sm text-zinc-600">
-              {user.email || user.phone || "Профиль"}
+              {user.email || user.phone || user.contact || "Профиль"}
             </p>
           </div>
-          <a
-            href="/auth"
-            className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400"
-          >
-            Выйти
-          </a>
+          <LogoutButton
+            redirectTo="/"
+            className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+            busyLabel="Выходим..."
+          />
         </div>
 
         {isVerified ? (
@@ -75,20 +76,20 @@ export default async function CabinetPage() {
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                {user.status === "rejected" ? "Отклонено" : "На проверке"}
+                {status === "rejected" ? "Отклонено" : "На проверке"}
               </span>
               <p className="text-sm text-zinc-700">
-                {user.status === "rejected"
+                {status === "rejected"
                   ? "Доступ отклонен"
                   : "На проверке правлением"}
               </p>
             </div>
             <p className="mt-3 text-sm text-zinc-700">
-              {user.status === "rejected"
+              {status === "rejected"
                 ? "Свяжитесь с правлением для уточнения причин и повторной заявки."
                 : "Доступ ограничен до подтверждения данных правлением."}
             </p>
-            {user.status === "rejected" && (
+            {status === "rejected" && (
               <p className="mt-2 text-sm text-zinc-700">
                 Контакты правления: info@snt-ulybka.ru, +7 (900) 000-00-00
               </p>
