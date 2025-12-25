@@ -605,9 +605,10 @@ export const updateAccrualItem = (id: string, patch: Partial<AccrualItem>) => {
   return updated;
 };
 
-export const listPayments = (filters?: { periodId?: string; plotId?: string }) => {
+export const listPayments = (filters?: { periodId?: string; plotId?: string; includeVoided?: boolean }) => {
   const db = getDb();
   return db.payments.filter((p) => {
+    if (!filters?.includeVoided && p.isVoided) return false;
     if (filters?.periodId && p.periodId !== filters.periodId) return false;
     if (filters?.plotId && p.plotId !== filters.plotId) return false;
     return true;
@@ -635,8 +636,8 @@ export const addPayment = (data: {
     reference: data.reference ?? null,
     comment: data.comment ?? null,
     createdByUserId: data.createdByUserId,
-    createdAt: now,
-    isVoided: false,
+  createdAt: now,
+  isVoided: false,
     voidReason: null,
     voidedAt: null,
     voidedByUserId: null,
@@ -659,6 +660,28 @@ export const voidPayment = (id: string, reason: string | null, voidedBy: string 
   };
   db.payments = db.payments.map((p) => (p.id === id ? updated : p));
   return updated;
+};
+
+export const findAccrualPeriod = (year: number, month: number, type: string) => {
+  const db = getDb();
+  return db.accrualPeriods.find((p) => p.year === year && p.month === month && p.type === type) ?? null;
+};
+
+export const ensureAccrualItem = (periodId: string, plotId: string) => {
+  const db = getDb();
+  const existing = db.accrualItems.find((i) => i.periodId === periodId && i.plotId === plotId);
+  if (existing) return existing;
+  const created: AccrualItem = {
+    id: createId("accrual"),
+    periodId,
+    plotId,
+    amountAccrued: 0,
+    amountPaid: 0,
+    note: null,
+    updatedAt: new Date().toISOString(),
+  };
+  db.accrualItems.push(created);
+  return created;
 };
 
 export const getSetting = <T = unknown>(key: string): SettingEntry<T> | null => {
