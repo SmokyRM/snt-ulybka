@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "snt_session";
-const ADMIN_CODE = process.env.ADMIN_ACCESS_CODE || "ADMIN_CODE";
+const ADMIN_CODE = process.env.ADMIN_ACCESS_CODE || "";
 const USER_CODE = process.env.USER_ACCESS_CODE || "USER_CODE";
 
 export async function POST(request: Request) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   let role: "user" | "admin" | null = null;
-  if (code === ADMIN_CODE) role = "admin";
+  if (ADMIN_CODE && code === ADMIN_CODE) role = "admin";
   if (code === USER_CODE) role = "user";
 
   if (!role) {
