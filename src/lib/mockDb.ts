@@ -18,6 +18,7 @@ import {
   ElectricityMeter,
   MeterReading,
   ElectricityTariff,
+  DebtNotification,
 } from "@/types/snt";
 
 interface MockDb {
@@ -36,6 +37,7 @@ interface MockDb {
   electricityMeters: ElectricityMeter[];
   meterReadings: MeterReading[];
   electricityTariffs: ElectricityTariff[];
+  debtNotifications: DebtNotification[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -141,6 +143,7 @@ const getDb = (): MockDb => {
       electricityMeters: [],
       meterReadings: [],
       electricityTariffs: [],
+      debtNotifications: [],
     };
   }
   return g.__SNT_DB__;
@@ -390,6 +393,7 @@ export const resetMockDb = () => {
     electricityMeters: [],
     meterReadings: [],
     electricityTariffs: [],
+    debtNotifications: [],
   };
 };
 
@@ -913,6 +917,53 @@ export const getElectricityReport = (year: number, month: number) => {
       debt: amountAccrued - amountPaid,
     };
   });
+};
+
+// Debt notifications
+export const upsertDebtNotification = (data: {
+  plotId: string;
+  periodId: string;
+  type: DebtNotification["type"];
+  debtAmount: number;
+  status: DebtNotification["status"];
+  comment?: string | null;
+  createdByUserId: string | null;
+}) => {
+  const db = getDb();
+  const existing = db.debtNotifications.find(
+    (n) => n.plotId === data.plotId && n.periodId === data.periodId && n.type === data.type
+  );
+  const now = new Date().toISOString();
+  if (existing) {
+    const updated: DebtNotification = {
+      ...existing,
+      debtAmount: data.debtAmount,
+      status: data.status,
+      comment: data.comment ?? existing.comment ?? null,
+      updatedAt: now,
+    };
+    db.debtNotifications = db.debtNotifications.map((n) => (n.id === existing.id ? updated : n));
+    return updated;
+  }
+  const created: DebtNotification = {
+    id: createId("debt"),
+    plotId: data.plotId,
+    periodId: data.periodId,
+    type: data.type,
+    debtAmount: data.debtAmount,
+    status: data.status,
+    comment: data.comment ?? null,
+    createdByUserId: data.createdByUserId,
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.debtNotifications.push(created);
+  return created;
+};
+
+export const listDebtNotifications = (filters: { periodId: string; type: DebtNotification["type"] }) => {
+  const db = getDb();
+  return db.debtNotifications.filter((n) => n.periodId === filters.periodId && n.type === filters.type);
 };
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();

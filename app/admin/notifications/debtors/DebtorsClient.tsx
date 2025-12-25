@@ -11,6 +11,9 @@ type Item = {
   amountPaid: number;
   debt: number;
   text: string;
+  notificationStatus?: "new" | "notified" | "resolved";
+  notificationComment?: string | null;
+  periodId?: string;
 };
 
 type ResponseData = { items: Item[]; error?: string };
@@ -22,6 +25,7 @@ export default function DebtorsClient() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hideResolved, setHideResolved] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -59,6 +63,38 @@ export default function DebtorsClient() {
   const exportCsv = () => {
     window.location.href = `/api/admin/notifications/debtors/export.csv?type=${type}&period=${period}`;
   };
+
+  const markStatus = async (item: Item, status: "notified" | "resolved", comment?: string) => {
+    if (!item.periodId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/notifications/debtors/mark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plotId: item.plotId,
+          periodId: item.periodId,
+          type,
+          status,
+          debtAmount: item.debt,
+          comment,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as { error?: string }).error ?? "Не удалось обновить статус");
+        return;
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredItems = hideResolved ? items.filter((i) => i.notificationStatus !== "resolved") : items;
 
   return (
     <div className="space-y-4">
@@ -99,6 +135,15 @@ export default function DebtorsClient() {
         >
           Экспорт CSV
         </button>
+        <label className="flex items-center gap-2 text-sm text-zinc-700">
+          <input
+            type="checkbox"
+            checked={hideResolved}
+            onChange={(e) => setHideResolved(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-300"
+          />
+          Скрыть закрытые
+        </label>
         {loading && <span className="text-sm text-zinc-600">Загрузка...</span>}
         {error && <span className="text-sm text-red-700">{error}</span>}
       </div>
@@ -113,11 +158,12 @@ export default function DebtorsClient() {
               <th className="px-3 py-2 text-left font-semibold text-зinc-700">Начислено</th>
               <th className="px-3 py-2 text-left font-semibold text-зinc-700">Оплачено</th>
               <th className="px-3 py-2 text-left font-semibold text-зinc-700">Долг</th>
+              <th className="px-3 py-2 text-left font-semibold text-зinc-700">Статус</th>
               <th className="px-3 py-2 text-left font-semibold text-зinc-700">Текст уведомления</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-зinc-100">
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <tr key={item.plotId} className={item.debt > 0 ? "bg-red-50/40" : undefined}>
                 <td className="px-3 py-2">{item.street}</td>
                 <td className="px-3 py-2">{item.number}</td>
@@ -125,6 +171,36 @@ export default function DebtorsClient() {
                 <td className="px-3 py-2">{item.amountAccrued.toFixed(2)}</td>
                 <td className="px-3 py-2">{item.amountPaid.toFixed(2)}</td>
                 <td className="px-3 py-2">{item.debt.toFixed(2)}</td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-col gap-1 text-xs">
+                    <span>
+                      {item.notificationStatus === "resolved"
+                        ? "Закрыто"
+                        : item.notificationStatus === "notified"
+                          ? "Уведомлён"
+                          : "Новый"}
+                    </span>
+                    {item.notificationComment && <span className="text-zinc-600">{item.notificationComment}</span>}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded border border-zinc-300 px-2 py-1 hover:bg-зinc-100"
+                        onClick={() => markStatus(item, "notified")}
+                        disabled={loading}
+                      >
+                        Отметить уведомлён
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-zinc-300 px-2 py-1 hover:bg-зinc-100"
+                        onClick={() => markStatus(item, "resolved")}
+                        disabled={loading}
+                      >
+                        Закрыть
+                      </button>
+                    </div>
+                  </div>
+                </td>
                 <td className="px-3 py-2 max-w-xl">
                   <div className="flex items-start gap-2">
                     <span className="flex-1 text-xs sm:text-sm">{item.text}</span>

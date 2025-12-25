@@ -1,4 +1,11 @@
-import { findAccrualPeriod, findPlotById, listAccrualItems, listPayments, listPlots } from "@/lib/mockDb";
+import {
+  findAccrualPeriod,
+  findPlotById,
+  listAccrualItems,
+  listPayments,
+  listPlots,
+  listDebtNotifications,
+} from "@/lib/mockDb";
 
 type NotificationType = "membership" | "electricity";
 
@@ -36,12 +43,15 @@ export const getAccrualDebtors = (type: NotificationType, periodRaw: string | nu
   const accruals = listAccrualItems(period.id);
   const paymentsAll = listPayments({ periodId: period.id, includeVoided: false });
 
+  const existingStatuses = listDebtNotifications({ periodId: period.id, type });
+
   const items = accruals.map((acc) => {
     const plot = findPlotById(acc.plotId) ?? listPlots().find((p) => p.id === acc.plotId);
     const amountPaid = paymentsAll
       .filter((p) => p.plotId === acc.plotId)
       .reduce((sum, p) => sum + p.amount, 0);
     const debt = acc.amountAccrued - amountPaid;
+    const status = existingStatuses.find((n) => n.plotId === acc.plotId);
     return {
       plotId: acc.plotId,
       street: plot?.street ?? "",
@@ -50,6 +60,10 @@ export const getAccrualDebtors = (type: NotificationType, periodRaw: string | nu
       amountAccrued: acc.amountAccrued,
       amountPaid,
       debt,
+      notificationStatus: status?.status ?? "new",
+      notificationComment: status?.comment ?? null,
+      notificationUpdatedAt: status?.updatedAt ?? null,
+      periodId: period.id,
     };
   });
 

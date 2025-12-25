@@ -223,3 +223,16 @@ export interface ElectricityTariff {
   validFrom: string;
   createdAt: string;
 }
+
+export interface DebtNotification {
+  id: string;
+  plotId: string;
+  periodId: string;
+  type: "membership" | "electricity";
+  debtAmount: number;
+  status: "new" | "notified" | "resolved";
+  comment?: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
