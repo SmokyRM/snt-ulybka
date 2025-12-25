@@ -1,4 +1,5 @@
 import { Plot } from "@/types/snt";
+import { randomUUID } from "crypto";
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
@@ -77,6 +78,19 @@ const defaultPlots: Plot[] = [
   },
 ];
 
+type PlotCreateInput = {
+  street: string;
+  number: string;
+  ownerFullName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  membershipStatus?: Plot["membershipStatus"];
+  isConfirmed?: boolean;
+  notes?: string | null;
+};
+
+type PlotUpdateInput = Partial<PlotCreateInput>;
+
 const getDb = () => {
   const g = globalThis as typeof globalThis & { __SNT_PLOTS__?: Plot[] };
   if (!g.__SNT_PLOTS__) {
@@ -84,6 +98,10 @@ const getDb = () => {
   }
   return g.__SNT_PLOTS__;
 };
+
+const createId = () =>
+  `plot-${typeof randomUUID === "function" ? randomUUID() : Math.random().toString(16).slice(2)}`;
+const nowIso = () => new Date().toISOString();
 
 export const findPlotByNumberStreet = (plotNumber: string, street: string) => {
   const plots = getDb();
@@ -118,3 +136,90 @@ export const isPlotTaken = (plotId: string) => {
 export const getPlotForUser = (userId: string) => {
   return getDb().find((plot) => plot.ownerUserId === userId) || null;
 };
+
+type ListFilters = {
+  confirmed?: boolean;
+  membership?: Plot["membershipStatus"];
+  missingContacts?: boolean;
+  q?: string;
+};
+
+export const listPlots = (filters: ListFilters = {}) => {
+  const { confirmed, membership, missingContacts, q } = filters;
+  const search = q?.trim().toLowerCase();
+  return getDb().filter((plot) => {
+    if (typeof confirmed === "boolean" && plot.isConfirmed !== confirmed) return false;
+    if (membership && plot.membershipStatus !== membership) return false;
+    if (missingContacts && plot.phone) return false;
+    if (missingContacts && plot.email) return false;
+    if (search) {
+      const haystack = `${plot.street} ${plot.plotNumber} ${plot.number} ${plot.ownerFullName ?? ""}`.toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+};
+
+export const findPlotById = (id: string) => {
+  return getDb().find((plot) => plot.id === id || plot.plotId === id) || null;
+};
+
+const streetNumberExists = (street: string, number: string, excludeId?: string) => {
+  const streetNorm = normalize(street);
+  const numNorm = normalize(number);
+  return getDb().some(
+    (plot) =>
+      (plot.id !== excludeId && plot.plotId !== excludeId) &&
+      normalize(plot.street) === streetNorm &&
+      normalize(plot.number) === numNorm
+  );
+};
+
+export const addPlot = (input: PlotCreateInput): Plot => {
+  const id = createId();
+  const now = nowIso();
+  const plot: Plot = {
+    id,
+    plotId: id,
+    createdAt: now,
+    updatedAt: now,
+    street: input.street,
+    number: input.number,
+    plotNumber: input.number,
+    ownerFullName: input.ownerFullName ?? null,
+    phone: input.phone ?? null,
+    email: input.email ?? null,
+    membershipStatus: input.membershipStatus ?? "UNKNOWN",
+    isConfirmed: input.isConfirmed ?? false,
+    notes: input.notes ?? null,
+    plotCode: "",
+    ownerUserId: null,
+  };
+  const db = getDb();
+  db.push(plot);
+  return plot;
+};
+
+export const updatePlot = (id: string, input: PlotUpdateInput) => {
+  const db = getDb();
+  const existing = db.find((p) => p.id === id || p.plotId === id);
+  if (!existing) return null;
+  const updated: Plot = {
+    ...existing,
+    street: input.street ?? existing.street,
+    number: input.number ?? existing.number,
+    plotNumber: input.number ?? existing.plotNumber ?? existing.number,
+    ownerFullName: input.ownerFullName ?? existing.ownerFullName ?? null,
+    phone: input.phone ?? existing.phone ?? null,
+    email: input.email ?? existing.email ?? null,
+    membershipStatus: input.membershipStatus ?? existing.membershipStatus,
+    isConfirmed: input.isConfirmed ?? existing.isConfirmed,
+    notes: input.notes ?? existing.notes ?? null,
+    updatedAt: nowIso(),
+  };
+  db.splice(db.indexOf(existing), 1, updated);
+  return updated;
+};
+
+export const existsStreetNumber = (street: string, number: string, excludeId?: string) =>
+  streetNumberExists(street, number, excludeId);
