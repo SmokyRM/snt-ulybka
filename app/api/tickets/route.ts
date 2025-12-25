@@ -5,6 +5,7 @@ import {
   listTickets,
   listTicketsForAuthor,
 } from "@/lib/ticketsDb";
+import { Ticket } from "@/types/snt";
 
 const validate = (subject?: string, message?: string) => {
   const errors: string[] = [];
@@ -40,8 +41,26 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const subject = (body.subject as string | undefined)?.trim();
   const message = (body.message as string | undefined)?.trim();
+  const attachments = Array.isArray(body.attachments) ? (body.attachments as string[]) : [];
 
   const errors = validate(subject, message);
+  if (attachments.length > 3) {
+    errors.push("Можно прикрепить не более 3 изображений.");
+  }
+  const mappedAttachments: Ticket["attachments"] = [];
+  for (const url of attachments) {
+    if (typeof url !== "string") {
+      errors.push("Некорректный формат вложения.");
+      break;
+    }
+    const trimmed = url.trim();
+    if (!trimmed.startsWith("data:image/")) {
+      errors.push("Допустимы только изображения, загруженные через форму.");
+      break;
+    }
+    mappedAttachments.push({ url: trimmed, type: "image" });
+  }
+
   if (errors.length) {
     return NextResponse.json({ error: errors.join(" ") }, { status: 400 });
   }
@@ -54,8 +73,8 @@ export async function POST(request: Request) {
     authorPhone: user.phone ?? null,
     subject: subject as string,
     message: message as string,
+    attachments: mappedAttachments,
   });
 
   return NextResponse.json({ ticket }, { status: 201 });
 }
-
