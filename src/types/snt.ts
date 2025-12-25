@@ -4,8 +4,10 @@ export type MembershipStatus = "UNKNOWN" | "MEMBER" | "NON_MEMBER";
 
 export interface Plot {
   id: string;
+  plotId: string;
   createdAt: string;
   updatedAt: string;
+  plotNumber: string;
   number: string;
   street: string;
   ownerFullName?: string | null;
@@ -15,8 +17,6 @@ export interface Plot {
   isConfirmed: boolean;
   notes?: string | null;
   // legacy/compat fields
-  plotId?: string;
-  plotNumber?: string;
   cadastral?: string;
   plotCode?: string;
   ownerUserId?: string | null;
