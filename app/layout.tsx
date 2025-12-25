@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Header from "@/components/home/Header";
+import Footer from "@/components/home/Footer";
 
 export const metadata: Metadata = {
   title: "СНТ «Улыбка» — официальный сайт",
@@ -22,7 +24,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <div className="min-h-screen bg-[#F8F1E9] text-zinc-900">
+          <Header />
+          <main className="pt-24">{children}</main>
+          <Footer />
+        </div>
+      </body>
     </html>
   );
 }
