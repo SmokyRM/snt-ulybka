@@ -1,10 +1,10 @@
+ "use client";
+
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useState } from "react";
 import { membershipLabel } from "@/lib/membershipLabels";
 import { listPlots } from "@/lib/plotsDb";
-import { getSessionUser } from "@/lib/session.server";
 import { Plot } from "@/types/snt";
-import { useState } from "react";
 
 const parseFilters = (searchParams?: { [key: string]: string | string[] | undefined }) => {
   const confirmedParam = typeof searchParams?.confirmed === "string" ? searchParams?.confirmed : undefined;
@@ -34,16 +34,11 @@ const contactShort = (plot: Plot) => {
   return "—";
 };
 
-export default async function AdminPlotsPage({
+export default function AdminPlotsPage({
   searchParams,
 }: {
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
-  const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
-    redirect("/login");
-  }
-
   const filters = parseFilters(searchParams);
   const plots = listPlots(filters);
   const selectedInitial: string[] = [];
