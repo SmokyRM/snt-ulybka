@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import React from "react";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getServerApiUrl } from "@/lib/serverApi";
 
 type DashboardData = {
   registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
@@ -22,7 +23,8 @@ type DashboardData = {
 };
 
 const fetchDashboard = async (): Promise<DashboardData> => {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/dashboard`, {
+  const url = await getServerApiUrl("/api/admin/dashboard");
+  const res = await fetch(url, {
     cache: "no-store",
   });
   if (!res.ok) {
@@ -42,9 +44,8 @@ const fetchAnalytics = async (): Promise<AnalyticsPoint[]> => {
   const now = new Date();
   const to = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
   const from = `${now.getUTCFullYear() - 1}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/analytics/collections?from=${from}&to=${to}`, {
-    cache: "no-store",
-  });
+  const url = await getServerApiUrl(`/api/analytics/collections?from=${from}&to=${to}`);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
   const data = (await res.json()) as { points: AnalyticsPoint[] };
   return data.points ?? [];
