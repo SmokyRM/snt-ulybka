@@ -1,5 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
+import { setUserPlot, upsertPlot } from "@/lib/plots";
+import { upsertUserProfileByUser } from "@/lib/userProfiles";
 
 export type MembershipStatus = "member" | "non-member" | "pending" | "unknown";
 export type MembershipRecord = {
@@ -22,6 +24,8 @@ export type MembershipRequest = {
   comment: string | null;
   status: MembershipRequestStatus;
   reviewedAt: string | null;
+  plots?: Array<{ street: string | null; plotNumber: string; cadastral?: string | null }>;
+  proofType?: "extract_egrn" | "sale_contract" | "garden_book" | "other";
 };
 
 const membershipPath = path.join(process.cwd(), "data", "membership.json");
@@ -61,19 +65,30 @@ export async function submitMembershipRequest(input: {
   userId: string;
   fullName: string;
   phone: string;
-  plotNumber: string;
+  plots?: Array<{ street: string | null; plotNumber: string; cadastral?: string | null }>;
+  plotNumber?: string;
   street?: string | null;
   comment?: string | null;
+  proofType?: "extract_egrn" | "sale_contract" | "garden_book" | "other";
 }) {
-  if (!input.userId || !input.fullName || !input.phone || !input.plotNumber) return;
+  const plots =
+    input.plots && input.plots.length > 0
+      ? input.plots.filter((p) => p.plotNumber)
+      : input.plotNumber
+        ? [{ street: input.street ?? null, plotNumber: input.plotNumber, cadastral: undefined }]
+        : [];
+  if (!input.userId || !input.fullName || !input.phone || plots.length === 0) return;
   const requests = await readJson<MembershipRequest[]>(requestsPath, []);
   const existing = requests.find((r) => r.userId === input.userId && r.status === "new");
   const now = new Date().toISOString();
+  await upsertUserProfileByUser(input.userId, { fullName: input.fullName, phone: input.phone });
   if (existing) {
     existing.fullName = input.fullName;
     existing.phone = input.phone;
-    existing.plotNumber = input.plotNumber;
-    existing.street = input.street ?? null;
+    existing.plotNumber = plots[0]?.plotNumber ?? existing.plotNumber;
+    existing.street = plots[0]?.street ?? existing.street ?? null;
+    existing.plots = plots;
+    existing.proofType = input.proofType ?? existing.proofType ?? "other";
     existing.comment = input.comment ?? null;
     existing.createdAt = now;
     await writeJson(requestsPath, requests);
@@ -85,11 +100,13 @@ export async function submitMembershipRequest(input: {
     createdAt: now,
     fullName: input.fullName,
     phone: input.phone,
-    plotNumber: input.plotNumber,
-    street: input.street ?? null,
+    plotNumber: plots[0]?.plotNumber ?? "",
+    street: plots[0]?.street ?? null,
     comment: input.comment ?? null,
     status: "new",
     reviewedAt: null,
+    plots,
+    proofType: input.proofType ?? "other",
   };
   requests.unshift(item);
   await writeJson(requestsPath, requests);
@@ -98,6 +115,14 @@ export async function submitMembershipRequest(input: {
 
 export async function getMembershipRequests(): Promise<MembershipRequest[]> {
   return readJson<MembershipRequest[]>(requestsPath, []);
+}
+
+export async function getLatestMembershipRequestForUser(userId: string): Promise<MembershipRequest | null> {
+  if (!userId) return null;
+  const requests = await readJson<MembershipRequest[]>(requestsPath, []);
+  const forUser = requests.filter((r) => r.userId === userId);
+  if (forUser.length === 0) return null;
+  return forUser.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))[0] ?? null;
 }
 
 export async function approveMembershipRequest(id: string) {
@@ -124,6 +149,35 @@ export async function approveMembershipRequest(id: string) {
     memberships[mIdx] = record;
   }
   await writeJson(membershipPath, memberships);
+
+  const targetPlots =
+    requests[idx].plots && requests[idx].plots.length > 0
+      ? requests[idx].plots
+      : requests[idx].plotNumber
+        ? [{ street: requests[idx].street ?? "—", plotNumber: requests[idx].plotNumber, cadastral: null }]
+        : [];
+  for (const p of targetPlots) {
+    const plot = await upsertPlot({
+      street: p.street ?? "—",
+      plotNumber: p.plotNumber,
+      cadastral: p.cadastral,
+      notes: null,
+    });
+    if (plot) {
+      await setUserPlot({
+        userId: requests[idx].userId,
+        plotId: plot.plotId,
+        status: "active",
+        ownershipStatus: "verified",
+        ownershipProof: {
+          type: requests[idx].proofType ?? "other",
+          note: requests[idx].comment ?? null,
+          verifiedAt: now,
+          verifiedBy: "admin",
+        },
+      });
+    }
+  }
 }
 
 export async function rejectMembershipRequest(id: string) {

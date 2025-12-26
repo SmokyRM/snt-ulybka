@@ -7,6 +7,7 @@ export type ChargeStatus = "unpaid" | "paid";
 export type Charge = {
   id: string;
   userId: string;
+  plotId?: string | null;
   type: ChargeType;
   amount: number;
   period: string; // YYYY-MM
@@ -50,6 +51,7 @@ export async function getAllCharges() {
 
 export async function addCharge(input: {
   userId: string;
+  plotId?: string | null;
   type: ChargeType;
   amount: number;
   period: string;
@@ -61,6 +63,7 @@ export async function addCharge(input: {
   const item: Charge = {
     id: makeId(),
     userId: input.userId,
+    plotId: input.plotId ?? null,
     type: input.type,
     amount: input.amount,
     period: input.period,

@@ -5,6 +5,7 @@ import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { serverFetchJson } from "@/lib/serverFetch";
 import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
+import { upsertUserProfileByAdmin } from "@/lib/userProfiles";
 
 type DashboardData = {
   registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
@@ -54,6 +55,7 @@ export default async function AdminDashboard() {
   if (!isAdmin(user)) {
     redirect("/login");
   }
+  const isDev = process.env.NODE_ENV === "development";
 
   const data = await fetchDashboard().catch(() => null);
   const analytics = await fetchAnalytics();
@@ -79,6 +81,33 @@ export default async function AdminDashboard() {
       <div className="text-xs text-zinc-700">
         Home views: Old — {homeViews.homeOld} | New — {homeViews.homeNew}
       </div>
+
+      {isDev && user && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold text-emerald-900">Тесты (admin only, dev)</div>
+            <form
+              action={async () => {
+                "use server";
+                const admin = await getSessionUser();
+                if (!isAdmin(admin)) {
+                  redirect("/login");
+                }
+                await upsertUserProfileByAdmin(admin?.id ?? "", { fullName: "", phone: "", cadastralNumbers: [] });
+                redirect("/cabinet");
+              }}
+            >
+              <button
+                type="submit"
+                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
+              >
+                Симулировать первый вход
+              </button>
+            </form>
+          </div>
+          <p className="mt-1 text-xs text-emerald-700">Очищает ФИО/телефон текущего админа для проверки онбординга.</p>
+        </div>
+      )}
 
       {!data ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Не удалось загрузить данные</div>

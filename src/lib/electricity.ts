@@ -3,6 +3,7 @@ import path from "path";
 
 export type ElectricityEntry = {
   userId: string;
+  plotId?: string | null;
   plotNumber: string;
   lastReading: number | null;
   lastReadingDate: string | null;
@@ -21,6 +22,7 @@ async function readAll(): Promise<ElectricityEntry[]> {
     if (!Array.isArray(parsed)) return [];
     return parsed.map((item) => ({
       userId: item.userId ?? "",
+      plotId: item.plotId ?? null,
       plotNumber: item.plotNumber ?? "—",
       lastReading: item.lastReading ?? null,
       lastReadingDate: item.lastReadingDate ?? null,
@@ -43,9 +45,11 @@ async function writeAll(items: ElectricityEntry[]) {
   await fs.rename(tmp, filePath);
 }
 
-export async function getUserElectricity(userId: string) {
+export async function getUserElectricity(userId: string, plotId?: string | null) {
   if (!userId) return null;
   const items = await readAll();
+  const exact = items.find((i) => i.userId === userId && (plotId ? i.plotId === plotId : true));
+  if (exact) return exact;
   return items.find((i) => i.userId === userId) ?? null;
 }
 
@@ -53,15 +57,16 @@ export async function getAllElectricity() {
   return readAll();
 }
 
-export async function submitReading(userId: string, value: number) {
+export async function submitReading(userId: string, value: number, plotId?: string | null, plotNumber?: string | null) {
   if (!userId || !Number.isFinite(value) || value < 0) return null;
   const items = await readAll();
-  const idx = items.findIndex((i) => i.userId === userId);
+  const idx = items.findIndex((i) => i.userId === userId && (plotId ? i.plotId === plotId : true));
   const now = new Date().toISOString();
   if (idx === -1) {
     const entry: ElectricityEntry = {
       userId,
-      plotNumber: "—",
+      plotId: plotId ?? null,
+      plotNumber: plotNumber ?? "—",
       lastReading: value,
       lastReadingDate: now,
       debt: null,
@@ -75,6 +80,8 @@ export async function submitReading(userId: string, value: number) {
   }
   const updated: ElectricityEntry = {
     ...items[idx],
+    plotId: plotId ?? items[idx].plotId ?? null,
+    plotNumber: plotNumber ?? items[idx].plotNumber,
     lastReading: value,
     lastReadingDate: now,
     history: [
@@ -118,9 +125,9 @@ export async function clearNotified(userIds: string[]) {
   if (changed) await writeAll(updated);
 }
 
-export async function getUserElectricityHistory(userId: string, months = 6) {
+export async function getUserElectricityHistory(userId: string, months = 6, plotId?: string | null) {
   if (!userId) return [];
-  const entry = await getUserElectricity(userId);
+  const entry = await getUserElectricity(userId, plotId);
   if (!entry) return [];
   const history = Array.isArray(entry.history) ? entry.history : [];
   const sorted = [...history].sort((a, b) => (a.date > b.date ? -1 : 1)).slice(0, months);

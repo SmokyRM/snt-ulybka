@@ -55,9 +55,22 @@ export default async function MembershipRequestsPage() {
                 </div>
                 <div className="mt-2 grid gap-1 text-sm text-zinc-700 sm:grid-cols-2">
                   <div>Телефон: {req.phone}</div>
-                  <div>Участок: {req.plotNumber}</div>
-                  <div>Улица: {req.street || "—"}</div>
+                  <div>Документ: {req.proofType || "—"}</div>
                   <div>Комментарий: {req.comment || "—"}</div>
+                </div>
+                <div className="mt-2 text-sm text-zinc-700">
+                  <div className="font-semibold text-zinc-900">Участки</div>
+                  {req.plots && req.plots.length > 0 ? (
+                    <ul className="mt-1 space-y-1">
+                      {req.plots.map((p, idx) => (
+                        <li key={`${req.id}-${idx}`} className="text-zinc-800">
+                          {(p.street || "—")}, уч. {p.plotNumber}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div>Участок: {req.plotNumber || "—"}, улица: {req.street || "—"}</div>
+                  )}
                 </div>
                 <div className="mt-3 flex gap-2">
                   <form action={approve}>
