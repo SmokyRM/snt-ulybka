@@ -4,6 +4,7 @@ import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { getDebtsData, DebtTypeFilter } from "@/lib/debts";
 import DebtsClient from "./DebtsClient";
 import { logAdminAction } from "@/lib/audit";
+import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
 const today = new Date();
 const defaultPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
@@ -15,6 +16,8 @@ export default async function DebtsPage({
 }) {
   const user = await getSessionUser();
   if (!isAdmin(user)) redirect("/login");
+  const flags = await getFeatureFlags();
+  const debtsV2On = isFeatureEnabled(flags, "debtsV2");
   const period = typeof searchParams?.period === "string" ? searchParams.period : defaultPeriod;
   const type = (typeof searchParams?.type === "string" ? searchParams.type : "all") as DebtTypeFilter;
   const minDebt =
@@ -50,6 +53,9 @@ export default async function DebtsPage({
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Долги по участкам</h1>
+          {debtsV2On ? (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">V2 enabled</span>
+          ) : null}
           <Link
             href="/admin"
             className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"

@@ -68,104 +68,137 @@ export default async function AdminDashboard() {
       {!data ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Не удалось загрузить данные</div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Card title="Реестр">
-            <div className="space-y-1 text-sm text-zinc-800">
-              <div>Всего участков: {data.registry.totalPlots}</div>
-              <div>Не подтверждено: {data.registry.unconfirmedPlots}</div>
-              <div>Без контактов: {data.registry.missingContactsPlots}</div>
-            </div>
-            <LinkBtn href="/admin/plots">Открыть реестр</LinkBtn>
-          </Card>
-
-          <Card title="Взносы (членские)">
-            {data.billing.membership ? (
+        <div className="space-y-6">
+          <Section title="Реестр">
+            <Card title="Реестр участков">
               <div className="space-y-1 text-sm text-zinc-800">
-                <div>Период: {data.billing.membership.period}</div>
-                <div>Начислено: {formatAmount(data.billing.membership.accruedSum)} ₽</div>
-                <div>Оплачено: {formatAmount(data.billing.membership.paidSum)} ₽</div>
-                <div>Долг: {formatAmount(data.billing.membership.debtSum)} ₽</div>
+                <div>Всего участков: {data.registry.totalPlots}</div>
+                <div>Не подтверждено: {data.registry.unconfirmedPlots}</div>
+                <div>Без контактов: {data.registry.missingContactsPlots}</div>
               </div>
-            ) : (
-              <Placeholder />
-            )}
-            <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
-          </Card>
+              <LinkBtn href="/admin/plots">Открыть реестр</LinkBtn>
+            </Card>
+          </Section>
 
-          <Card title="Взносы (целевые)">
-            {data.billing.target ? (
-              <div className="space-y-1 text-sm text-zinc-800">
-                <div>Период: {data.billing.target.period}</div>
-                <div>Начислено: {formatAmount(data.billing.target.accruedSum)} ₽</div>
-                <div>Оплачено: {formatAmount(data.billing.target.paidSum)} ₽</div>
-                <div>Долг: {formatAmount(data.billing.target.debtSum)} ₽</div>
-              </div>
-            ) : (
-              <Placeholder />
-            )}
-            <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
-          </Card>
-
-          <Card title="Электроэнергия">
-            {data.electricity.totals ? (
-              <div className="space-y-1 text-sm text-zinc-800">
-                <div>Период: {data.electricity.totals.period}</div>
-                <div>Начислено: {formatAmount(data.electricity.totals.accruedSum)} ₽</div>
-                <div>Оплачено: {formatAmount(data.electricity.totals.paidSum)} ₽</div>
-                <div>Долг: {formatAmount(data.electricity.totals.debtSum)} ₽</div>
-                <div>Нет показаний: {data.electricity.missingReadingsCount}</div>
-              </div>
-            ) : (
-              <Placeholder />
-            )}
-            <div className="flex gap-2">
-              <LinkBtn href="/admin/electricity/readings">Показания</LinkBtn>
-              <LinkBtn href="/admin/electricity/report" variant="secondary">
-                Отчёт
-              </LinkBtn>
-            </div>
-          </Card>
-
-          <Card title="Импорты">
-            {data.imports.lastImportBatch ? (
-              <div className="space-y-1 text-sm text-zinc-800">
-                <div>Дата: {new Date(data.imports.lastImportBatch.importedAt).toLocaleString("ru-RU")}</div>
-                <div>Файл: {data.imports.lastImportBatch.fileName || "—"}</div>
-                <div>
-                  Итог: {data.imports.lastImportBatch.createdCount} / Ошибки: {data.imports.lastImportBatch.skippedCount}
+          <Section title="Деньги">
+            <Card title="Членские взносы">
+              {data.billing.membership ? (
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Период: {data.billing.membership.period}</div>
+                  <div>Начислено: {formatAmount(data.billing.membership.accruedSum)} ₽</div>
+                  <div>Оплачено: {formatAmount(data.billing.membership.paidSum)} ₽</div>
+                  <div>Долг: {formatAmount(data.billing.membership.debtSum)} ₽</div>
                 </div>
-                <div>Статус: {data.imports.lastImportBatch.status}</div>
+              ) : (
+                <Placeholder />
+              )}
+              <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
+            </Card>
+
+            <Card title="Целевые взносы">
+              {data.billing.target ? (
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Период: {data.billing.target.period}</div>
+                  <div>Начислено: {formatAmount(data.billing.target.accruedSum)} ₽</div>
+                  <div>Оплачено: {formatAmount(data.billing.target.paidSum)} ₽</div>
+                  <div>Долг: {formatAmount(data.billing.target.debtSum)} ₽</div>
+                </div>
+              ) : (
+                <Placeholder />
+              )}
+              <div className="flex gap-2">
+                <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
+                <LinkBtn href="/admin/targets" variant="secondary">
+                  Цели
+                </LinkBtn>
               </div>
-            ) : (
-              <Placeholder />
-            )}
-            <div className="flex gap-2">
-              <LinkBtn href="/admin/billing/import">Импорт</LinkBtn>
-              <LinkBtn href="/admin/billing/imports" variant="secondary">
-                История
-              </LinkBtn>
-            </div>
-          </Card>
+            </Card>
 
-          <Card title="Должники (членские)">
-            <div className="space-y-1 text-sm text-zinc-800">
-              <div>Кол-во: {data.debtors.membership.count}</div>
-              <div>Сумма долга: {formatAmount(data.debtors.membership.sumDebt)} ₽</div>
-            </div>
-            <LinkBtn href="/admin/notifications/debtors?type=membership">Открыть</LinkBtn>
-          </Card>
+            <Card title="Импорты платежей">
+              {data.imports.lastImportBatch ? (
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Дата: {new Date(data.imports.lastImportBatch.importedAt).toLocaleString("ru-RU")}</div>
+                  <div>Файл: {data.imports.lastImportBatch.fileName || "—"}</div>
+                  <div>
+                    Итог: {data.imports.lastImportBatch.createdCount} / Ошибки: {data.imports.lastImportBatch.skippedCount}
+                  </div>
+                  <div>Статус: {data.imports.lastImportBatch.status}</div>
+                </div>
+              ) : (
+                <Placeholder />
+              )}
+              <div className="flex gap-2">
+                <LinkBtn href="/admin/billing/import">Импорт</LinkBtn>
+                <LinkBtn href="/admin/billing/imports" variant="secondary">
+                  История
+                </LinkBtn>
+              </div>
+            </Card>
 
-          <Card title="Должники (электро)">
-            <div className="space-y-1 text-sm text-zinc-800">
-              <div>Кол-во: {data.debtors.electricity.count}</div>
-              <div>Сумма долга: {formatAmount(data.debtors.electricity.sumDebt)} ₽</div>
-            </div>
-            <LinkBtn href="/admin/notifications/debtors?type=electricity">Открыть</LinkBtn>
-          </Card>
+            <Card title="Аналитика (accrued vs paid)">
+              <AnalyticsBlock points={analytics} />
+            </Card>
+          </Section>
 
-          <Card title="Аналитика (accrued vs paid)">
-            <AnalyticsBlock points={analytics} />
-          </Card>
+          <Section title="Электроэнергия">
+            <Card title="Электро начисления">
+              {data.electricity.totals ? (
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Период: {data.electricity.totals.period}</div>
+                  <div>Начислено: {formatAmount(data.electricity.totals.accruedSum)} ₽</div>
+                  <div>Оплачено: {formatAmount(data.electricity.totals.paidSum)} ₽</div>
+                  <div>Долг: {formatAmount(data.electricity.totals.debtSum)} ₽</div>
+                  <div>Нет показаний: {data.electricity.missingReadingsCount}</div>
+                </div>
+              ) : (
+                <Placeholder />
+              )}
+              <div className="flex gap-2">
+                <LinkBtn href="/admin/electricity/readings">Показания</LinkBtn>
+                <LinkBtn href="/admin/electricity/report" variant="secondary">
+                  Отчёт
+                </LinkBtn>
+              </div>
+            </Card>
+          </Section>
+
+          <Section title="Обращения">
+            <Card title="Тикеты">
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Управление обращениями жителей</div>
+                <div>Проверка статусов и ответы</div>
+              </div>
+              <LinkBtn href="/admin/tickets">Перейти</LinkBtn>
+            </Card>
+
+            <Card title="Должники">
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Членские: {data.debtors.membership.count} шт., долг {formatAmount(data.debtors.membership.sumDebt)} ₽</div>
+                <div>Электро: {data.debtors.electricity.count} шт., долг {formatAmount(data.debtors.electricity.sumDebt)} ₽</div>
+              </div>
+              <div className="flex gap-2">
+                <LinkBtn href="/admin/notifications/debtors?type=membership">Членские</LinkBtn>
+                <LinkBtn href="/admin/notifications/debtors?type=electricity" variant="secondary">
+                  Электро
+                </LinkBtn>
+              </div>
+            </Card>
+          </Section>
+
+          <Section title="Настройки">
+            <Card title="Цели и публичные отчёты">
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>Управление целевыми сборами и прозрачностью</div>
+                <div>Публичные цели и прогресс</div>
+              </div>
+              <div className="flex gap-2">
+                <LinkBtn href="/admin/targets">Цели</LinkBtn>
+                <LinkBtn href="/reports/goals" variant="secondary">
+                  Публично
+                </LinkBtn>
+              </div>
+            </Card>
+          </Section>
         </div>
       )}
     </div>
@@ -204,6 +237,15 @@ function LinkBtn({
 
 function Placeholder() {
   return <div className="rounded border border-dashed border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">Нет данных</div>;
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold uppercase tracking-widest text-[#2F3827]">{title}</h2>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </section>
+  );
 }
 
 function AnalyticsBlock({ points }: { points: AnalyticsPoint[] }) {

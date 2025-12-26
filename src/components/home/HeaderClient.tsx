@@ -41,10 +41,7 @@ export function HeaderClient({ role }: HeaderClientProps) {
             href="/admin"
             className="flex items-center gap-2 rounded-full border border-white/30 bg-white px-4 py-2 text-xs font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
           >
-            Админка
-            <span className="rounded-full bg-[#2F3827]/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[#2F3827]">
-              admin
-            </span>
+            В админку
           </Link>
           <LogoutButton
             redirectTo="/"
@@ -110,36 +107,6 @@ export function HeaderClient({ role }: HeaderClientProps) {
               {item.label}
             </a>
           ))}
-          {isUser && (
-            <Link
-              href="/cabinet/tickets"
-              className={`transition-colors hover:text-white ${
-                pathname.startsWith("/cabinet/tickets") ? "text-white" : ""
-              }`}
-            >
-              Обращения
-            </Link>
-          )}
-          {isAdmin && (
-            <Link
-              href="/admin/plots"
-              className={`transition-colors hover:text-white ${
-                pathname.startsWith("/admin/plots") ? "text-white" : ""
-              }`}
-            >
-              Реестр
-            </Link>
-          )}
-          {isAdmin && (
-            <Link
-              href="/admin/tickets"
-              className={`transition-colors hover:text-white ${
-                pathname.startsWith("/admin/tickets") ? "text-white" : ""
-              }`}
-            >
-              Тикеты
-            </Link>
-          )}
         </nav>
         <div className="flex items-center gap-2">
           <button
@@ -168,45 +135,6 @@ export function HeaderClient({ role }: HeaderClientProps) {
                   {item.label}
                 </Link>
               ))}
-              {isUser && (
-                <Link
-                  href="/cabinet/tickets"
-                  onClick={() => setMenuOpen(false)}
-                  className={`rounded-lg px-3 py-2 transition-colors hover:bg-white/10 ${
-                    pathname.startsWith("/cabinet/tickets")
-                      ? "bg-white/10 text-white"
-                      : "text-white/80"
-                  }`}
-                >
-                  Обращения
-                </Link>
-              )}
-              {isAdmin && (
-                <>
-                  <Link
-                    href="/admin/plots"
-                    onClick={() => setMenuOpen(false)}
-                    className={`rounded-lg px-3 py-2 transition-colors hover:bg-white/10 ${
-                      pathname.startsWith("/admin/plots")
-                        ? "bg-white/10 text-white"
-                        : "text-white/80"
-                    }`}
-                  >
-                    Реестр
-                  </Link>
-                  <Link
-                    href="/admin/tickets"
-                    onClick={() => setMenuOpen(false)}
-                    className={`rounded-lg px-3 py-2 transition-colors hover:bg-white/10 ${
-                      pathname.startsWith("/admin/tickets")
-                        ? "bg-white/10 text-white"
-                        : "text-white/80"
-                    }`}
-                  >
-                    Тикеты
-                  </Link>
-                </>
-              )}
               <div className="pt-2">{action()}</div>
             </div>
           </div>
