@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { getTargetFundWithStats, getTargetFundTimeline } from "@/lib/targets";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetFundDetail({ params }: { params: { id: string } }) {

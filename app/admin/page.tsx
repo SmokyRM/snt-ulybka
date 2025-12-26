@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import React from "react";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
-import { getServerApiUrl } from "@/lib/serverApi";
+import { serverFetchJson } from "@/lib/serverFetch";
 
 type DashboardData = {
   registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
@@ -22,16 +22,7 @@ type DashboardData = {
   };
 };
 
-const fetchDashboard = async (): Promise<DashboardData> => {
-  const url = await getServerApiUrl("/api/admin/dashboard");
-  const res = await fetch(url, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error("Failed to load dashboard");
-  }
-  return (await res.json()) as DashboardData;
-};
+const fetchDashboard = async (): Promise<DashboardData> => serverFetchJson<DashboardData>("/api/admin/dashboard");
 
 type AnalyticsPoint = {
   period: string;
@@ -44,11 +35,14 @@ const fetchAnalytics = async (): Promise<AnalyticsPoint[]> => {
   const now = new Date();
   const to = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
   const from = `${now.getUTCFullYear() - 1}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const url = await getServerApiUrl(`/api/analytics/collections?from=${from}&to=${to}`);
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { points: AnalyticsPoint[] };
-  return data.points ?? [];
+  try {
+    const data = await serverFetchJson<{ points: AnalyticsPoint[] }>(
+      `/api/analytics/collections?from=${from}&to=${to}`
+    );
+    return data.points ?? [];
+  } catch {
+    return [];
+  }
 };
 
 const formatAmount = (n?: number | null) => (typeof n === "number" ? n.toFixed(2) : "—");

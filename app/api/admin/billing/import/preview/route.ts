@@ -326,7 +326,7 @@ export async function POST(request: Request) {
       matchedTargetFundTitle: matchedFund?.title ?? null,
       suggestedTargetFundId: matchedFund?.id ?? null,
       suggestedTargetFundTitle: matchedFund?.title ?? null,
-      warning: category === "target_fee" && !matchedFund ? "Цель не определена" : undefined,
+      warning: category === "target_fee" && !matchedFund ? "target_fund_missing" : undefined,
     };
   });
 

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
-import { getTargetFundWithStats } from "@/lib/targets";
+import { getTargetFundTimeline, getTargetFundWithStats } from "@/lib/targets";
 
 type ParamsPromise<T> = { params: Promise<T> };
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(_req: Request, { params }: ParamsPromise<{ id: string }>) {
   const user = await getSessionUser();
@@ -11,5 +14,6 @@ export async function GET(_req: Request, { params }: ParamsPromise<{ id: string 
   const { id } = await params;
   const fund = getTargetFundWithStats(id);
   if (!fund) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json({ fund });
+  const timeline = getTargetFundTimeline(id);
+  return NextResponse.json({ fund, timeline });
 }

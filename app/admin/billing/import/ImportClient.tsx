@@ -386,7 +386,9 @@ export default function ImportClient() {
                               ))}
                             </select>
                           )}
-                          {row.warning ? <div className="text-xs text-amber-700">{row.warning}</div> : null}
+                          {row.warning === "target_fund_missing" ? (
+                            <div className="text-xs text-amber-700">Цель не определена</div>
+                          ) : null}
                         </td>
                         <td className="px-2 py-1">
                           {row.matchedTargetFundTitle ?? "—"}
