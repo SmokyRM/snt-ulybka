@@ -16,7 +16,7 @@ export default async function DebtsPage({
   const user = await getSessionUser();
   if (!isAdmin(user)) redirect("/login");
   const period = typeof searchParams?.period === "string" ? searchParams.period : defaultPeriod;
-  const type = (typeof searchParams?.type === "string" ? searchParams.type : undefined) as DebtTypeFilter | undefined;
+  const type = (typeof searchParams?.type === "string" ? searchParams.type : "all") as DebtTypeFilter;
   const minDebt =
     typeof searchParams?.minDebt === "string" && searchParams.minDebt.trim() !== ""
       ? Number(searchParams.minDebt)
