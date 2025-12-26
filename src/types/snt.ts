@@ -186,6 +186,7 @@ export interface Payment {
   voidedByUserId?: string | null;
   importBatchId?: string | null;
   fingerprint?: string | null;
+  targetFundId?: string | null;
 }
 
 export interface ImportBatch {
@@ -238,4 +239,25 @@ export interface DebtNotification {
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Expense {
+  id: string;
+  date: string;
+  amount: number;
+  category: "roads" | "trash" | "security" | "lighting" | "electricity" | "other";
+  description: string;
+  vendor?: string | null;
+  targetFundId?: string | null;
+  createdAt: string;
+  createdByUserId: string | null;
+}
+
+export interface TargetFund {
+  id: string;
+  title: string;
+  description: string;
+  targetAmount: number;
+  status: "active" | "completed" | "archived";
+  createdAt: string;
 }

@@ -14,6 +14,8 @@ const links = [
   { href: "/admin/electricity/report", label: "Отчёт по электро" },
   { href: "/admin/notifications/debtors", label: "Должники" },
   { href: "/admin/debts", label: "Долги" },
+  { href: "/admin/expenses", label: "Расходы" },
+  { href: "/admin/targets", label: "Цели" },
 ];
 
 export default function AdminSidebar() {

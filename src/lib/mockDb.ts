@@ -19,6 +19,8 @@ import {
   MeterReading,
   ElectricityTariff,
   DebtNotification,
+  Expense,
+  TargetFund,
 } from "@/types/snt";
 
 interface MockDb {
@@ -38,6 +40,8 @@ interface MockDb {
   meterReadings: MeterReading[];
   electricityTariffs: ElectricityTariff[];
   debtNotifications: DebtNotification[];
+  expenses: Expense[];
+  targetFunds: TargetFund[];
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -144,9 +148,11 @@ const getDb = (): MockDb => {
       meterReadings: [],
       electricityTariffs: [],
       debtNotifications: [],
+      expenses: [],
+      targetFunds: [],
     };
   }
-  return g.__SNT_DB__;
+  return g.__SNT_DB__ as MockDb;
 };
 
 const createId = (prefix: string) =>
@@ -394,6 +400,8 @@ export const resetMockDb = () => {
     meterReadings: [],
     electricityTariffs: [],
     debtNotifications: [],
+    expenses: [],
+    targetFunds: [],
   };
 };
 
@@ -669,6 +677,7 @@ export const addPayment = (data: {
   importBatchId?: string | null;
   category?: string | null;
   fingerprint?: string | null;
+  targetFundId?: string | null;
 }) => {
   const now = new Date().toISOString();
   const payment: Payment = {
@@ -681,15 +690,16 @@ export const addPayment = (data: {
     reference: data.reference ?? null,
     comment: data.comment ?? null,
     category: data.category ?? null,
-    createdByUserId: data.createdByUserId,
-    createdAt: now,
-    isVoided: false,
-    voidReason: null,
-    voidedAt: null,
-    voidedByUserId: null,
-    importBatchId: data.importBatchId ?? null,
-    fingerprint: data.fingerprint ?? null,
-  };
+  createdByUserId: data.createdByUserId,
+  createdAt: now,
+  isVoided: false,
+  voidReason: null,
+  voidedAt: null,
+  voidedByUserId: null,
+  importBatchId: data.importBatchId ?? null,
+  fingerprint: data.fingerprint ?? null,
+  targetFundId: data.targetFundId ?? null,
+};
   const db = getDb();
   db.payments.push(payment);
   return payment;
@@ -998,6 +1008,69 @@ export const listDebtNotificationsByPlot = (plotId: string) => {
   const db = getDb();
   return db.debtNotifications.filter((n) => n.plotId === plotId);
 };
+
+// Expenses
+export const addExpense = (data: {
+  date: string;
+  amount: number;
+  category: Expense["category"];
+  description: string;
+  vendor?: string | null;
+  targetFundId?: string | null;
+  createdByUserId: string | null;
+}) => {
+  const now = new Date().toISOString();
+  const expense: Expense = {
+    id: createId("exp"),
+    date: data.date,
+    amount: data.amount,
+    category: data.category,
+    description: data.description,
+    vendor: data.vendor ?? null,
+    targetFundId: data.targetFundId ?? null,
+    createdAt: now,
+    createdByUserId: data.createdByUserId,
+  };
+  const db = getDb();
+  db.expenses.unshift(expense);
+  return expense;
+};
+
+export const listExpenses = (filters?: { from?: string | null; to?: string | null; category?: Expense["category"] | null }) => {
+  const db = getDb();
+  const fromTs = filters?.from ? new Date(filters.from).getTime() : null;
+  const toTs = filters?.to ? new Date(filters.to).getTime() : null;
+  return db.expenses.filter((e) => {
+    const ts = new Date(e.date).getTime();
+    if (fromTs && ts < fromTs) return false;
+    if (toTs && ts > toTs) return false;
+    if (filters?.category && e.category !== filters.category) return false;
+    return true;
+  });
+};
+
+// Target funds
+export const addTargetFund = (data: {
+  title: string;
+  description: string;
+  targetAmount: number;
+  status?: TargetFund["status"];
+}) => {
+  const fund: TargetFund = {
+    id: createId("fund"),
+    title: data.title,
+    description: data.description,
+    targetAmount: data.targetAmount,
+    status: data.status ?? "active",
+    createdAt: new Date().toISOString(),
+  };
+  const db = getDb();
+  db.targetFunds.unshift(fund);
+  return fund;
+};
+
+export const listTargetFunds = () => getDb().targetFunds;
+export const findTargetFundById = (id: string) => getDb().targetFunds.find((f) => f.id === id) ?? null;
 export const findAccrualPeriod = (year: number, month: number, type: string) => {
   const db = getDb();
   return db.accrualPeriods.find((p) => p.year === year && p.month === month && p.type === type) ?? null;
