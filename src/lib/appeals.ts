@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { addUserEvent } from "@/lib/userEvents";
 
 export type AppealStatus = "new" | "in_progress" | "answered";
 
@@ -73,5 +74,13 @@ export async function updateAppealStatus(id: string, status: AppealStatus, admin
     adminReply: typeof adminReply === "string" ? adminReply : appeals[idx].adminReply,
   };
   await writeAppeals(appeals);
+  if (status === "answered") {
+    await addUserEvent({
+      userId: appeals[idx].userId,
+      type: "appeal_answered",
+      title: "Ответ по обращению",
+      text: adminReply && adminReply.trim().length > 0 ? adminReply : "Обращение отмечено как отвеченное",
+    });
+  }
   return appeals[idx];
 }

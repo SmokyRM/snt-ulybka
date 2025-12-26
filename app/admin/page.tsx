@@ -4,6 +4,7 @@ import React from "react";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { serverFetchJson } from "@/lib/serverFetch";
 import { getHomeViews } from "@/lib/homeViews";
+import { getAllAppeals } from "@/lib/appeals";
 
 type DashboardData = {
   registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
@@ -57,6 +58,15 @@ export default async function AdminDashboard() {
   const data = await fetchDashboard().catch(() => null);
   const analytics = await fetchAnalytics();
   const homeViews = await getHomeViews();
+  const appeals = await getAllAppeals();
+  const appealsNew = appeals.filter((a) => a.status === "new").length;
+  const appealsInWork = appeals.filter((a) => a.status === "in_progress").length;
+  const debtSummary = data
+    ? {
+        membership: data.debtors.membership.sumDebt,
+        electricity: data.debtors.electricity.sumDebt,
+      }
+    : null;
 
   return (
     <div className="space-y-6">
@@ -74,6 +84,35 @@ export default async function AdminDashboard() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Не удалось загрузить данные</div>
       ) : (
         <div className="space-y-6">
+          <Section title="Сводка">
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card title="Электроэнергия">
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Не передали показания: {data.electricity.missingReadingsCount}</div>
+                </div>
+                <LinkBtn href="/admin/electricity">Перейти</LinkBtn>
+              </Card>
+              <Card title="Обращения">
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Новые: {appealsNew}</div>
+                  <div>В работе: {appealsInWork}</div>
+                </div>
+                <LinkBtn href="/admin/appeals">Открыть</LinkBtn>
+              </Card>
+              <Card title="Долги">
+                {debtSummary ? (
+                  <div className="space-y-1 text-sm text-zinc-800">
+                    <div>Членские: {formatAmount(debtSummary.membership)} ₽</div>
+                    <div>Электро: {formatAmount(debtSummary.electricity)} ₽</div>
+                  </div>
+                ) : (
+                  <Placeholder />
+                )}
+                <LinkBtn href="/admin/notifications/debtors?type=membership">Должники</LinkBtn>
+              </Card>
+            </div>
+          </Section>
+
           <Section title="Реестр">
             <Card title="Реестр участков">
               <div className="space-y-1 text-sm text-zinc-800">
