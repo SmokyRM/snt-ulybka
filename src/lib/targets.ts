@@ -25,3 +25,32 @@ export const getTargetFundWithStats = (id: string) => {
   if (!fund) return null;
   return { ...fund, ...calculateAggregates(fund) };
 };
+
+const normalize = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const matchTargetFundByPurpose = (purpose?: string | null): TargetFund | null => {
+  if (!purpose) return null;
+  const norm = normalize(purpose);
+  if (!norm) return null;
+  const funds = listTargetFunds().filter((f) => f.status === "active");
+  let matched: TargetFund | null = null;
+  let bestLen = 0;
+  funds.forEach((f) => {
+    (f.aliases ?? []).forEach((alias) => {
+      const aliasNorm = normalize(alias);
+      if (aliasNorm && norm.includes(aliasNorm)) {
+        if (aliasNorm.length > bestLen) {
+          matched = f;
+          bestLen = aliasNorm.length;
+        }
+      }
+    });
+  });
+  return matched;
+};

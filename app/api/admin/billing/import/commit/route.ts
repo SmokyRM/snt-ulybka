@@ -23,6 +23,7 @@ type RowInput = {
   category?: string | null;
   kwh?: number | null;
   periodKey?: string | null;
+  targetFundId?: string | null;
 };
 
 const parseDate = (iso: string | undefined) => {
@@ -134,6 +135,7 @@ export async function POST(request: Request) {
       importBatchId: batch.id,
       category,
       fingerprint: fingerprint ?? null,
+      targetFundId: row.targetFundId ?? null,
     });
     if (fingerprint) {
       existingFingerprints.add(fingerprint);

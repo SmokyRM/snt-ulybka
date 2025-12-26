@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function ImportClient() {
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +34,11 @@ export default function ImportClient() {
       isDuplicate?: boolean;
       category?: string | null;
       fingerprint?: string | null;
+      matchedTargetFundId?: string | null;
+      matchedTargetFundTitle?: string | null;
+      warning?: string;
+      suggestedTargetFundId?: string | null;
+      suggestedTargetFundTitle?: string | null;
     }>;
   } | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -53,6 +58,8 @@ export default function ImportClient() {
     skippedCount: number;
     skipped: Array<{ rowIndex: number; reason: string }>;
   } | null>(null);
+  const [targets, setTargets] = useState<Array<{ id: string; title: string; status: string }>>([]);
+  const [selectedTargetByRow, setSelectedTargetByRow] = useState<Record<number, string | null>>({});
 
   const reset = () => {
     setFile(null);
@@ -123,6 +130,9 @@ export default function ImportClient() {
           plotIdMatched: r.plotIdMatched,
           reference: r.reference,
           category: r.category ?? null,
+          targetFundId:
+            selectedTargetByRow[r.rowIndex] ??
+            (r.category === "target_fee" ? r.suggestedTargetFundId ?? r.matchedTargetFundId ?? null : null),
         })) ?? [];
     if (!rowsToSend.length) return;
     setCommitLoading(true);
@@ -316,6 +326,7 @@ export default function ImportClient() {
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Дата</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Сумма</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Категория</th>
+                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Цель</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Улица/Участок</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Участок найден</th>
                     <th className="px-2 py-2 text-left font-semibold text-zinc-700">Reference</th>
@@ -351,6 +362,36 @@ export default function ImportClient() {
                         <td className="px-2 py-1">{row.paidAtLocalFormatted ?? "—"}</td>
                         <td className="px-2 py-1">{row.amount ?? "—"}</td>
                         <td className="px-2 py-1">{row.category ?? "—"}</td>
+                        <td className="px-2 py-1">
+                          {row.suggestedTargetFundId ? (
+                            <div className="text-xs text-zinc-800">
+                              {row.suggestedTargetFundTitle ?? row.matchedTargetFundTitle ?? "Цель найдена"}
+                            </div>
+                          ) : (
+                            <select
+                              className="rounded border border-zinc-300 px-2 py-1 text-xs"
+                              value={selectedTargetByRow[row.rowIndex] ?? ""}
+                              onChange={(e) =>
+                                setSelectedTargetByRow((prev) => ({
+                                  ...prev,
+                                  [row.rowIndex]: e.target.value || null,
+                                }))
+                              }
+                            >
+                              <option value="">Не выбрано</option>
+                              {targets.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.title}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {row.warning ? <div className="text-xs text-amber-700">{row.warning}</div> : null}
+                        </td>
+                        <td className="px-2 py-1">
+                          {row.matchedTargetFundTitle ?? "—"}
+                          {row.warning ? <div className="text-xs text-amber-700">{row.warning}</div> : null}
+                        </td>
                         <td className="px-2 py-1">
                           {row.streetRaw} / {row.plotNumberRaw}{" "}
                           {row.streetParsed || row.plotNumberParsed ? (

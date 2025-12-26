@@ -4,6 +4,7 @@ import { formatAdminTime } from "@/lib/settings.shared";
 import { getPlots, listPayments } from "@/lib/mockDb";
 import { classifyPurposeCategory } from "@/lib/paymentCategory";
 import { buildPaymentFingerprint, normalizePaymentFingerprint } from "@/lib/paymentFingerprint";
+import { matchTargetFundByPurpose } from "@/lib/targets";
 
 const MAX_ROWS = 200;
 
@@ -281,6 +282,7 @@ export async function POST(request: Request) {
     }
 
     const category = classifyPurposeCategory(purposeVal);
+    const matchedFund = matchTargetFundByPurpose(purposeVal);
     const fingerprint =
       status === "OK"
         ? buildPaymentFingerprint({
@@ -320,6 +322,11 @@ export async function POST(request: Request) {
       isDuplicate: duplicate,
       category,
       fingerprint,
+      matchedTargetFundId: matchedFund?.id ?? null,
+      matchedTargetFundTitle: matchedFund?.title ?? null,
+      suggestedTargetFundId: matchedFund?.id ?? null,
+      suggestedTargetFundTitle: matchedFund?.title ?? null,
+      warning: category === "target_fee" && !matchedFund ? "Цель не определена" : undefined,
     };
   });
 

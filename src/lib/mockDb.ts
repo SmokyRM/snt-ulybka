@@ -1055,6 +1055,7 @@ export const addTargetFund = (data: {
   description: string;
   targetAmount: number;
   status?: TargetFund["status"];
+  aliases?: string[] | null;
 }) => {
   const fund: TargetFund = {
     id: createId("fund"),
@@ -1063,6 +1064,7 @@ export const addTargetFund = (data: {
     targetAmount: data.targetAmount,
     status: data.status ?? "active",
     createdAt: new Date().toISOString(),
+    aliases: data.aliases ?? [],
   };
   const db = getDb();
   db.targetFunds.unshift(fund);

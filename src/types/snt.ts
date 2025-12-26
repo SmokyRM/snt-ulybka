@@ -260,4 +260,5 @@ export interface TargetFund {
   targetAmount: number;
   status: "active" | "completed" | "archived";
   createdAt: string;
+  aliases?: string[];
 }
