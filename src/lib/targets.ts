@@ -26,6 +26,35 @@ export const getTargetFundWithStats = (id: string) => {
   return { ...fund, ...calculateAggregates(fund) };
 };
 
+export const getTargetFundTimeline = (id: string) => {
+  const fund = findTargetFundById(id);
+  if (!fund) return { collected: [], spent: [] };
+  const payments = listPayments({ includeVoided: false }).filter((p) => p.targetFundId === id);
+  const expenses = listExpenses({}).filter((e) => e.targetFundId === id);
+
+  const groupByMonth = <T extends { date?: string; paidAt?: string }>(
+    arr: T[],
+    dateField: "date" | "paidAt",
+    getAmount: (item: T) => number
+  ) => {
+    const map: Record<string, number> = {};
+    arr.forEach((item) => {
+      const raw = (item as Record<string, string | undefined>)[dateField];
+      const d = raw ? new Date(raw) : null;
+      if (!d || Number.isNaN(d.getTime())) return;
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      map[key] = (map[key] ?? 0) + getAmount(item);
+    });
+    return Object.entries(map)
+      .sort(([a], [b]) => (a > b ? 1 : -1))
+      .map(([month, amount]) => ({ month, amount }));
+  };
+
+  const collected = groupByMonth(payments, "paidAt", (p) => (p as any).amount);
+  const spent = groupByMonth(expenses as any[], "date", (e) => (e as any).amount);
+  return { collected, spent };
+};
+
 const normalize = (text: string) =>
   text
     .toLowerCase()
