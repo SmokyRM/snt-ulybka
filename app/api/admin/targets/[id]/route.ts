@@ -15,5 +15,5 @@ export async function GET(_req: Request, { params }: ParamsPromise<{ id: string 
   const fund = getTargetFundWithStats(id);
   if (!fund) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const timeline = getTargetFundTimeline(id);
-  return NextResponse.json({ fund, timeline });
+  return NextResponse.json({ fund, timeline, collectedByMonth: timeline.collected });
 }

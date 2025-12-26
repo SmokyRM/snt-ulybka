@@ -32,14 +32,21 @@ export const getTargetFundTimeline = (id: string) => {
   const payments = listPayments({ includeVoided: false }).filter((p) => p.targetFundId === id);
   const expenses = listExpenses({}).filter((e) => e.targetFundId === id);
 
-  const groupByMonth = <T extends { date?: string; paidAt?: string }>(
+  const groupByMonth = <T extends { date?: string; paidAt?: string; createdAt?: string }>(
     arr: T[],
-    dateField: "date" | "paidAt",
+    preferred: Array<"date" | "paidAt" | "createdAt">,
     getAmount: (item: T) => number
   ) => {
     const map: Record<string, number> = {};
     arr.forEach((item) => {
-      const raw = (item as Record<string, string | undefined>)[dateField];
+      let raw: string | undefined;
+      for (const key of preferred) {
+        const candidate = (item as Record<string, string | undefined>)[key];
+        if (candidate) {
+          raw = candidate;
+          break;
+        }
+      }
       const d = raw ? new Date(raw) : null;
       if (!d || Number.isNaN(d.getTime())) return;
       const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -50,9 +57,9 @@ export const getTargetFundTimeline = (id: string) => {
       .map(([month, amount]) => ({ month, amount }));
   };
 
-  const collected = groupByMonth(payments, "paidAt", (p) => (p as any).amount);
-  const spent = groupByMonth(expenses as any[], "date", (e) => (e as any).amount);
-  return { collected, spent };
+  const collected = groupByMonth(payments, ["paidAt", "createdAt"], (p) => (p as any).amount);
+  const spent = groupByMonth(expenses as any[], ["date", "createdAt"], (e) => (e as any).amount);
+  return { collected, spent, collectedByMonth: collected };
 };
 
 const normalize = (text: string) =>
