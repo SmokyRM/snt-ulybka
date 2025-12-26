@@ -21,46 +21,51 @@ const readSessionRole = (
 };
 
 export function middleware(request: NextRequest) {
-  const { pathname, search } = request.nextUrl;
-  const isApiAdmin = pathname.startsWith("/api/admin");
-  const { role, hasSession } = readSessionRole(request);
+  try {
+    const { pathname, search } = request.nextUrl;
+    const isApiAdmin = pathname.startsWith("/api/admin");
+    const { role, hasSession } = readSessionRole(request);
 
-  if (isAdminPath(pathname) || isApiAdmin) {
-    if (process.env.NODE_ENV !== "production") {
-      console.log(`[middleware] admin guard role=${role ?? "none"} path=${pathname}`);
-    }
-    if (!hasSession) {
-      if (isApiAdmin) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    if (isAdminPath(pathname) || isApiAdmin) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[middleware] admin guard role=${role ?? "none"} path=${pathname}`);
       }
-      const url = new URL("/login", request.url);
-      if (!pathname.startsWith("/login")) {
-        url.searchParams.set("next", `${pathname}${search}`);
+      if (!hasSession) {
+        if (isApiAdmin) {
+          return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+        }
+        const url = new URL("/login", request.url);
+        if (!pathname.startsWith("/login")) {
+          url.searchParams.set("next", `${pathname}${search}`);
+        }
+        return NextResponse.redirect(url);
       }
-      return NextResponse.redirect(url);
-    }
-    if (role !== "admin") {
-      if (isApiAdmin) {
-        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      if (role !== "admin") {
+        if (isApiAdmin) {
+          return NextResponse.json({ error: "forbidden" }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/", request.url));
       }
-      return NextResponse.redirect(new URL("/", request.url));
     }
+
+    if (isUserPath(pathname)) {
+      if (!hasSession) {
+        const url = new URL("/login", request.url);
+        if (!pathname.startsWith("/login")) {
+          url.searchParams.set("next", `${pathname}${search}`);
+        }
+        return NextResponse.redirect(url);
+      }
+      if (role !== "user" && role !== "admin") {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error("[middleware] proxy error", error);
+    return NextResponse.next();
   }
-
-  if (isUserPath(pathname)) {
-    if (!hasSession) {
-      const url = new URL("/login", request.url);
-      if (!pathname.startsWith("/login")) {
-        url.searchParams.set("next", `${pathname}${search}`);
-      }
-      return NextResponse.redirect(url);
-    }
-    if (role !== "user" && role !== "admin") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {
