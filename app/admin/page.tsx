@@ -58,12 +58,12 @@ export default async function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Админ-панель</h1>
-        <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
-          Только для админов
-        </span>
-      </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Админ-панель</h1>
+          <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
+            Только для админов
+          </span>
+        </div>
 
       {!data ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Не удалось загрузить данные</div>
