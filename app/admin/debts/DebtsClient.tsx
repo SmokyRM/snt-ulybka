@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { DebtTypeFilter } from "@/lib/debts";
@@ -28,7 +28,6 @@ const formatCurrency = (v: number) => `${v.toFixed(2)} ₽`;
 
 export default function DebtsClient({ initialItems, totals, filters }: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [items, setItems] = useState(initialItems);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

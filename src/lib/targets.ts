@@ -57,8 +57,8 @@ export const getTargetFundTimeline = (id: string) => {
       .map(([month, amount]) => ({ month, amount }));
   };
 
-  const collected = groupByMonth(payments, ["paidAt", "createdAt"], (p) => (p as any).amount);
-  const spent = groupByMonth(expenses as any[], ["date", "createdAt"], (e) => (e as any).amount);
+  const collected = groupByMonth(payments, ["paidAt", "createdAt"], (p) => p.amount);
+  const spent = groupByMonth(expenses, ["date", "createdAt"], (e) => e.amount);
   return { collected, spent, collectedByMonth: collected };
 };
 

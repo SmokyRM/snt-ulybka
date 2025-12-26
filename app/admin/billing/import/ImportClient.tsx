@@ -71,6 +71,22 @@ export default function ImportClient() {
     setCommitResult(null);
   };
 
+  useEffect(() => {
+    const loadTargets = async () => {
+      try {
+        const res = await fetch("/api/admin/targets");
+        if (!res.ok) return;
+        const data = (await res.json()) as { items?: Array<{ id: string; title: string; status: string }> };
+        if (data.items) {
+          setTargets(data.items.filter((t) => t.status === "active"));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadTargets();
+  }, []);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;

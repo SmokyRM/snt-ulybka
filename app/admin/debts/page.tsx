@@ -1,4 +1,3 @@
-import { use } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
@@ -9,15 +8,21 @@ import { logAdminAction } from "@/lib/audit";
 const today = new Date();
 const defaultPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 
-export default async function DebtsPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+export default async function DebtsPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const user = await getSessionUser();
   if (!isAdmin(user)) redirect("/login");
-  const sp = use(searchParams);
-  const period = sp.period ?? defaultPeriod;
-  const type = (sp.type as DebtTypeFilter | undefined) ?? "all";
-  const minDebt = sp.minDebt ? Number(sp.minDebt) : null;
-  const q = sp.q ?? "";
-  const onlyUnnotified = sp.onlyUnnotified === "1";
+  const period = typeof searchParams?.period === "string" ? searchParams.period : defaultPeriod;
+  const type = (typeof searchParams?.type === "string" ? searchParams.type : undefined) as DebtTypeFilter | undefined;
+  const minDebt =
+    typeof searchParams?.minDebt === "string" && searchParams.minDebt.trim() !== ""
+      ? Number(searchParams.minDebt)
+      : null;
+  const q = typeof searchParams?.q === "string" ? searchParams.q : "";
+  const onlyUnnotified = searchParams?.onlyUnnotified === "1";
 
   const data = getDebtsData({ period, type, minDebt, q, onlyUnnotified });
   if (data.error) {
