@@ -63,7 +63,7 @@ export function middleware(request: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    console.error("[middleware] proxy error", error);
+    console.error("proxy error", error);
     return NextResponse.next();
   }
 }
