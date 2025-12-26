@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/session.server";
 import HomeOld from "./home/HomeOld";
 import HomeNew from "./home/HomeNew";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
@@ -7,6 +9,10 @@ import { incrementHomeView } from "@/lib/homeViews";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  const session = await getSessionUser();
+  if (session && session.role) {
+    redirect("/cabinet");
+  }
   const flags = await getFeatureFlags();
   const flagOn = isFeatureEnabled(flags, "newPublicHome");
   const forceNew = isFeatureEnabled(flags, "forceNewHome");

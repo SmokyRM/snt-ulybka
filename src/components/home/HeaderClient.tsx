@@ -12,13 +12,10 @@ type HeaderClientProps = {
 };
 
 const navItems = [
-  { label: "Главная", href: "/" },
-  { label: "Новости", href: "#news" },
-  { label: "Документы", href: "#docs" },
+  { label: "Новости", href: "/news" },
   { label: "Электроэнергия", href: "/electricity" },
   { label: "Взносы", href: "/fees" },
-  { label: "Обращения", href: "#appeal" },
-  { label: "Контакты", href: "#contacts" },
+  { label: "Контакты", href: "/contacts" },
 ];
 
 const isActive = (pathname: string, href: string) => {

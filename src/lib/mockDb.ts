@@ -514,6 +514,56 @@ export const updatePlotStatus = (id: string, patch: Partial<Plot>) => {
   return updated;
 };
 
+export const upsertRegistryPlot = (input: {
+  id?: string;
+  plotDisplay: string;
+  cadastral?: string | null;
+  seedOwnerName?: string | null;
+  seedOwnerPhone?: string | null;
+  note?: string | null;
+}) => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const targetId =
+    input.id ||
+    (input.cadastral
+      ? db.plots.find((p) => (p.cadastral || "").toLowerCase() === input.cadastral?.toLowerCase())?.id
+      : undefined);
+  const existing = targetId ? db.plots.find((p) => p.id === targetId) : null;
+  const [street, plotNumber] = (() => {
+    const parts = input.plotDisplay.split(",");
+    const streetPart = parts[0]?.trim() || input.plotDisplay.trim();
+    const numberMatch = input.plotDisplay.match(/(\d+[А-Яа-яA-Za-z\-]*)/);
+    return [streetPart, numberMatch ? numberMatch[1] : input.plotDisplay.trim()];
+  })();
+  const record: Plot = {
+    id: existing?.id ?? createId("plot"),
+    plotId: existing?.plotId ?? createId("plot"),
+    street: existing?.street ?? street,
+    plotNumber: existing?.plotNumber ?? plotNumber,
+    number: existing?.number ?? plotNumber,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    status: existing?.status ?? "active",
+    membershipStatus: existing?.membershipStatus ?? "UNKNOWN",
+    isConfirmed: existing?.isConfirmed ?? false,
+    ownerFullName: existing?.ownerFullName ?? input.seedOwnerName ?? null,
+    phone: existing?.phone ?? input.seedOwnerPhone ?? null,
+    email: existing?.email ?? null,
+    notes: input.note ?? existing?.notes ?? null,
+    cadastral: input.cadastral ?? existing?.cadastral,
+    plotCode: existing?.plotCode,
+    ownerUserId: existing?.ownerUserId ?? null,
+  };
+  const existsIdx = db.plots.findIndex((p) => p.id === record.id);
+  if (existsIdx === -1) {
+    db.plots.push(record);
+  } else {
+    db.plots[existsIdx] = record;
+  }
+  return record;
+};
+
 export const listPlotsWithFilters = (filters?: {
   query?: string | null;
   street?: string | null;

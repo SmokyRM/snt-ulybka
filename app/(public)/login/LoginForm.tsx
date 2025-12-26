@@ -68,10 +68,15 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         return;
       }
       const role: "user" | "admin" = data.role === "admin" ? "admin" : "user";
-      const fallback = role === "admin" ? "/admin" : "/cabinet";
-      const nextAllowed = allowedNextForRole(role);
-      const target = nextAllowed ?? fallback;
-      router.replace(target);
+      if (role === "admin") {
+        const fallback = "/admin";
+        const nextAllowed = allowedNextForRole(role);
+        const target = nextAllowed ?? fallback;
+        router.replace(target);
+      } else {
+        // Всегда ведём в кабинет, он сам отправит на onboarding при незаполненном профиле.
+        router.replace("/cabinet");
+      }
     } catch {
       setError("Ошибка входа, попробуйте позже");
     } finally {

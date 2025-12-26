@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
-import { getUserPlots } from "@/lib/plots";
+import { clearDelegate, getPlots, getUserPlots, generateDelegateInvite, acceptDelegateInvite } from "@/lib/plots";
 import { createAppeal, getUserAppeals } from "@/lib/appeals";
 import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 import { getUserElectricity, getUserElectricityHistory, submitReading } from "@/lib/electricity";
@@ -15,15 +15,21 @@ import { getDecisions } from "@/lib/decisions";
 import { getLatestMembershipRequestForUser, getMembershipStatus, submitMembershipRequest } from "@/lib/membership";
 import { getUserProfile, upsertUserProfileByAdmin, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { getUserPreferences, setActivePlot } from "@/lib/userPreferences";
+import { submitPlotProposal } from "@/lib/plots";
 import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { ProfileCard } from "./ProfileCard";
+import { MembershipBlock } from "./MembershipBlock";
 
 async function submitAppeal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
+  }
+  const membership = await getMembershipStatus(user.id ?? "");
+  if (membership.status !== "member") {
+    redirect("/cabinet?locked=1");
   }
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
@@ -40,6 +46,10 @@ async function submitElectricity(formData: FormData) {
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
+  }
+  const membership = await getMembershipStatus(user.id ?? "");
+  if (membership.status !== "member") {
+    redirect("/cabinet?locked=1");
   }
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
@@ -60,6 +70,10 @@ async function markEvent(formData: FormData) {
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
   }
+  const membership = await getMembershipStatus(user.id ?? "");
+  if (membership.status !== "member") {
+    redirect("/cabinet?locked=1");
+  }
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
@@ -77,6 +91,10 @@ async function markAllEvents() {
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
   }
+  const membership = await getMembershipStatus(user.id ?? "");
+  if (membership.status !== "member") {
+    redirect("/cabinet?locked=1");
+  }
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
@@ -91,6 +109,10 @@ async function ackDoc(formData: FormData) {
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
+  }
+  const membership = await getMembershipStatus(user.id ?? "");
+  if (membership.status !== "member") {
+    redirect("/cabinet?locked=1");
   }
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
@@ -109,16 +131,19 @@ async function submitMembership(formData: FormData) {
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
   }
-  const comment = (formData.get("comment") as string | null) ?? "";
-  const proofType = (formData.get("proofType") as string | null) ?? "other";
-  const plots = [1, 2, 3]
-    .map((idx) => {
-      const num = (formData.get(`plotNumber${idx}`) as string | null) ?? "";
-      const st = (formData.get(`plotStreet${idx}`) as string | null) ?? "";
-      const cad = (formData.get(`plotCadastral${idx}`) as string | null) ?? "";
-      return { plotNumber: num.trim(), street: st.trim() || null, cadastral: cad.trim() || null };
-    })
-    .filter((p) => p.plotNumber);
+  const basis = ((formData.get("ownershipBasis") as string | null) ?? "OWNER").toUpperCase();
+  const cadastralNumbers = formData
+    .getAll("cadastralNumbers")
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v);
+  if (cadastralNumbers.length === 0) {
+    redirect("/cabinet?section=home");
+  }
+  const plots = cadastralNumbers.map((cad) => ({
+    plotNumber: cad,
+    street: null as string | null,
+    cadastral: cad,
+  }));
   const profile = await getUserProfile(user.id ?? "");
   if (!profile.fullName || !profile.phone) {
     redirect("/cabinet#profile");
@@ -128,8 +153,29 @@ async function submitMembership(formData: FormData) {
     fullName: profile.fullName ?? "",
     phone: profile.phone ?? "",
     plots,
-    comment,
-    proofType: proofType as "extract_egrn" | "sale_contract" | "garden_book" | "other",
+    comment: `Основание: ${basis}`,
+    proofType: "other",
+  });
+  redirect("/cabinet?section=home");
+}
+
+async function submitPlotProposalAction(formData: FormData) {
+  "use server";
+  const user = await getSessionUser();
+  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
+    redirect("/login");
+  }
+  const plotId = (formData.get("plotId") as string | null) ?? "";
+  const street = (formData.get("proposalStreet") as string | null) ?? "";
+  const plotNumber = (formData.get("proposalPlotNumber") as string | null) ?? "";
+  const cadastral = (formData.get("proposalCadastral") as string | null) ?? "";
+  if (!plotId) redirect("/cabinet");
+  await submitPlotProposal({
+    userId: user.id ?? "",
+    plotId,
+    street: street || undefined,
+    plotNumber: plotNumber || undefined,
+    cadastral: cadastral || undefined,
   });
   redirect("/cabinet?section=home");
 }
@@ -179,6 +225,67 @@ async function simulateFirstEntry() {
   redirect("/cabinet?section=home");
 }
 
+async function createDelegateInviteAction(formData: FormData) {
+  "use server";
+  const user = await getSessionUser();
+  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
+    redirect("/login");
+  }
+  const plotId = (formData.get("plotId") as string | null) ?? "";
+  const allowReplace = (formData.get("allowReplace") as string | null) === "1";
+  if (!plotId) redirect("/cabinet?section=home");
+  const plots = await getPlots();
+  const plot = plots.find((p) => p.plotId === plotId);
+  const isAdmin = user.role === "admin" || user.role === "board";
+  if (!plot || (!isAdmin && plot.ownerUserId !== user.id)) {
+    redirect("/cabinet?section=home");
+  }
+  const result = await generateDelegateInvite({
+    plotId,
+    createdByUserId: user.id ?? "",
+    isAdmin,
+    allowReplace,
+  });
+  if (!result.ok) {
+    const reason = result.reason ?? "error";
+    redirect(`/cabinet?section=home&delegateError=${encodeURIComponent(reason)}`);
+  }
+  redirect(`/cabinet?section=home&delegateCode=${encodeURIComponent(result.token)}`);
+}
+
+async function acceptDelegateInviteAction(formData: FormData) {
+  "use server";
+  const user = await getSessionUser();
+  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
+    redirect("/login");
+  }
+  const token = (formData.get("inviteToken") as string | null) ?? "";
+  if (!token) redirect("/cabinet?section=home");
+  const result = await acceptDelegateInvite({ token, userId: user.id ?? "" });
+  if (!result.ok) {
+    redirect(`/cabinet?section=home&delegateError=${encodeURIComponent(result.reason)}`);
+  }
+  redirect("/cabinet?section=home");
+}
+
+async function clearDelegateAction(formData: FormData) {
+  "use server";
+  const user = await getSessionUser();
+  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
+    redirect("/login");
+  }
+  const plotId = (formData.get("plotId") as string | null) ?? "";
+  if (!plotId) redirect("/cabinet?section=home");
+  const plots = await getPlots();
+  const plot = plots.find((p) => p.plotId === plotId);
+  const isAdmin = user.role === "admin" || user.role === "board";
+  if (!plot || (!isAdmin && plot.ownerUserId !== user.id)) {
+    redirect("/cabinet?section=home");
+  }
+  await clearDelegate(plotId);
+  redirect("/cabinet?section=home");
+}
+
 export default async function CabinetPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
@@ -192,7 +299,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
 
   const userPlots = await getUserPlots(user.id ?? "");
   const prefs = await getUserPreferences(user.id ?? "");
-  const userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.status === "active") || userPlots[0] || null;
+  const userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.linkStatus === "active") || userPlots[0] || null;
   const membership = await getMembershipStatus(user.id ?? "");
   let profile = await getUserProfile(user.id ?? "");
   const latestRequest = await getLatestMembershipRequestForUser(user.id ?? "");
@@ -217,6 +324,8 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
         : membership.status === "pending"
           ? "На проверке"
           : "Данные уточняются";
+  const isProfileComplete = !profileMissing;
+  const isMembershipApproved = membership.status === "member";
 
   const appeals = await getUserAppeals(user.id ?? "");
   const finance = await getUserFinanceInfo(user.id ?? "");
@@ -242,6 +351,8 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
 
   const appealsInProgress = appeals.filter((a) => a.status === "in_progress").length;
   const lastAppeal = appeals[0];
+  const delegateCode = typeof searchParams?.delegateCode === "string" ? searchParams.delegateCode : null;
+  const delegateError = typeof searchParams?.delegateError === "string" ? searchParams.delegateError : null;
   const hasMembershipDebt = finance.membershipDebt != null && finance.membershipDebt > 0;
   const hasElectricityDebt = finance.electricityDebt != null && finance.electricityDebt > 0;
   const hasAnyFinanceData = finance.membershipDebt !== null || finance.electricityDebt !== null;
@@ -251,6 +362,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     userPlot?.street == null ||
     finance.status === "unknown" ||
     (electricity?.lastReading == null && electricity?.debt == null);
+  const locked = typeof searchParams?.locked === "string";
 
   const unpaidChargesSum = charges
     .filter((c) => c.status === "unpaid")
@@ -270,6 +382,12 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
               Обновление данных
             </span>
           </div>
+        </div>
+      )}
+      {!isMembershipApproved && isProfileComplete && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
+          Разделы кабинета откроются после подтверждения членства.
+          {locked ? " Запросите подтверждение на этой странице." : null}
         </div>
       )}
 
@@ -367,75 +485,150 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
 
         <ProfileCard profile={profile} action={updateProfile} autoEdit={profileMissing} />
 
-        {membership.status !== "member" && (
-          <div className="mt-4 space-y-2 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
-            <div className="font-semibold text-zinc-900">Подтвердить членство</div>
-            <p className="text-xs text-zinc-600">Документ потребуется показать правлению для подтверждения.</p>
-            {profileMissing ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Сначала заполните профиль (ФИО и телефон), затем отправьте заявку.
+        {userPlot && userPlot.ownerUserId === user.id ? (
+          <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-zinc-900">Представитель (только один)</div>
+                <p className="text-xs text-zinc-600">Код действует 7 дней. Сменить представителя можно в любой момент.</p>
               </div>
-            ) : profile.fullName && profile.phone ? (
-              <form action={submitMembership} className="grid gap-2 text-sm">
-                <div className="rounded border border-zinc-200 bg-white p-3">
-                  <div className="mb-2 text-xs font-semibold text-zinc-700">Участки</div>
-                  <div className="mb-2 grid gap-2 sm:grid-cols-2">
-                    <input name="plotStreet1" placeholder="Улица (обязательно)" className="w-full rounded border border-zinc-300 px-3 py-2" />
-                    <input name="plotNumber1" placeholder="Участок (обязательно)" className="w-full rounded border border-zinc-300 px-3 py-2" required />
-                    <input name="plotCadastral1" placeholder="Кадастровый номер (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2 sm:col-span-2" />
-                  </div>
-                  <details className="mb-2 rounded border border-dashed border-zinc-300 bg-zinc-50 p-2 text-xs text-zinc-700">
-                    <summary className="cursor-pointer text-zinc-800">+ Добавить ещё участок</summary>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <input name="plotStreet2" placeholder="Улица (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2" />
-                      <input name="plotNumber2" placeholder="Участок (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2" />
-                      <input name="plotCadastral2" placeholder="Кадастровый номер (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2 sm:col-span-2" />
-                    </div>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <input name="plotStreet3" placeholder="Улица (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2" />
-                      <input name="plotNumber3" placeholder="Участок (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2" />
-                      <input name="plotCadastral3" placeholder="Кадастровый номер (опц.)" className="w-full rounded border border-zinc-300 px-3 py-2 sm:col-span-2" />
-                    </div>
-                  </details>
+              {delegateCode ? (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                  Код приглашения: {delegateCode}
+                </span>
+              ) : null}
+            </div>
+            {delegateError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                Ошибка: {delegateError}
+              </div>
+            ) : null}
+            {userPlot.delegateUserId ? (
+              <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                <div className="text-sm text-zinc-800">
+                  Представитель: {userPlot.delegateUserId}
                 </div>
-                <label className="text-xs text-zinc-700">
-                  Тип документа
-                  <select
-                    name="proofType"
-                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                    defaultValue="extract_egrn"
-                  >
-                    <option value="extract_egrn">Выписка ЕГРН</option>
-                    <option value="sale_contract">Договор купли-продажи</option>
-                    <option value="garden_book">Садовая книжка</option>
-                    <option value="other">Другое</option>
-                  </select>
-                </label>
-                <textarea
-                  name="comment"
-                  rows={2}
-                  placeholder="Комментарий (опционально)"
-                  className="w-full rounded border border-zinc-300 px-3 py-2"
+                <div className="flex flex-wrap gap-2">
+                  <form action={clearDelegateAction}>
+                    <input type="hidden" name="plotId" value={userPlot.plotId} />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-red-200 px-3 py-1 text-[11px] font-semibold text-red-700 hover:border-red-300"
+                    >
+                      Удалить представителя
+                    </button>
+                  </form>
+                  <form action={createDelegateInviteAction}>
+                    <input type="hidden" name="plotId" value={userPlot.plotId} />
+                    <input type="hidden" name="allowReplace" value="1" />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-[#5E704F] px-3 py-1 text-[11px] font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
+                    >
+                      Сменить представителя (новый код)
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <form action={createDelegateInviteAction} className="flex flex-col gap-2 sm:flex-row">
+                <input type="hidden" name="plotId" value={userPlot.plotId} />
+                <input
+                  name="invitePhone"
+                  placeholder="Телефон представителя"
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
                 />
                 <button
                   type="submit"
-                  className="self-start rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
+                  className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
                 >
-                  Отправить заявку
+                  Пригласить
                 </button>
               </form>
-            ) : (
-              <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                <div>Чтобы отправить заявку, заполните профиль (ФИО и телефон).</div>
-                <a
-                  href="#profile"
-                  className="inline-flex items-center justify-center rounded-full border border-amber-300 px-3 py-2 font-semibold text-amber-800 hover:border-amber-400"
-                >
-                  Заполнить профиль
-                </a>
-              </div>
             )}
+            <p className="text-xs text-zinc-600">
+              Код показывается один раз. В проде передайте его представителю лично.
+            </p>
           </div>
+        ) : null}
+
+        <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
+          <div className="text-sm font-semibold text-zinc-900">Ввести код приглашения</div>
+          <form action={acceptDelegateInviteAction} className="flex flex-col gap-2 sm:flex-row">
+            <input
+              name="inviteToken"
+              placeholder="Код приглашения"
+              className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+              required
+            />
+            <button
+              type="submit"
+              className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
+            >
+              Подтвердить доступ
+            </button>
+          </form>
+        </div>
+
+        {userPlot ? (
+          <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-zinc-900">Сверка данных участка</div>
+                <p className="text-xs text-zinc-600">Проверьте информацию реестра и при необходимости предложите исправления.</p>
+              </div>
+              {userPlot.proposedChanges ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-800">
+                  Изменения отправлены в правление
+                </span>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                <div className="text-xs font-semibold text-zinc-700">В реестре</div>
+                <div className="mt-1 text-sm text-zinc-800">Улица: {userPlot.street}</div>
+                <div className="text-sm text-zinc-800">Участок: {userPlot.plotNumber}</div>
+                <div className="text-sm text-zinc-800">Кадастровый: {userPlot.cadastral || "—"}</div>
+                <div className="text-xs text-zinc-600">Статус: {userPlot.status || "DRAFT"}</div>
+              </div>
+              <form action={submitPlotProposalAction} className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                <input type="hidden" name="plotId" value={userPlot.plotId} />
+                <div className="text-xs font-semibold text-zinc-700">Ваши данные</div>
+                <input
+                  name="proposalStreet"
+                  defaultValue={userPlot.proposedChanges?.street ?? userPlot.street}
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Улица"
+                />
+                <input
+                  name="proposalPlotNumber"
+                  defaultValue={userPlot.proposedChanges?.plotNumber ?? userPlot.plotNumber}
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Участок"
+                />
+                <input
+                  name="proposalCadastral"
+                  defaultValue={userPlot.proposedChanges?.cadastral ?? userPlot.cadastral ?? ""}
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Кадастровый номер"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
+                >
+                  Отправить изменения
+                </button>
+              </form>
+            </div>
+          </div>
+        ) : null}
+
+        {profileMissing ? null : (
+          <MembershipBlock
+            latestRequest={latestRequest ? { ...latestRequest, plotId: userPlot?.plotId } : null}
+            onSubmit={submitMembership}
+            onProposal={submitPlotProposalAction}
+          />
         )}
       </div>
 
@@ -831,28 +1024,35 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     </div>
   );
 
-  const initialSection = (() => {
-    const param = typeof searchParams?.section === "string" ? searchParams?.section : "home";
-    const allowed: SectionKey[] = ["home", "electricity", "finance", "charges", "appeals", "docs", "events"];
-    return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
-  })();
-
   const sections: { key: SectionKey; title: string; content: React.ReactNode }[] = [
     { key: "home", title: "Домой (ЛК)", content: homeSection },
-    { key: "electricity", title: "Электроэнергия", content: electricitySection },
-    { key: "finance", title: "Финансы", content: financeSection },
-    { key: "charges", title: "Начисления", content: chargesSection },
-    { key: "appeals", title: "Обращения", content: appealsSection },
-    { key: "docs", title: "Документы", content: docsSection },
-    { key: "events", title: "Уведомления", content: eventsSection },
   ];
+  if (isProfileComplete && isMembershipApproved) {
+    sections.push(
+      { key: "electricity", title: "Электроэнергия", content: electricitySection },
+      { key: "finance", title: "Финансы", content: financeSection },
+      { key: "charges", title: "Начисления", content: chargesSection },
+      { key: "appeals", title: "Обращения", content: appealsSection },
+      { key: "docs", title: "Документы", content: docsSection },
+      { key: "events", title: "Уведомления", content: eventsSection },
+    );
+  }
 
-  const quickActions = [
-    { key: "electricity" as SectionKey, title: "Передать показания", desc: "Электроэнергия", targetId: "electricity-section" },
-    { key: "charges" as SectionKey, title: "Начисления", desc: "Основания и суммы", targetId: "charges-section" },
-    { key: "appeals" as SectionKey, title: "Написать обращение", desc: "Вопросы правлению", targetId: "appeals-section" },
-    { key: "docs" as SectionKey, title: "Документы", desc: "Устав и протоколы", targetId: "docs-section" },
-  ];
+  const quickActions =
+    isProfileComplete && isMembershipApproved
+      ? [
+          { key: "electricity" as SectionKey, title: "Передать показания", desc: "Электроэнергия", targetId: "electricity-section" },
+          { key: "charges" as SectionKey, title: "Начисления", desc: "Основания и суммы", targetId: "charges-section" },
+          { key: "appeals" as SectionKey, title: "Написать обращение", desc: "Вопросы правлению", targetId: "appeals-section" },
+          { key: "docs" as SectionKey, title: "Документы", desc: "Устав и протоколы", targetId: "docs-section" },
+        ]
+      : [];
+
+  const initialSection = (() => {
+    const param = typeof searchParams?.section === "string" ? searchParams?.section : "home";
+    const allowed: SectionKey[] = sections.map((s) => s.key);
+    return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
+  })();
 
   return <CabinetShell sections={sections} unreadCount={unreadCount} quickActions={quickActions} initialActive={initialSection} />;
 }

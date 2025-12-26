@@ -12,7 +12,7 @@ export type MembershipRecord = {
   notes: string | null;
 };
 
-export type MembershipRequestStatus = "new" | "approved" | "rejected";
+export type MembershipRequestStatus = "new" | "approved" | "rejected" | "needs_info";
 export type MembershipRequest = {
   id: string;
   userId: string;
@@ -185,23 +185,80 @@ export async function rejectMembershipRequest(id: string) {
   const requests = await readJson<MembershipRequest[]>(requestsPath, []);
   const idx = requests.findIndex((r) => r.id === id);
   if (idx === -1) return;
+  await updateMembershipRequestStatus({ id, status: "rejected" });
+}
+
+export async function updateMembershipRequestStatus(input: { id: string; status: MembershipRequestStatus; comment?: string | null }) {
+  if (!input.id) return;
+  const requests = await readJson<MembershipRequest[]>(requestsPath, []);
+  const idx = requests.findIndex((r) => r.id === input.id);
+  if (idx === -1) return;
   const now = new Date().toISOString();
-  requests[idx] = { ...requests[idx], status: "rejected", reviewedAt: now };
+  requests[idx] = { ...requests[idx], status: input.status, reviewedAt: now, comment: input.comment ?? requests[idx].comment ?? null };
   await writeJson(requestsPath, requests);
 
-  const memberships = await readJson<MembershipRecord[]>(membershipPath, []);
-  const mIdx = memberships.findIndex((m) => m.userId === requests[idx].userId);
-  const record: MembershipRecord = {
-    userId: requests[idx].userId,
-    status: "non-member",
-    updatedAt: now,
-    updatedBy: "admin",
-    notes: null,
-  };
-  if (mIdx === -1) {
-    memberships.push(record);
-  } else {
-    memberships[mIdx] = record;
+  if (input.status === "approved") {
+    const memberships = await readJson<MembershipRecord[]>(membershipPath, []);
+    const mIdx = memberships.findIndex((m) => m.userId === requests[idx].userId);
+    const record: MembershipRecord = {
+      userId: requests[idx].userId,
+      status: "member",
+      updatedAt: now,
+      updatedBy: "admin",
+      notes: null,
+    };
+    if (mIdx === -1) {
+      memberships.push(record);
+    } else {
+      memberships[mIdx] = record;
+    }
+    await writeJson(membershipPath, memberships);
+
+    const targetPlots =
+      requests[idx].plots && requests[idx].plots.length > 0
+        ? requests[idx].plots
+        : requests[idx].plotNumber
+          ? [{ street: requests[idx].street ?? "—", plotNumber: requests[idx].plotNumber, cadastral: null }]
+          : [];
+    for (const p of targetPlots) {
+      const plot = await upsertPlot({
+        street: p.street ?? "—",
+        plotNumber: p.plotNumber,
+        cadastral: p.cadastral,
+        notes: null,
+      });
+      if (plot) {
+        await setUserPlot({
+          userId: requests[idx].userId,
+          plotId: plot.plotId,
+          status: "active",
+          ownershipStatus: "verified",
+          ownershipProof: {
+            type: requests[idx].proofType ?? "other",
+            note: requests[idx].comment ?? null,
+            verifiedAt: now,
+            verifiedBy: "admin",
+          },
+        });
+      }
+    }
   }
-  await writeJson(membershipPath, memberships);
+
+  if (input.status === "rejected") {
+    const memberships = await readJson<MembershipRecord[]>(membershipPath, []);
+    const mIdx = memberships.findIndex((m) => m.userId === requests[idx].userId);
+    const record: MembershipRecord = {
+      userId: requests[idx].userId,
+      status: "non-member",
+      updatedAt: now,
+      updatedBy: "admin",
+      notes: null,
+    };
+    if (mIdx === -1) {
+      memberships.push(record);
+    } else {
+      memberships[mIdx] = record;
+    }
+    await writeJson(membershipPath, memberships);
+  }
 }

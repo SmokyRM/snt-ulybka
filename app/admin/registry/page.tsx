@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
 import RegistryTableClient from "./RegistryTableClient";
+import RegistryImportModalClient from "./RegistryImportModalClient";
 
 export default async function RegistryPage({
   searchParams,
@@ -50,6 +51,21 @@ export default async function RegistryPage({
           >
             Найти
           </button>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/api/admin/registry/template"
+              className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
+            >
+              Скачать шаблон
+            </Link>
+            <RegistryImportModalClient />
+            <Link
+              href="/api/admin/registry/export.csv"
+              className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
+            >
+              Экспорт
+            </Link>
+          </div>
         </form>
 
         <RegistryTableClient plots={items} query={query} />

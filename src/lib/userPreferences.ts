@@ -39,7 +39,7 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
 export async function setActivePlot(userId: string, plotId: string) {
   if (!userId || !plotId) return;
   const plots = await getUserPlots(userId);
-  const allowed = plots.some((p) => p.plotId === plotId && p.status === "active");
+  const allowed = plots.some((p) => p.plotId === plotId && p.linkStatus === "active");
   if (!allowed) return;
   const prefs = await readJson<UserPreferences[]>(prefsPath, []);
   const now = new Date().toISOString();

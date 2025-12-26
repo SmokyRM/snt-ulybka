@@ -1,26 +1,21 @@
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import {
-  approveMembershipRequest,
   getMembershipRequests,
-  rejectMembershipRequest,
+  updateMembershipRequestStatus,
+  type MembershipRequestStatus,
 } from "@/lib/membership";
 
-async function approve(formData: FormData) {
+async function updateStatus(formData: FormData) {
   "use server";
   const user = await getSessionUser();
   if (!isAdmin(user)) redirect("/login");
   const id = (formData.get("id") as string | null) ?? "";
-  if (id) await approveMembershipRequest(id);
-  redirect("/admin/membership-requests");
-}
-
-async function reject(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
-  const id = (formData.get("id") as string | null) ?? "";
-  if (id) await rejectMembershipRequest(id);
+  const status = (formData.get("status") as MembershipRequestStatus | null) ?? "new";
+  const comment = (formData.get("comment") as string | null) ?? null;
+  if (id) {
+    await updateMembershipRequestStatus({ id, status, comment });
+  }
   redirect("/admin/membership-requests");
 }
 
@@ -72,26 +67,38 @@ export default async function MembershipRequestsPage() {
                     <div>Участок: {req.plotNumber || "—"}, улица: {req.street || "—"}</div>
                   )}
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <form action={approve}>
-                    <input type="hidden" name="id" value={req.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full bg-[#5E704F] px-3 py-2 text-xs font-semibold text-white hover:bg-[#4d5d40]"
+                <form action={updateStatus} className="mt-3 space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                  <input type="hidden" name="id" value={req.id} />
+                  <label className="text-xs text-zinc-700">
+                    Статус
+                    <select
+                      name="status"
+                      defaultValue={req.status}
+                      className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
                     >
-                      Подтвердить
-                    </button>
-                  </form>
-                  <form action={reject}>
-                    <input type="hidden" name="id" value={req.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 hover:border-red-400"
-                    >
-                      Отклонить
-                    </button>
-                  </form>
-                </div>
+                      <option value="new">На проверке</option>
+                      <option value="needs_info">Нужны уточнения</option>
+                      <option value="approved">Подтверждено</option>
+                      <option value="rejected">Отклонено</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-zinc-700">
+                    Комментарий
+                    <textarea
+                      name="comment"
+                      defaultValue={req.comment ?? ""}
+                      className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                      rows={2}
+                      placeholder="Комментарий правления"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-[#5E704F] px-3 py-2 text-xs font-semibold text-white hover:bg-[#4d5d40]"
+                  >
+                    Сохранить
+                  </button>
+                </form>
               </div>
             ))}
           </div>
