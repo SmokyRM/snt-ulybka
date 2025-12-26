@@ -24,13 +24,11 @@ async function submitAppeal(formData: FormData) {
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") {
-      redirect("/admin");
-    }
+    if (view !== "user") redirect("/admin");
   }
   const text = (formData.get("appeal") as string | null) ?? "";
   await createAppeal(user.id ?? "", text);
-  redirect("/cabinet");
+  redirect("/cabinet?section=appeals");
 }
 
 async function submitElectricity(formData: FormData) {
@@ -42,16 +40,12 @@ async function submitElectricity(formData: FormData) {
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") {
-      redirect("/admin");
-    }
+    if (view !== "user") redirect("/admin");
   }
   const value = Number(formData.get("reading"));
-  if (!Number.isFinite(value) || value < 0) {
-    redirect("/cabinet");
-  }
+  if (!Number.isFinite(value) || value < 0) redirect("/cabinet");
   await submitReading(user.id ?? "", value);
-  redirect("/cabinet");
+  redirect("/cabinet?section=electricity");
 }
 
 async function markEvent(formData: FormData) {
@@ -63,14 +57,12 @@ async function markEvent(formData: FormData) {
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") {
-      redirect("/admin");
-    }
+    if (view !== "user") redirect("/admin");
   }
   const id = formData.get("eventId") as string | null;
   if (!id) redirect("/cabinet");
   await markEventRead(user.id ?? "", id);
-  redirect("/cabinet");
+  redirect("/cabinet?section=events");
 }
 
 async function markAllEvents() {
@@ -82,12 +74,10 @@ async function markAllEvents() {
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") {
-      redirect("/admin");
-    }
+    if (view !== "user") redirect("/admin");
   }
   await markAllRead(user.id ?? "");
-  redirect("/cabinet");
+  redirect("/cabinet?section=events");
 }
 
 async function ackDoc(formData: FormData) {
@@ -99,28 +89,23 @@ async function ackDoc(formData: FormData) {
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") {
-      redirect("/admin");
-    }
+    if (view !== "user") redirect("/admin");
   }
   const docId = formData.get("docId") as string | null;
   if (!docId) redirect("/cabinet");
   await acknowledgeDoc(user.id ?? "", docId);
-  redirect("/cabinet");
+  redirect("/cabinet?section=docs");
 }
 
-export default async function CabinetPage() {
+export default async function CabinetPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
   }
-
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") {
-      redirect("/admin");
-    }
+    if (view !== "user") redirect("/admin");
   }
 
   const plotInfo = await getUserPlotInfo(user.id ?? "");
@@ -132,6 +117,7 @@ export default async function CabinetPage() {
       : plotInfo.membershipStatus === "non-member"
         ? "Не член"
         : "Данные уточняются";
+
   const appeals = await getUserAppeals(user.id ?? "");
   const finance = await getUserFinanceInfo(user.id ?? "");
   const electricity = await getUserElectricity(user.id ?? "");
@@ -147,13 +133,12 @@ export default async function CabinetPage() {
   const charges = await getUserCharges(user.id ?? "");
   const decisions = await getDecisions();
   const decisionMap = new Map(decisions.map((d) => [d.id, d]));
+
   const appealsInProgress = appeals.filter((a) => a.status === "in_progress").length;
   const lastAppeal = appeals[0];
   const hasMembershipDebt = finance.membershipDebt != null && finance.membershipDebt > 0;
   const hasElectricityDebt = finance.electricityDebt != null && finance.electricityDebt > 0;
-  const hasTargetDebt = false;
-  const hasAnyFinanceData =
-    finance.membershipDebt !== null || finance.electricityDebt !== null || hasTargetDebt;
+  const hasAnyFinanceData = finance.membershipDebt !== null || finance.electricityDebt !== null;
   const needsAttention =
     plotInfo.membershipStatus === "unknown" ||
     plotInfo.plotNumber === null ||
@@ -161,47 +146,21 @@ export default async function CabinetPage() {
     finance.status === "unknown" ||
     (electricity?.lastReading == null && electricity?.debt == null);
 
+  const unpaidChargesSum = charges
+    .filter((c) => c.status === "unpaid")
+    .reduce((sum, c) => sum + c.amount, 0);
+
   const homeSection = (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-zinc-900">Быстрые действия</h2>
-        <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-          {[
-            { key: "electricity" as SectionKey, title: "Передать показания", desc: "Электроэнергия" },
-            { key: "appeals" as SectionKey, title: "Написать обращение", desc: "Вопросы правлению" },
-            { key: "charges" as SectionKey, title: "Начисления", desc: "Основания и суммы" },
-            { key: "docs" as SectionKey, title: "Документы", desc: "Устав и протоколы" },
-          ].map((card) => (
-            <button
-              key={card.key}
-              type="button"
-              onClick={() => {
-                const target = card.key;
-                const el = document?.getElementById(`${target}-section`);
-                setTimeout(() => el?.scrollIntoView({ behavior: "smooth" }), 50);
-                // @ts-ignore setActive from shell scope
-              }}
-              className="flex flex-col rounded-xl border border-[#5E704F]/30 bg-[#5E704F]/5 px-3 py-3 text-left text-sm font-semibold text-[#2F3827] transition-colors hover:border-[#5E704F]/60"
-            >
-              <span>{card.title}</span>
-              <span className="text-xs font-normal text-zinc-700">{card.desc}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {needsAttention && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               Данные уточняются. Если вы недавно купили участок или сменились данные — отправьте обращение.
             </div>
-            <a
-              href="#appeals"
-              className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-            >
-              Написать обращение
-            </a>
+            <span className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800">
+              Обновление данных
+            </span>
           </div>
         </div>
       )}
@@ -245,13 +204,16 @@ export default async function CabinetPage() {
           <h3 className="text-sm font-semibold text-zinc-900">Статистика СНТ</h3>
           <div className="mt-2 grid gap-2 text-sm text-zinc-700 sm:grid-cols-2">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              Показания электро: данных нет (MVP)
+              Показания электро: {electricity?.lastReading != null ? "переданы" : "нет данных"}
             </div>
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
               Обращений в работе: {appealsInProgress}
             </div>
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              Сумма долгов: нет данных (MVP)
+              Неоплаченных начислений: {charges.filter((c) => c.status === "unpaid").length}
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+              Сумма неоплаченных: {unpaidChargesSum || "нет данных"}
             </div>
           </div>
         </div>
@@ -265,188 +227,154 @@ export default async function CabinetPage() {
 
   const financeSection = (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <a
-            href="#appeals"
-            className="rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
-          >
-            Задать вопрос
-          </a>
+      <h2 className="text-lg font-semibold text-zinc-900">Финансы</h2>
+      <div className="space-y-2 text-sm text-zinc-700">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="font-semibold text-zinc-900">Членские взносы</div>
+          <div>
+            {finance.membershipDebt === null
+              ? "—"
+              : finance.membershipDebt === 0
+                ? "Задолженности нет"
+                : `Задолженность: ${finance.membershipDebt} ₽`}
+          </div>
         </div>
-        <h2 className="mt-3 text-lg font-semibold text-zinc-900">Финансы</h2>
-        <div className="mt-2 space-y-2 text-sm text-zinc-700">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="font-semibold text-zinc-900">Электроэнергия</div>
+          <div>
+            {finance.electricityDebt === null
+              ? "—"
+              : finance.electricityDebt === 0
+                ? "Задолженности нет"
+                : `Задолженность: ${finance.electricityDebt} ₽`}
+          </div>
+        </div>
+        {(finance.membershipDebt !== null || finance.electricityDebt !== null) && (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Членские взносы</div>
+            <div className="font-semibold text-zinc-900">Итого</div>
             <div>
-              {finance.membershipDebt === null
-                ? "—"
-                : finance.membershipDebt === 0
-                  ? "Задолженности нет"
-                  : `Задолженность: ${finance.membershipDebt} ₽`}
+              Членские: {finance.membershipDebt === null ? "—" : `${finance.membershipDebt} ₽`}
             </div>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Электроэнергия</div>
             <div>
-              {finance.electricityDebt === null
-                ? "—"
-                : finance.electricityDebt === 0
-                  ? "Задолженности нет"
-                  : `Задолженность: ${finance.electricityDebt} ₽`}
+              Электро: {finance.electricityDebt === null ? "—" : `${finance.electricityDebt} ₽`}
             </div>
           </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Целевые взносы</div>
-            <div>—</div>
-          </div>
-          {(finance.membershipDebt !== null || finance.electricityDebt !== null) && (
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              <div className="font-semibold text-zinc-900">Итого</div>
-              <div>
-                Членские:{" "}
-                {finance.membershipDebt === null ? "—" : `${finance.membershipDebt} ₽`}
-              </div>
-              <div>
-                Электро:{" "}
-                {finance.electricityDebt === null ? "—" : `${finance.electricityDebt} ₽`}
-              </div>
-            </div>
+        )}
+      </div>
+      {!hasAnyFinanceData && (
+        <p className="text-xs text-zinc-600">
+          Данные уточняются. Если вы недавно купили участок или сменились данные — отправьте обращение.
+        </p>
+      )}
+      <div className="space-y-2 text-sm text-zinc-700">
+        <div className="font-semibold text-zinc-900">Оплата через банк</div>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
+          <div>Получатель: {paymentDetails.recipientName}</div>
+          <div>ИНН/КПП: {paymentDetails.inn} / {paymentDetails.kpp}</div>
+          <div>Р/с: {paymentDetails.account}</div>
+          <div>Банк: {paymentDetails.bank}</div>
+          <div>БИК: {paymentDetails.bik}</div>
+          <div>Корр. счёт: {paymentDetails.corrAccount}</div>
+        </div>
+        <PaymentPurposeClient
+          street={plotInfo.street}
+          plotNumber={plotInfo.plotNumber}
+          lastReading={electricity?.lastReading ?? null}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
+          <div className="font-semibold text-zinc-900">Электроэнергия (последние 6 мес.)</div>
+          {electricityHistory.length === 0 ? (
+            <div className="text-zinc-600">Нет данных</div>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {electricityHistory.map((h) => (
+                <li key={`${h.date}`} className="flex justify-between gap-3">
+                  <span>{h.month || "—"}</span>
+                  <span>{h.reading}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-        {!hasAnyFinanceData && (
-          <p className="mt-2 text-xs text-zinc-600">
-            Данные уточняются. Если вы недавно купили участок или сменились данные — отправьте обращение.
-          </p>
-        )}
-        <div className="mt-4 space-y-2 text-sm text-zinc-700">
-          <div className="font-semibold text-zinc-900">Оплата через банк</div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
-            <div>Получатель: {paymentDetails.recipientName}</div>
-            <div>ИНН/КПП: {paymentDetails.inn} / {paymentDetails.kpp}</div>
-            <div>Р/с: {paymentDetails.account}</div>
-            <div>Банк: {paymentDetails.bank}</div>
-            <div>БИК: {paymentDetails.bik}</div>
-            <div>Корр. счёт: {paymentDetails.corrAccount}</div>
-          </div>
-          <PaymentPurposeClient
-            street={plotInfo.street}
-            plotNumber={plotInfo.plotNumber}
-            lastReading={electricity?.lastReading ?? null}
-          />
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-zinc-900">Статистика</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
-            <div className="font-semibold text-zinc-900">Электроэнергия (последние 6 мес.)</div>
-            {electricityHistory.length === 0 ? (
-              <div className="text-zinc-600">Нет данных</div>
-            ) : (
-              <ul className="mt-2 space-y-1">
-                {electricityHistory.map((h) => (
-                  <li key={`${h.date}`} className="flex justify-between gap-3">
-                    <span>{h.month || "—"}</span>
-                    <span>{h.reading}</span>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
+          <div className="font-semibold text-zinc-900">Взносы (последние 6 мес.)</div>
+          {financeHistory.length === 0 ? (
+            <div className="text-zinc-600">Нет данных</div>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {financeHistory.map((f) => {
+                const diff = f.charged - f.paid;
+                return (
+                  <li key={`${f.month}`} className="space-y-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span>{f.month}</span>
+                      <span>Начислено: {f.charged} ₽</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Оплачено: {f.paid} ₽</span>
+                      <span>Разница: {diff} ₽</span>
+                    </div>
                   </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
-            <div className="font-semibold text-zinc-900">Взносы (последние 6 мес.)</div>
-            {financeHistory.length === 0 ? (
-              <div className="text-zinc-600">Нет данных</div>
-            ) : (
-              <ul className="mt-2 space-y-2">
-                {financeHistory.map((f) => {
-                  const diff = f.charged - f.paid;
-                  return (
-                    <li key={`${f.month}`} className="space-y-0.5">
-                      <div className="flex justify-between gap-3">
-                        <span>{f.month}</span>
-                        <span>Начислено: {f.charged} ₽</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Оплачено: {f.paid} ₽</span>
-                        <span>Разница: {diff} ₽</span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
     </div>
   );
 
   const electricitySection = (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <a
-          href="#electricity"
-          className="rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
-        >
-          Передать показания
-        </a>
-      </div>
-      <div id="electricity" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-zinc-900">Электроэнергия</h2>
-        <div className="mt-2 space-y-2 text-sm text-zinc-700">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Последние показания</div>
-            <div>
-              {electricity?.lastReading != null ? electricity.lastReading : "Не переданы"}
-            </div>
-            <div className="text-xs text-zinc-600">
-              Дата: {electricity?.lastReadingDate ? new Date(electricity.lastReadingDate).toLocaleString("ru-RU") : "—"}
-            </div>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Статус</div>
-            <div>{electricity?.lastReading != null ? "Переданы" : "Не переданы"}</div>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Долг</div>
-            <div>
-              {electricity?.debt == null ? "Нет данных" : `${electricity.debt} ₽`}
-            </div>
+    <div className="space-y-4" id="electricity-section">
+      <h2 className="text-lg font-semibold text-zinc-900">Электроэнергия</h2>
+      <div className="space-y-2 text-sm text-zinc-700">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="font-semibold text-zinc-900">Последние показания</div>
+          <div>{electricity?.lastReading != null ? electricity.lastReading : "Не переданы"}</div>
+          <div className="text-xs text-zinc-600">
+            Дата: {electricity?.lastReadingDate ? new Date(electricity.lastReadingDate).toLocaleString("ru-RU") : "—"}
           </div>
         </div>
-        <form action={submitElectricity} className="mt-3 flex flex-col gap-2 text-sm">
-          <label className="text-zinc-800">
-            Передать показания
-            <input
-              type="number"
-              name="reading"
-              min={0}
-              step="0.01"
-              required
-              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-            />
-          </label>
-          <button
-            type="submit"
-            className="self-start rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4d5d41]"
-          >
-            Отправить
-          </button>
-        </form>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="font-semibold text-zinc-900">Статус</div>
+          <div>{electricity?.lastReading != null ? "Переданы" : "Не переданы"}</div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <div className="font-semibold text-zinc-900">Долг</div>
+          <div>{electricity?.debt == null ? "Нет данных" : `${electricity.debt} ₽`}</div>
+        </div>
       </div>
+      <form action={submitElectricity} className="mt-3 flex flex-col gap-2 text-sm">
+        <label className="text-zinc-800">
+          Передать показания
+          <input
+            type="number"
+            name="reading"
+            min={0}
+            step="0.01"
+            required
+            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
+          />
+        </label>
+        <button
+          type="submit"
+          className="self-start rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4d5d41]"
+        >
+          Отправить
+        </button>
+      </form>
     </div>
   );
 
   const chargesSection = (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="space-y-3" id="charges-section">
       <h2 className="text-lg font-semibold text-zinc-900">Начисления</h2>
       {charges.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-700">Начислений пока нет.</p>
+        <p className="text-sm text-zinc-700">Начислений пока нет.</p>
       ) : (
-        <div className="mt-2 space-y-2 text-sm text-zinc-800">
+        <div className="space-y-2 text-sm text-zinc-800">
           {charges.slice(0, 10).map((c) => {
             const decision = decisionMap.get(c.decisionId);
             const typeLabel =
@@ -491,9 +419,10 @@ export default async function CabinetPage() {
   );
 
   const docsSection = (
-    <div className="space-y-4">
+    <div className="space-y-4" id="docs-section">
+      <h2 className="text-lg font-semibold text-zinc-900">Документы</h2>
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-zinc-900">Обязательные документы</h2>
+        <h3 className="text-sm font-semibold text-zinc-900">Обязательные документы</h3>
         {requiredDocs.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-700">Нет обязательных документов.</p>
         ) : (
@@ -533,41 +462,42 @@ export default async function CabinetPage() {
           </div>
         )}
       </div>
-
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-zinc-900">Документы</h2>
-        <p className="mt-2 text-sm text-zinc-700">Устав, протоколы и решения размещены в разделе документов.</p>
-        <Link
-          href="/docs"
-          className="mt-3 inline-flex rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
-        >
-          Открыть документы
-        </Link>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900">Документы СНТ</h3>
+            <p className="text-xs text-zinc-700">Устав, протоколы и решения в разделе документов.</p>
+          </div>
+          <Link
+            href="/docs"
+            className="inline-flex rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F]/10"
+          >
+            Открыть документы
+          </Link>
+        </div>
       </div>
     </div>
   );
 
   const eventsSection = (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="space-y-3" id="events-section">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Что нового</h2>
+        <h2 className="text-lg font-semibold text-zinc-900">Уведомления</h2>
         {events.length > 0 && (
-          <div className="flex flex-wrap gap-2 text-xs">
-            <form action={markAllEvents}>
-              <button
-                type="submit"
-                className="rounded-full border border-zinc-300 px-3 py-1 font-semibold text-zinc-800 hover:border-zinc-400"
-              >
-                Отметить всё прочитанным
-              </button>
-            </form>
-          </div>
+          <form action={markAllEvents}>
+            <button
+              type="submit"
+              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:border-zinc-400"
+            >
+              Отметить всё прочитанным
+            </button>
+          </form>
         )}
       </div>
       {events.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-700">Пока нет новых уведомлений.</p>
+        <p className="text-sm text-zinc-700">Пока нет новых уведомлений.</p>
       ) : (
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           {events.map((ev) => (
             <div key={ev.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <div className="flex items-start justify-between gap-3">
@@ -603,17 +533,14 @@ export default async function CabinetPage() {
   );
 
   const appealsSection = (
-    <div id="appeals" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="space-y-3" id="appeals-section">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-900">Обращения</h2>
-        <Link
-          href="/admin/appeals"
-          className="text-xs font-semibold text-[#5E704F] underline"
-        >
+        <Link href="/admin/appeals" className="text-xs font-semibold text-[#5E704F] underline">
           Админка обращений
         </Link>
       </div>
-      <form action={submitAppeal} className="mt-3 space-y-3">
+      <form action={submitAppeal} className="space-y-3">
         <label className="block text-sm text-zinc-800">
           Текст обращения
           <textarea
@@ -631,7 +558,7 @@ export default async function CabinetPage() {
           Отправить
         </button>
       </form>
-      <div className="mt-4 space-y-2 text-sm text-zinc-800">
+      <div className="space-y-2 text-sm text-zinc-800">
         <div className="text-sm font-semibold text-zinc-900">Мои обращения</div>
         {appeals.length === 0 ? (
           <p className="text-sm text-zinc-600">Обращений пока нет.</p>
@@ -658,15 +585,28 @@ export default async function CabinetPage() {
     </div>
   );
 
+  const initialSection = (() => {
+    const param = typeof searchParams?.section === "string" ? searchParams?.section : "home";
+    const allowed: SectionKey[] = ["home", "electricity", "finance", "charges", "appeals", "docs", "events"];
+    return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
+  })();
+
   const sections: { key: SectionKey; title: string; content: React.ReactNode }[] = [
     { key: "home", title: "Домой (ЛК)", content: homeSection },
-    { key: "finance", title: "Финансы", content: financeSection },
     { key: "electricity", title: "Электроэнергия", content: electricitySection },
+    { key: "finance", title: "Финансы", content: financeSection },
     { key: "charges", title: "Начисления", content: chargesSection },
+    { key: "appeals", title: "Обращения", content: appealsSection },
     { key: "docs", title: "Документы", content: docsSection },
     { key: "events", title: "Уведомления", content: eventsSection },
-    { key: "appeals", title: "Обращения", content: appealsSection },
   ];
 
-  return <CabinetShell sections={sections} unreadCount={unreadCount} />;
+  const quickActions = [
+    { key: "electricity" as SectionKey, title: "Передать показания", desc: "Электроэнергия", targetId: "electricity-section" },
+    { key: "charges" as SectionKey, title: "Начисления", desc: "Основания и суммы", targetId: "charges-section" },
+    { key: "appeals" as SectionKey, title: "Написать обращение", desc: "Вопросы правлению", targetId: "appeals-section" },
+    { key: "docs" as SectionKey, title: "Документы", desc: "Устав и протоколы", targetId: "docs-section" },
+  ];
+
+  return <CabinetShell sections={sections} unreadCount={unreadCount} quickActions={quickActions} initialActive={initialSection} />;
 }

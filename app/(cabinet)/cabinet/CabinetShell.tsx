@@ -22,11 +22,13 @@ type Props = {
   sections: Section[];
   unreadCount: number;
   quickActions?: Array<{ key: SectionKey; title: string; desc?: string; targetId?: string }>;
+  initialActive?: SectionKey;
 };
 
-export function CabinetShell({ sections, unreadCount, quickActions = [] }: Props) {
-  const [active, setActive] = useState<SectionKey>("home");
+export function CabinetShell({ sections, unreadCount, quickActions = [], initialActive = "home" }: Props) {
+  const [active, setActive] = useState<SectionKey>(initialActive);
   const activeContent = sections.find((s) => s.key === active)?.content;
+  const activeTitle = sections.find((s) => s.key === active)?.title ?? "Секция";
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -43,7 +45,7 @@ export function CabinetShell({ sections, unreadCount, quickActions = [] }: Props
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm sm:flex sm:flex-wrap">
           {sections.map((s) => (
             <button
               key={s.key}
@@ -60,7 +62,21 @@ export function CabinetShell({ sections, unreadCount, quickActions = [] }: Props
           ))}
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">{activeContent}</div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-zinc-900">{activeTitle}</h2>
+            {active !== "home" && (
+              <button
+                type="button"
+                onClick={() => setActive("home")}
+                className="text-xs font-semibold text-[#5E704F] underline"
+              >
+                ← Домой (ЛК)
+              </button>
+            )}
+          </div>
+          {activeContent}
+        </div>
 
         {active === "home" && quickActions.length > 0 && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
