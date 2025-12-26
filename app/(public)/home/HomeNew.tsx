@@ -62,6 +62,25 @@ export default function HomeNew() {
         </div>
       </section>
 
+      <section className="mx-auto mt-10 w/full max-w-6xl px-4 sm:px-6">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-zinc-900">Личный кабинет члена СНТ</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+            <li>Долги и начисления по вашему участку</li>
+            <li>Передача показаний и история оплат</li>
+            <li>Обращения в правление и ответы</li>
+            <li>Важные документы и уведомления</li>
+          </ul>
+          <p className="mt-2 text-xs text-zinc-600">Доступно после подтверждения членства.</p>
+          <Link
+            href="/login"
+            className="mt-3 inline-flex rounded-full bg-[#5E704F] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41]"
+          >
+            Войти в кабинет
+          </Link>
+        </div>
+      </section>
+
       <section className="mx-auto mt-10 w-full max-w-6xl px-4 sm:px-6">
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-zinc-900">Официальные каналы</h2>

@@ -8,6 +8,7 @@ const labels: Record<FeatureFlagKey, string> = {
   newPublicHome: "Новая публичная главная",
   debtsV2: "Долги v2",
   cabinetMvp: "Кабинет MVP",
+  forceNewHome: "Сделать новую главную основной",
 };
 
 export const dynamic = "force-dynamic";

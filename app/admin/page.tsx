@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import React from "react";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { serverFetchJson } from "@/lib/serverFetch";
+import { getHomeViews } from "@/lib/homeViews";
 
 type DashboardData = {
   registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
@@ -55,15 +56,19 @@ export default async function AdminDashboard() {
 
   const data = await fetchDashboard().catch(() => null);
   const analytics = await fetchAnalytics();
+  const homeViews = await getHomeViews();
 
   return (
     <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Админ-панель</h1>
-          <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
-            Только для админов
-          </span>
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Админ-панель</h1>
+        <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
+          Только для админов
+        </span>
+      </div>
+      <div className="text-xs text-zinc-700">
+        Home views: Old — {homeViews.homeOld} | New — {homeViews.homeNew}
+      </div>
 
       {!data ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Не удалось загрузить данные</div>

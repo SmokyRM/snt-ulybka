@@ -1,5 +1,6 @@
 {
   "newPublicHome": false,
   "debtsV2": false,
-  "cabinetMvp": false
+  "cabinetMvp": false,
+  "forceNewHome": false
 }

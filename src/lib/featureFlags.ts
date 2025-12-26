@@ -1,13 +1,14 @@
 import fs from "fs/promises";
 import path from "path";
 
-export type FeatureFlagKey = "newPublicHome" | "debtsV2" | "cabinetMvp";
+export type FeatureFlagKey = "newPublicHome" | "debtsV2" | "cabinetMvp" | "forceNewHome";
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
 
 const defaultFlags: FeatureFlags = {
   newPublicHome: false,
   debtsV2: false,
   cabinetMvp: false,
+  forceNewHome: false,
 };
 
 const flagsPath = path.join(process.cwd(), "data", "feature-flags.json");
