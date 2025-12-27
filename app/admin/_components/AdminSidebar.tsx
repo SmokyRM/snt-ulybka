@@ -6,6 +6,7 @@ import AppLink from "@/components/AppLink";
 const links = [
   { href: "/admin", label: "Дашборд" },
   { href: "/admin/plots", label: "Реестр участков" },
+  { href: "/admin/analytics", label: "Аналитика реестра" },
   { href: "/admin/billing", label: "Биллинг" },
   { href: "/admin/billing/import", label: "Импорт платежей" },
   { href: "/admin/billing/imports", label: "Импорты" },

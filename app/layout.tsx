@@ -27,12 +27,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const enableUx = process.env.NODE_ENV !== "production";
   return (
     <html lang="ru">
       <body className="antialiased bg-[#F8F1E9] text-zinc-900">
-        <RouteLoaderProvider>
-          <PageTransition>{children}</PageTransition>
-        </RouteLoaderProvider>
+        {enableUx ? (
+          <RouteLoaderProvider>
+            <PageTransition>{children}</PageTransition>
+          </RouteLoaderProvider>
+        ) : (
+          <>{children}</>
+        )}
       </body>
     </html>
   );

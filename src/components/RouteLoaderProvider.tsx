@@ -9,7 +9,13 @@ type RouteLoaderContextValue = {
   isLoading: boolean;
 };
 
-const RouteLoaderContext = createContext<RouteLoaderContextValue | null>(null);
+const defaultRouteLoader: RouteLoaderContextValue = {
+  start: () => {},
+  stop: () => {},
+  isLoading: false,
+};
+
+const RouteLoaderContext = createContext<RouteLoaderContextValue>(defaultRouteLoader);
 
 const DELAY_MS = 180;
 
@@ -55,13 +61,5 @@ export function RouteLoaderProvider({ children }: { children: React.ReactNode })
 }
 
 export function useRouteLoader() {
-  const ctx = useContext(RouteLoaderContext);
-  if (!ctx) {
-    return {
-      start: () => {},
-      stop: () => {},
-      isLoading: false,
-    };
-  }
-  return ctx;
+  return useContext(RouteLoaderContext);
 }
