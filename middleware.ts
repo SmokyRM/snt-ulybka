@@ -44,7 +44,9 @@ export function middleware(request: NextRequest) {
         if (isApiAdmin) {
           return NextResponse.json({ error: "forbidden" }, { status: 403 });
         }
-        return NextResponse.redirect(new URL("/", request.url));
+        const url = new URL("/login", request.url);
+        url.searchParams.set("next", "/admin");
+        return NextResponse.redirect(url);
       }
     }
 

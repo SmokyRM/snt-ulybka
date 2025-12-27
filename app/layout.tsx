@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import PageTransition from "@/components/PageTransition";
 import { RouteLoaderProvider } from "@/components/RouteLoaderProvider";
 import "./globals.css";
 
@@ -33,7 +32,7 @@ export default function RootLayout({
       <body className="antialiased bg-[#F8F1E9] text-zinc-900">
         {enableUx ? (
           <RouteLoaderProvider>
-            <PageTransition>{children}</PageTransition>
+            {children}
           </RouteLoaderProvider>
         ) : (
           <>{children}</>
