@@ -310,6 +310,8 @@ export async function resetPlotOwner(plotId: string) {
   if (idx === -1) return;
   plots[idx].ownerUserId = null;
   plots[idx].codeUsedAt = null;
+  plots[idx].inviteCodeHash = null;
+  plots[idx].inviteCodeIssuedAt = null;
   plots[idx].status = "DRAFT";
   plots[idx].proposedChanges = null;
   plots[idx].delegateUserId = null;
@@ -320,6 +322,17 @@ export async function resetPlotOwner(plotId: string) {
   plots[idx].delegateInviteUsedAt = null;
   await writeJson(plotsPath, plots);
   await removeUserPlotLinks(plotId);
+}
+
+export async function clearInviteCode(plotId: string) {
+  if (!plotId) return;
+  const plots = await getPlots();
+  const idx = plots.findIndex((p) => p.plotId === plotId);
+  if (idx === -1) return;
+  plots[idx].inviteCodeHash = null;
+  plots[idx].inviteCodeIssuedAt = null;
+  plots[idx].codeUsedAt = null;
+  await writeJson(plotsPath, plots);
 }
 
 export async function clearDelegate(plotId: string) {

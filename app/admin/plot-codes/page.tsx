@@ -1,6 +1,14 @@
 import { redirect } from "next/navigation";
 import { isAdmin, getSessionUser } from "@/lib/session.server";
-import { generateInviteCode, getPlots, resetPlotOwner, verifyPlot, approvePlotProposal, rejectPlotProposal } from "@/lib/plots";
+import {
+  generateInviteCode,
+  getPlots,
+  resetPlotOwner,
+  verifyPlot,
+  approvePlotProposal,
+  rejectPlotProposal,
+  clearInviteCode,
+} from "@/lib/plots";
 
 async function generate(formData: FormData) {
   "use server";
@@ -8,7 +16,10 @@ async function generate(formData: FormData) {
   if (!isAdmin(user)) redirect("/login");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
-    await generateInviteCode(plotId);
+    const code = await generateInviteCode(plotId);
+    if (code) {
+      redirect(`/admin/plot-codes?code=${encodeURIComponent(code)}&plot=${encodeURIComponent(plotId)}`);
+    }
   }
   redirect("/admin/plot-codes");
 }
@@ -35,6 +46,17 @@ async function verify(formData: FormData) {
   redirect("/admin/plot-codes");
 }
 
+async function clearCode(formData: FormData) {
+  "use server";
+  const user = await getSessionUser();
+  if (!isAdmin(user)) redirect("/login");
+  const plotId = (formData.get("plotId") as string | null) ?? "";
+  if (plotId) {
+    await clearInviteCode(plotId);
+  }
+  redirect("/admin/plot-codes");
+}
+
 async function approveProposal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
@@ -57,10 +79,12 @@ async function rejectProposal(formData: FormData) {
   redirect("/admin/plot-codes");
 }
 
-export default async function PlotCodesPage() {
+export default async function PlotCodesPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
   if (!isAdmin(user)) redirect("/login");
   const plots = await getPlots();
+  const code = typeof searchParams?.code === "string" ? searchParams.code : null;
+  const plotParam = typeof searchParams?.plot === "string" ? searchParams.plot : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -74,24 +98,50 @@ export default async function PlotCodesPage() {
             plots.map((plot) => (
               <div key={plot.plotId} className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
+                  <div className="space-y-1">
                     <div className="font-semibold text-zinc-900">{plot.displayName || `№ ${plot.plotNumber}, ${plot.street}`}</div>
-                  <div className="text-xs text-zinc-600">Кадастровый: {plot.cadastral || "—"}</div>
-                  <div className="text-xs text-zinc-600">Владелец: {plot.ownerUserId || "не привязан"}</div>
-                  <div className="text-xs text-zinc-600">Представитель: {plot.delegateUserId || "не назначен"}</div>
-                  <div className="text-xs text-zinc-600">Статус: {plot.status || "DRAFT"}</div>
-                  <div className="text-xs text-zinc-600">Код: {plot.inviteCode || "не сгенерирован"}</div>
-                </div>
+                    <div className="text-xs text-zinc-600">Кадастровый: {plot.cadastral || "—"}</div>
+                    <div className="text-xs text-zinc-600">Владелец: {plot.ownerUserId || "не привязан"}</div>
+                    <div className="text-xs text-zinc-600">Представитель: {plot.delegateUserId || "не назначен"}</div>
+                    <div className="text-xs text-zinc-600">
+                      Статус:{" "}
+                      <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-semibold">
+                        {plot.status || "DRAFT"}
+                      </span>
+                    </div>
+                    {plotParam === plot.plotId && code ? (
+                      <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800">
+                        Код: {code}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    <form action={generate}>
-                      <input type="hidden" name="plotId" value={plot.plotId} />
-                      <button
-                        type="submit"
-                        className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
-                      >
-                        Сгенерировать код
-                      </button>
-                    </form>
+                    {!plot.ownerUserId ? (
+                      <>
+                        <form action={generate}>
+                          <input type="hidden" name="plotId" value={plot.plotId} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
+                          >
+                            {plot.inviteCodeHash ? "Показать новый код" : "Сгенерировать код"}
+                          </button>
+                        </form>
+                        {plot.inviteCodeHash ? (
+                          <form action={clearCode}>
+                            <input type="hidden" name="plotId" value={plot.plotId} />
+                            <button
+                              type="submit"
+                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:bg-zinc-100"
+                            >
+                              Сбросить код
+                            </button>
+                          </form>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700">Привязан</span>
+                    )}
                     <form action={resetOwner}>
                       <input type="hidden" name="plotId" value={plot.plotId} />
                       <button
