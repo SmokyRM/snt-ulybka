@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { getSessionUser } from "@/lib/session.server";
 import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { claimPlotByCode } from "@/lib/plots";
@@ -31,6 +32,14 @@ async function saveOnboarding(formData: FormData) {
 
   if (!plotCode) {
     redirect("/onboarding?error=Нужен код участка");
+  }
+  // DEV ONLY: allow local testing without real plot binding.
+  const isDev = process.env.NODE_ENV !== "production";
+  const h = await Promise.resolve(headers());
+  const host = h.get("host") ?? "";
+  const isLocalhost = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  if (isDev && isLocalhost && plotCode === "PLOT111") {
+    redirect("/cabinet");
   }
   const claimResult = await claimPlotByCode(plotCode, user.id ?? "");
   if (!claimResult.ok) {

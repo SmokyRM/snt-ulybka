@@ -9,7 +9,7 @@ type SearchParams = {
 async function createDoc(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const title = (formData.get("title") as string | null) ?? "";
   const url = (formData.get("url") as string | null) ?? "";
   const requiredFor = (formData.get("requiredFor") as "all" | "members" | "non-members" | null) ?? "all";
@@ -20,7 +20,7 @@ async function createDoc(formData: FormData) {
 async function removeDoc(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const id = formData.get("id") as string | null;
   if (id) {
     await deleteRequiredDoc(id);
@@ -30,9 +30,9 @@ async function removeDoc(formData: FormData) {
 
 export default async function RequiredDocsAdminPage({}: { searchParams?: SearchParams }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
-  if (!user?.id) redirect("/login");
+  if (!user?.id) redirect("/login?next=/admin");
   const docs = await getRequiredDocsForUser({ userId: user.id, membershipStatus: "member" });
 
   return (

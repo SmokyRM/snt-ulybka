@@ -5,7 +5,7 @@ import ImportClient from "./ImportClient";
 export default async function BillingImportPage() {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   return (

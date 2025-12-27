@@ -18,7 +18,7 @@ export default async function ContactsRequestPage({
 }) {
   const user = await getSessionUser();
   if (!user || user.role !== "admin") {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   const q = typeof searchParams?.q === "string" ? searchParams.q : undefined;

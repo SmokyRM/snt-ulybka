@@ -10,7 +10,7 @@ export default async function AdminSettingsPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
   const settings = getSntSettings();
   const saved = typeof searchParams?.saved === "string";
@@ -18,7 +18,7 @@ export default async function AdminSettingsPage({
   async function saveSettings(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!isAdmin(session)) redirect("/login");
+    if (!isAdmin(session)) redirect("/login?next=/admin");
 
     const parseNumber = (value: FormDataEntryValue | null, fallback: number) => {
       const raw = typeof value === "string" ? value.trim() : "";

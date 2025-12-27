@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 type PlotAccessBlockProps = {
   hasPlots: boolean;
@@ -10,10 +10,8 @@ type PlotAccessBlockProps = {
 };
 
 export default function PlotAccessBlock({ hasPlots, codeRequestSent, onSubmitCode, onRequestCode }: PlotAccessBlockProps) {
-  const initialMode = useMemo<"have" | "request">(() => {
-    if (codeRequestSent) return "request";
-    return hasPlots ? "have" : "request";
-  }, [codeRequestSent, hasPlots]);
+  const initialMode: "have" | "request" = codeRequestSent ? "request" : hasPlots ? "have" : "request";
+  // Keep hooks unconditional; avoid conditional hook branches to prevent hook-order errors.
   const [mode, setMode] = useState<"have" | "request">(initialMode);
 
   return (

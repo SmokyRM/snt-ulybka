@@ -1,17 +1,14 @@
 import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { redirect } from "next/navigation";
 import AdminSidebar from "./_components/AdminSidebar";
 import { serverFetchJson } from "@/lib/serverFetch";
 import { viewAsAdmin, viewAsUser } from "./adminViewActions";
-import AppLink from "@/components/AppLink";
+import Link from "next/link";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F8F1E9] text-sm text-red-700">
-        Доступ только для администраторов
-      </div>
-    );
+    redirect("/login?next=/admin");
   }
 
   let buildInfo: { sha: string; builtAt: string } | null = null;
@@ -51,12 +48,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 Смотреть как член СНТ
               </button>
             </form>
-            <AppLink
+            <Link
               href="/"
+              prefetch={false}
               className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
             >
               На сайт
-            </AppLink>
+            </Link>
           </div>
         </header>
         <main className="px-6 py-6">{children}</main>

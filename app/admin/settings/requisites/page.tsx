@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 export default async function AdminRequisitesHistory() {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
   const requisites = getPaymentDetailsSettingServer();
   const versions = listSettingVersions("requisites", "payment_details", 50);

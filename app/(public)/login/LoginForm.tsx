@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import AppLink from "@/components/AppLink";
 import { getSessionClient } from "@/lib/session";
@@ -19,21 +19,31 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
+  // Sanitize next to prevent open-redirects to external URLs.
   const sanitizedNext = useMemo(() => sanitizeNext(nextParam), [nextParam]);
 
   const allowedNextForRole = useCallback(
     (role: "user" | "admin"): string | null => {
       if (!sanitizedNext) return null;
       if (role === "admin") {
-        if (sanitizedNext.startsWith("/admin") || sanitizedNext.startsWith("/cabinet")) {
-          return sanitizedNext;
+        if (sanitizedNext.startsWith("/admin")) return sanitizedNext;
+        if (sanitizedNext.startsWith("/cabinet")) {
+          // Do not read admin_view on client; it can be HttpOnly or scoped by path. Rely on server guard.
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[allowedNextForRole] admin next=/cabinet -> /cabinet");
+          }
+          return "/cabinet";
+        }
+        if (sanitizedNext === "/") return sanitizedNext;
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[allowedNextForRole] admin next not allowed", sanitizedNext);
         }
         return null;
       }
-      if (sanitizedNext.startsWith("/cabinet")) {
-        return sanitizedNext;
-      }
+      if (sanitizedNext.startsWith("/admin")) return null;
+      if (sanitizedNext.startsWith("/cabinet") || sanitizedNext === "/") return sanitizedNext;
       return null;
     },
     [sanitizedNext]
@@ -41,10 +51,22 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
 
   useEffect(() => {
     const session = getSessionClient();
+    if (isSubmittingRef.current) return;
+    if (sanitizedNext) return;
     if (session?.role) {
       const fallback = session.role === "admin" ? "/admin" : "/cabinet";
       const target = allowedNextForRole(session.role) ?? fallback;
-      router.replace(target);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          "[login] role=",
+          session.role,
+          "target=",
+          target,
+          "admin_view_cookie_set=",
+          session.role === "admin" && target.startsWith("/cabinet")
+        );
+      }
+      queueMicrotask(() => router.replace(target));
     }
   }, [router, sanitizedNext, allowedNextForRole]);
 
@@ -55,12 +77,13 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
       setError("Введите код доступа.");
       return;
     }
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim() }),
+        body: JSON.stringify({ code: code.trim(), next: sanitizedNext ?? "" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -72,14 +95,32 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         const fallback = "/admin";
         const nextAllowed = allowedNextForRole(role);
         const target = nextAllowed ?? fallback;
-        router.replace(target);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            "[login] role=",
+            role,
+            "target=",
+            target,
+            "admin_view_cookie_set=",
+            role === "admin" && target.startsWith("/cabinet")
+          );
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[login-success] role=", role, "sanitizedNext=", sanitizedNext, "target=", target);
+        }
+        queueMicrotask(() => router.replace(target));
       } else {
         // Всегда ведём в кабинет, он сам отправит на onboarding при незаполненном профиле.
-        router.replace("/cabinet");
+        const nextAllowed = allowedNextForRole(role);
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[login-success] role=", role, "sanitizedNext=", sanitizedNext, "target=", nextAllowed ?? "/cabinet");
+        }
+        router.replace(nextAllowed ?? "/cabinet");
       }
     } catch {
       setError("Ошибка входа, попробуйте позже");
     } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };

@@ -5,7 +5,7 @@ import { getAllAppeals, updateAppealStatus, AppealStatus } from "@/lib/appeals";
 async function updateAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const id = (formData.get("id") as string | null) ?? "";
   const status = (formData.get("status") as AppealStatus | null) ?? "new";
   const reply = (formData.get("reply") as string | null) ?? undefined;
@@ -18,7 +18,7 @@ const statusLabel = (s: AppealStatus) =>
 
 export default async function AdminAppealsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const appeals = await getAllAppeals();
 
   return (

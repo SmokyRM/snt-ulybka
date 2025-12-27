@@ -30,7 +30,7 @@ export default async function AdminTicketDetail({
 }) {
   const user = await getSessionUser();
   if (!user || user.role !== "admin") {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
   const ticket = findTicketById(params.id);
   if (!ticket) {

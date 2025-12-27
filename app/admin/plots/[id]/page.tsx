@@ -7,7 +7,7 @@ import { membershipLabel } from "@/lib/membershipLabels";
 
 export default async function PlotDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
   const { id } = await params;
   const plot = listPlots().find((p) => p.id === id);

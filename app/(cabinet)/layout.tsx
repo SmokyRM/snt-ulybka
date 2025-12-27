@@ -1,9 +1,22 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 import { findUserById } from "@/lib/mockDb";
 import { stopImpersonation } from "../admin/impersonationActions";
 
 export default async function CabinetLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
+  // Guard in layout so client components never render for guests, avoiding hook-order issues.
+  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
+    redirect("/login");
+  }
+  if (user.role === "admin") {
+    const store = await Promise.resolve(cookies());
+    const view = store.get("admin_view")?.value || "admin";
+    if (view !== "user") {
+      redirect("/admin");
+    }
+  }
   const isImpersonating = Boolean(user?.isImpersonating);
   const impersonator = user?.impersonatorAdminId ? findUserById(user.impersonatorAdminId) : null;
 

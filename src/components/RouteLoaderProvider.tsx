@@ -23,6 +23,7 @@ export function RouteLoaderProvider({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [isLoading, setIsLoading] = useState(false);
   const timerRef = useRef<number | null>(null);
+  const showLoader = pathname.startsWith("/admin") || pathname.startsWith("/cabinet");
 
   const stop = useCallback(() => {
     if (timerRef.current) {
@@ -41,16 +42,13 @@ export function RouteLoaderProvider({ children }: { children: React.ReactNode })
   }, [isLoading]);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      stop();
-    }, 0);
-    return () => window.clearTimeout(t);
+    stop();
   }, [pathname, stop]);
 
   return (
     <RouteLoaderContext.Provider value={{ start, stop, isLoading }}>
       {children}
-      {isLoading ? (
+      {isLoading && showLoader ? (
         <div className="pointer-events-none fixed right-4 top-4 z-[100] flex items-center gap-2 rounded-full border border-zinc-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm">
           <span className="route-loader-arrow text-[#5E704F]">→</span>
           Загрузка…

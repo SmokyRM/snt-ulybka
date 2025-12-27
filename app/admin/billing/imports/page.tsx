@@ -5,7 +5,7 @@ import ImportBatchesClient from "./ImportBatchesClient";
 
 export default async function ImportBatchesPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const batches = listImportBatches();
 
   return (

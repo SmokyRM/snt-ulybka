@@ -15,7 +15,7 @@ export default async function DebtsPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const flags = await getFeatureFlags();
   const debtsV2On = isFeatureEnabled(flags, "debtsV2");
   const period = typeof searchParams?.period === "string" ? searchParams.period : defaultPeriod;
