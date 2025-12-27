@@ -96,6 +96,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         const nextAllowed = allowedNextForRole(role);
         const target = nextAllowed ?? fallback;
         if (process.env.NODE_ENV !== "production") {
+          console.log("[login-submit]", { role, nextParam, sanitizedNext, nextAllowed, target });
+        }
+        if (process.env.NODE_ENV !== "production") {
           console.log(
             "[login] role=",
             role,
