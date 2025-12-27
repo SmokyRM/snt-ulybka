@@ -7,6 +7,7 @@ import { formatAdminTime } from "@/lib/settings.shared";
 export default function RegistryTableClient({
   plots,
   query,
+  status,
 }: {
   plots: Array<{
     id: string;
@@ -18,6 +19,7 @@ export default function RegistryTableClient({
     updatedAt: string;
   }>;
   query: string;
+  status?: string;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const allSelected = selected.length === plots.length && plots.length > 0;
@@ -45,7 +47,7 @@ export default function RegistryTableClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plotIds: selected, action, payload, comment }),
     });
-    window.location.href = `/admin/registry?query=${encodeURIComponent(query)}`;
+    window.location.href = `/admin/registry?query=${encodeURIComponent(query)}&status=${encodeURIComponent(status ?? "")}`;
   };
 
   return (
@@ -114,6 +116,7 @@ export default function RegistryTableClient({
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Улица</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Участок</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Членство</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Статус</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Архив</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Владелец</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Обновлено</th>
@@ -137,6 +140,15 @@ export default function RegistryTableClient({
                   </Link>
                 </td>
                 <td className="px-3 py-2 text-zinc-700">{plot.membershipStatus ?? "—"}</td>
+                <td className="px-3 py-2 text-zinc-700">
+                  {plot.status ? (
+                    <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs uppercase text-zinc-700">
+                      {plot.status}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-3 py-2 text-zinc-700">{plot.status === "archived" ? "Да" : "Нет"}</td>
                 <td className="px-3 py-2 text-zinc-700">{plot.ownerFullName ?? "—"}</td>
                 <td className="px-3 py-2 text-zinc-700">{formatAdminTime(plot.updatedAt)}</td>
@@ -144,7 +156,7 @@ export default function RegistryTableClient({
             ))}
             {plots.length === 0 && (
               <tr>
-                <td className="px-3 py-4 text-center text-zinc-600" colSpan={7}>
+                <td className="px-3 py-4 text-center text-zinc-600" colSpan={8}>
                   Участков не найдено
                 </td>
               </tr>

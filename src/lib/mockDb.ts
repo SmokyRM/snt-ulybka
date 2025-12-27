@@ -569,6 +569,7 @@ export const listPlotsWithFilters = (filters?: {
   street?: string | null;
   membershipStatus?: Plot["membershipStatus"] | null;
   archived?: boolean | null;
+  status?: Plot["status"] | null;
   page?: number;
   pageSize?: number;
 }) => {
@@ -577,6 +578,7 @@ export const listPlotsWithFilters = (filters?: {
     street,
     membershipStatus,
     archived = null,
+    status = null,
     page = 1,
     pageSize = 50,
   } = filters ?? {};
@@ -586,6 +588,7 @@ export const listPlotsWithFilters = (filters?: {
     if (street && plot.street !== street) return false;
     if (membershipStatus && plot.membershipStatus !== membershipStatus) return false;
     if (archived !== null && (plot.status === "archived") !== archived) return false;
+    if (status && plot.status !== status) return false;
     if (!q) return true;
     const ownerLink = db.plotOwners.find((po) => po.plotNumber === plot.plotNumber);
     const owner =
@@ -598,15 +601,25 @@ export const listPlotsWithFilters = (filters?: {
       plot.ownerFullName ?? "",
       plot.phone ?? "",
       plot.email ?? "",
+      plot.cadastral ?? "",
+      plot.notes ?? "",
       owner?.fullName ?? "",
       owner?.phone ?? "",
       owner?.email ?? "",
+      `Улица ${plot.street}, участок ${plot.plotNumber}`,
     ]
       .join(" ")
       .toLowerCase();
     return haystack.includes(q);
   });
+  const statusOrder = (status?: string) => {
+    const map: Record<string, number> = { DRAFT: 0, INVITE_READY: 1, CLAIMED: 2, VERIFIED: 3, active: 2, archived: 4 };
+    return map[status || ""] ?? 5;
+  };
   const sorted = filtered.sort((a, b) => {
+    const sa = statusOrder(a.status);
+    const sb = statusOrder(b.status);
+    if (sa !== sb) return sa - sb;
     const streetCmp = a.street.localeCompare(b.street, "ru");
     if (streetCmp !== 0) return streetCmp;
     return a.plotNumber.localeCompare(b.plotNumber, "ru", { numeric: true });

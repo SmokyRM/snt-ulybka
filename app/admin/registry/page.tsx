@@ -16,9 +16,18 @@ export default async function RegistryPage({
   }
 
   const query = typeof searchParams.query === "string" ? searchParams.query : "";
+  const statusRaw = typeof searchParams.status === "string" ? searchParams.status : "";
+  const allowedStatuses = ["DRAFT", "INVITE_READY", "CLAIMED", "VERIFIED"] as const;
+  const status: (typeof allowedStatuses)[number] | null = allowedStatuses.includes(
+    statusRaw as (typeof allowedStatuses)[number]
+  )
+    ? (statusRaw as (typeof allowedStatuses)[number])
+    : null;
   const page = Number(searchParams.page || "1");
+  const statusParam = status ?? "";
   const { items, total, pageSize } = listPlotsWithFilters({
     query,
+    status,
     page: Number.isFinite(page) && page > 0 ? page : 1,
     pageSize: 20,
   });
@@ -45,6 +54,17 @@ export default async function RegistryPage({
             placeholder="Поиск по улице, участку, ФИО, телефону, email"
             className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
           />
+          <select
+            name="status"
+            defaultValue={statusParam}
+            className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          >
+            <option value="">Все статусы</option>
+            <option value="DRAFT">DRAFT</option>
+            <option value="INVITE_READY">INVITE_READY</option>
+            <option value="CLAIMED">CLAIMED</option>
+            <option value="VERIFIED">VERIFIED</option>
+          </select>
           <button
             type="submit"
             className="rounded bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42]"
@@ -68,7 +88,7 @@ export default async function RegistryPage({
           </div>
         </form>
 
-        <RegistryTableClient plots={items} query={query} />
+        <RegistryTableClient plots={items} query={query} status={statusParam} />
 
         <div className="flex items-center justify-between text-sm text-zinc-700">
           <div>
@@ -77,7 +97,7 @@ export default async function RegistryPage({
           <div className="flex gap-2">
             {page > 1 && (
               <Link
-                href={`/admin/registry?query=${encodeURIComponent(query)}&page=${page - 1}`}
+                href={`/admin/registry?query=${encodeURIComponent(query)}&status=${encodeURIComponent(statusParam)}&page=${page - 1}`}
                 className="rounded border border-zinc-300 px-3 py-1 hover:bg-зinc-100"
               >
                 Назад
@@ -85,7 +105,7 @@ export default async function RegistryPage({
             )}
             {page < totalPages && (
               <Link
-                href={`/admin/registry?query=${encodeURIComponent(query)}&page=${page + 1}`}
+                href={`/admin/registry?query=${encodeURIComponent(query)}&status=${encodeURIComponent(statusParam)}&page=${page + 1}`}
                 className="rounded border border-зinc-300 px-3 py-1 hover:bg-зinc-100"
               >
                 Вперёд

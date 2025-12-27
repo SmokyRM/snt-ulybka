@@ -10,7 +10,7 @@ export interface Plot {
   plotNumber: string;
   number: string;
   street: string;
-  status?: "active" | "archived";
+  status?: "active" | "archived" | "DRAFT" | "INVITE_READY" | "CLAIMED" | "VERIFIED";
   needsReview?: boolean;
   ownerFullName?: string | null;
   phone?: string | null;

@@ -16,6 +16,7 @@ import { getLatestMembershipRequestForUser, getMembershipStatus, submitMembershi
 import { getUserProfile, upsertUserProfileByAdmin, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { getUserPreferences, setActivePlot } from "@/lib/userPreferences";
 import { submitPlotProposal } from "@/lib/plots";
+import { createCodeRequest } from "@/lib/codeRequests";
 import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { ProfileCard } from "./ProfileCard";
@@ -286,6 +287,27 @@ async function clearDelegateAction(formData: FormData) {
   redirect("/cabinet?section=home");
 }
 
+async function submitCodeRequest(formData: FormData) {
+  "use server";
+  const user = await getSessionUser();
+  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
+    redirect("/login");
+  }
+  const display = (formData.get("plot_display") as string | null)?.trim() || "";
+  const cadastral = (formData.get("cadastral_number") as string | null)?.trim() || "";
+  const comment = (formData.get("comment") as string | null)?.trim() || "";
+  if (!display) {
+    redirect("/cabinet?section=home");
+  }
+  await createCodeRequest({
+    userId: user.id ?? "",
+    plotDisplay: display,
+    cadastralNumber: cadastral || null,
+    comment: comment || null,
+  });
+  redirect("/cabinet?section=home&codeRequest=sent");
+}
+
 export default async function CabinetPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
@@ -353,6 +375,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const lastAppeal = appeals[0];
   const delegateCode = typeof searchParams?.delegateCode === "string" ? searchParams.delegateCode : null;
   const delegateError = typeof searchParams?.delegateError === "string" ? searchParams.delegateError : null;
+  const codeRequestSent = typeof searchParams?.codeRequest === "string";
   const hasMembershipDebt = finance.membershipDebt != null && finance.membershipDebt > 0;
   const hasElectricityDebt = finance.electricityDebt != null && finance.electricityDebt > 0;
   const hasAnyFinanceData = finance.membershipDebt !== null || finance.electricityDebt !== null;
@@ -566,6 +589,58 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
               className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
             >
               Подтвердить доступ
+            </button>
+          </form>
+          <div className="text-xs text-zinc-600">
+            Нет кода?{" "}
+            <a className="text-[#5E704F] underline" href="#code-request-form">
+              Запросить в правлении
+            </a>
+          </div>
+        </div>
+
+        <div
+          id="code-request-form"
+          className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm"
+        >
+          <div className="text-sm font-semibold text-zinc-900">Запросить код участка</div>
+          {codeRequestSent ? (
+            <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Запрос отправлен. Правление свяжется с вами и выдаст код.
+            </div>
+          ) : null}
+          <form action={submitCodeRequest} className="space-y-2">
+            <label className="block text-sm text-zinc-800">
+              Улица и участок
+              <input
+                name="plot_display"
+                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="Улица Березовая, участок 12"
+                required
+              />
+            </label>
+            <label className="block text-sm text-zinc-800">
+              Кадастровый номер (опционально)
+              <input
+                name="cadastral_number"
+                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="74:00:0000000:1234"
+              />
+            </label>
+            <label className="block text-sm text-zinc-800">
+              Комментарий (опционально)
+              <textarea
+                name="comment"
+                rows={2}
+                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="Например: когда удобна связь"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
+            >
+              Отправить запрос
             </button>
           </form>
         </div>
