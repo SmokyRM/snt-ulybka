@@ -11,6 +11,7 @@ export type CodeRequest = {
   comment?: string | null;
   status: CodeRequestStatus;
   adminComment?: string | null;
+  resolvedBy?: string | null;
   resolvedAt?: string | null;
   createdAt: string;
   plotId?: string | null;
@@ -54,6 +55,7 @@ export async function createCodeRequest(params: { userId: string; plotDisplay: s
     status: "NEW",
     createdAt: now,
     adminComment: null,
+    resolvedBy: null,
     resolvedAt: null,
     plotId: null,
   };
@@ -66,7 +68,12 @@ export async function listCodeRequests() {
   return readJson<CodeRequest[]>(filePath, []);
 }
 
-export async function resolveCodeRequest(input: { id: string; adminComment?: string | null; plotId?: string | null }) {
+export async function resolveCodeRequest(input: {
+  id: string;
+  adminComment?: string | null;
+  plotId?: string | null;
+  actorUserId?: string | null;
+}) {
   if (!input.id) return;
   const items = await readJson<CodeRequest[]>(filePath, []);
   const idx = items.findIndex((r) => r.id === input.id);
@@ -75,6 +82,7 @@ export async function resolveCodeRequest(input: { id: string; adminComment?: str
     ...items[idx],
     status: "RESOLVED",
     adminComment: input.adminComment?.trim() || null,
+    resolvedBy: input.actorUserId ? `admin:${input.actorUserId}` : null,
     resolvedAt: new Date().toISOString(),
     plotId: input.plotId ?? items[idx].plotId ?? null,
   };

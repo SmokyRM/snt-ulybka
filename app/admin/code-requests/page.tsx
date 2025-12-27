@@ -13,9 +13,9 @@ async function resolveAction(formData: FormData) {
   const comment = (formData.get("adminComment") as string | null) ?? "";
   if (!id) redirect("/admin/code-requests");
   if (plotId) {
-    await generateInviteCode(plotId);
+    await generateInviteCode(plotId, user?.id ?? null);
   }
-  await resolveCodeRequest({ id, adminComment: comment || null, plotId: plotId || null });
+  await resolveCodeRequest({ id, adminComment: comment || null, plotId: plotId || null, actorUserId: user?.id ?? null });
   redirect(`/admin/code-requests${plotId ? `?code_for=${encodeURIComponent(plotId)}` : ""}`);
 }
 
@@ -61,6 +61,7 @@ export default async function CodeRequestsPage({ searchParams }: { searchParams?
                       <div className="text-xs text-zinc-600">Кадастровый: {req.cadastralNumber || "—"}</div>
                       <div className="text-xs text-zinc-600">Комментарий: {req.comment || "—"}</div>
                       <div className="text-xs text-zinc-600">Статус: {req.status}</div>
+                      {req.resolvedBy ? <div className="text-xs text-zinc-600">Закрыл: {req.resolvedBy}</div> : null}
                       <div className="text-xs text-zinc-600">
                         Создано: {new Date(req.createdAt).toLocaleString("ru-RU")}
                         {req.resolvedAt ? ` • Закрыто: ${new Date(req.resolvedAt).toLocaleString("ru-RU")}` : ""}

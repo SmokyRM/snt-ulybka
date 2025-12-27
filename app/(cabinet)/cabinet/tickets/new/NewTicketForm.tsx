@@ -2,10 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 export default function NewTicketForm() {
-  const router = useRouter();
+  const router = useAppRouter();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);

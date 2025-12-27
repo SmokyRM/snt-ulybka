@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 import type { DebtTypeFilter } from "@/lib/debts";
 
 type Item = {
@@ -27,7 +27,7 @@ interface Props {
 const formatCurrency = (v: number) => `${v.toFixed(2)} ₽`;
 
 export default function DebtsClient({ initialItems, totals, filters }: Props) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [items, setItems] = useState(initialItems);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -262,9 +262,9 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
                 <td className="px-3 py-2 font-semibold">{formatCurrency(item.debtTotal)}</td>
                 <td className="px-3 py-2">{item.notificationStatus}</td>
                 <td className="px-3 py-2 space-x-2">
-                  <Link href={`/admin/registry/${item.plotId}`} className="text-[#5E704F] underline">
+                  <AppLink href={`/admin/registry/${item.plotId}`} className="text-[#5E704F] underline">
                     Карточка
-                  </Link>
+                  </AppLink>
                   <button
                     type="button"
                     className="rounded border border-amber-500 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"

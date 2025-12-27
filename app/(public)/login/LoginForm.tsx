@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
+import AppLink from "@/components/AppLink";
 import { getSessionClient } from "@/lib/session";
 import { sanitizeNext } from "@/lib/sanitizeNext";
 
@@ -15,7 +15,7 @@ type LoginFormProps = {
 };
 
 export default function LoginForm({ nextParam }: LoginFormProps) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -88,9 +88,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Вход</h1>
-        <Link href="/" className="text-sm font-medium text-[#5E704F] hover:underline">
+        <AppLink href="/" className="text-sm font-medium text-[#5E704F] hover:underline">
           На главную
-        </Link>
+        </AppLink>
       </div>
       <p className="mt-2 text-sm text-zinc-600">
         Введите код доступа, полученный от правления. После входа вы перейдёте в личный кабинет.

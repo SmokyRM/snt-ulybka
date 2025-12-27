@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 type Filters = {
   confirmed?: boolean;
@@ -10,7 +10,7 @@ type Filters = {
 };
 
 export default function FiltersClient({ initialFilters }: { initialFilters: Filters }) {
-  const router = useRouter();
+  const router = useAppRouter();
 
   const buildQuery = (data: Filters) => {
     const params = new URLSearchParams();

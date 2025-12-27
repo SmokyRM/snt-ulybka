@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { normalizeRow } from "@/lib/plotsImport/normalizeRow";
 
 type ParsedRow = {
@@ -129,7 +129,7 @@ async function parseXlsx(file: File): Promise<string[][]> {
 }
 
 export default function CsvImportForm({ existingKeys }: { existingKeys: string[] }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [mode, setMode] = useState<"skip" | "upsert">("skip");
   const [error, setError] = useState<string | null>(null);

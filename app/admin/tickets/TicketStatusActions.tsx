@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { Ticket } from "@/types/snt";
 
 const statusOptions: { value: Ticket["status"]; label: string }[] = [
@@ -11,7 +11,7 @@ const statusOptions: { value: Ticket["status"]; label: string }[] = [
 ];
 
 export default function TicketStatusActions({ ticketId, current }: { ticketId: string; current: Ticket["status"] }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [value, setValue] = useState<Ticket["status"]>(current);
@@ -64,4 +64,3 @@ export default function TicketStatusActions({ ticketId, current }: { ticketId: s
     </div>
   );
 }
-

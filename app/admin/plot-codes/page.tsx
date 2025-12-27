@@ -9,6 +9,7 @@ import {
   rejectPlotProposal,
   clearInviteCode,
 } from "@/lib/plots";
+import ConfirmActionForm from "./ConfirmActionForm";
 
 async function generate(formData: FormData) {
   "use server";
@@ -16,7 +17,7 @@ async function generate(formData: FormData) {
   if (!isAdmin(user)) redirect("/login");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
-    const code = await generateInviteCode(plotId);
+    const code = await generateInviteCode(plotId, user?.id ?? null);
     if (code) {
       redirect(`/admin/plot-codes?code=${encodeURIComponent(code)}&plot=${encodeURIComponent(plotId)}`);
     }
@@ -30,7 +31,7 @@ async function resetOwner(formData: FormData) {
   if (!isAdmin(user)) redirect("/login");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
-    await resetPlotOwner(plotId);
+    await resetPlotOwner(plotId, user?.id ?? null);
   }
   redirect("/admin/plot-codes");
 }
@@ -52,7 +53,7 @@ async function clearCode(formData: FormData) {
   if (!isAdmin(user)) redirect("/login");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
-    await clearInviteCode(plotId);
+    await clearInviteCode(plotId, user?.id ?? null);
   }
   redirect("/admin/plot-codes");
 }
@@ -128,29 +129,27 @@ export default async function PlotCodesPage({ searchParams }: { searchParams?: R
                           </button>
                         </form>
                         {plot.inviteCodeHash ? (
-                          <form action={clearCode}>
-                            <input type="hidden" name="plotId" value={plot.plotId} />
-                            <button
-                              type="submit"
-                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:bg-zinc-100"
-                            >
-                              Сбросить код
-                            </button>
-                          </form>
+                          <ConfirmActionForm
+                            action={clearCode}
+                            plotId={plot.plotId}
+                            confirmText="Сбросить код? Старый код перестанет работать."
+                            buttonClassName="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:bg-zinc-100"
+                          >
+                            Сбросить код
+                          </ConfirmActionForm>
                         ) : null}
                       </>
                     ) : (
                       <span className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700">Привязан</span>
                     )}
-                    <form action={resetOwner}>
-                      <input type="hidden" name="plotId" value={plot.plotId} />
-                      <button
-                        type="submit"
-                        className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:border-red-400"
-                      >
-                        Сбросить привязку
-                      </button>
-                    </form>
+                    <ConfirmActionForm
+                      action={resetOwner}
+                      plotId={plot.plotId}
+                      confirmText="Снять владельца? Доступ владельца будет отключён. Потребуется новый код."
+                      buttonClassName="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:border-red-400"
+                    >
+                      Сбросить привязку
+                    </ConfirmActionForm>
                     <form action={verify}>
                       <input type="hidden" name="plotId" value={plot.plotId} />
                       <button

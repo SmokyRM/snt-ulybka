@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 import { useState } from "react";
 import { formatAdminTime } from "@/lib/settings.shared";
 
@@ -16,6 +16,8 @@ export default function RegistryTableClient({
     membershipStatus?: string | null;
     status?: string | null;
     ownerFullName?: string | null;
+    lastActionAt?: string | null;
+    lastActionBy?: string | null;
     updatedAt: string;
   }>;
   query: string;
@@ -119,6 +121,7 @@ export default function RegistryTableClient({
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Статус</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Архив</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Владелец</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Последнее действие</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Обновлено</th>
             </tr>
           </thead>
@@ -135,9 +138,9 @@ export default function RegistryTableClient({
                 </td>
                 <td className="px-3 py-2 text-zinc-900">{plot.street}</td>
                 <td className="px-3 py-2">
-                  <Link href={`/admin/registry/${plot.id}`} className="text-[#5E704F] underline">
+                  <AppLink href={`/admin/registry/${plot.id}`} className="text-[#5E704F] underline">
                     {plot.plotNumber}
-                  </Link>
+                  </AppLink>
                 </td>
                 <td className="px-3 py-2 text-zinc-700">{plot.membershipStatus ?? "—"}</td>
                 <td className="px-3 py-2 text-zinc-700">
@@ -151,12 +154,22 @@ export default function RegistryTableClient({
                 </td>
                 <td className="px-3 py-2 text-zinc-700">{plot.status === "archived" ? "Да" : "Нет"}</td>
                 <td className="px-3 py-2 text-zinc-700">{plot.ownerFullName ?? "—"}</td>
+                <td className="px-3 py-2 text-zinc-700">
+                  {plot.lastActionAt ? (
+                    <div className="text-xs">
+                      <div>{formatAdminTime(plot.lastActionAt)}</div>
+                      <div className="text-zinc-500">{plot.lastActionBy ?? "—"}</div>
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-3 py-2 text-zinc-700">{formatAdminTime(plot.updatedAt)}</td>
               </tr>
             ))}
             {plots.length === 0 && (
               <tr>
-                <td className="px-3 py-4 text-center text-zinc-600" colSpan={8}>
+                <td className="px-3 py-4 text-center text-zinc-600" colSpan={9}>
                   Участков не найдено
                 </td>
               </tr>

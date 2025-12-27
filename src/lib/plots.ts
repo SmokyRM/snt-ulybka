@@ -31,6 +31,8 @@ export type PlotRecord = {
   delegateInviteTokenHash?: string | null;
   delegateInviteExpiresAt?: string | null;
   delegateInviteUsedAt?: string | null;
+  lastActionAt?: string | null;
+  lastActionBy?: string | null;
 };
 
 export type UserPlotRecord = {
@@ -91,6 +93,8 @@ function normalizePlot(p: PlotRecord): PlotRecord {
     delegateInviteTokenHash: p.delegateInviteTokenHash ?? null,
     delegateInviteExpiresAt: p.delegateInviteExpiresAt ?? null,
     delegateInviteUsedAt: p.delegateInviteUsedAt ?? null,
+    lastActionAt: p.lastActionAt ?? null,
+    lastActionBy: p.lastActionBy ?? null,
   };
 }
 
@@ -257,17 +261,20 @@ async function removeUserPlotLinks(plotId: string, role?: "OWNER" | "DELEGATE") 
   }
 }
 
-export async function generateInviteCode(plotId: string) {
+export async function generateInviteCode(plotId: string, actorUserId?: string | null) {
   if (!plotId) return null;
   const plots = await getPlots();
   const idx = plots.findIndex((p) => p.plotId === plotId);
   if (idx === -1) return null;
   const code = Math.random().toString(36).slice(2, 8).toUpperCase();
   const hash = crypto.createHash("sha256").update(code).digest("hex");
+  const now = new Date().toISOString();
   plots[idx].inviteCode = null; // не храним оригинал
   plots[idx].inviteCodeHash = hash;
-  plots[idx].inviteCodeIssuedAt = new Date().toISOString();
+  plots[idx].inviteCodeIssuedAt = now;
   plots[idx].codeUsedAt = null;
+  plots[idx].lastActionAt = now;
+  plots[idx].lastActionBy = actorUserId ? `admin:${actorUserId}` : null;
   await writeJson(plotsPath, plots);
   return code;
 }
@@ -287,6 +294,8 @@ export async function claimPlotByCode(code: string, userId: string) {
   plots[idx].claimedAt = now;
   plots[idx].inviteCodeHash = null;
   plots[idx].proposedChanges = null;
+  plots[idx].lastActionAt = now;
+  plots[idx].lastActionBy = `user:${userId}`;
   await writeJson(plotsPath, plots);
   await setUserPlot({
     userId,
@@ -303,11 +312,12 @@ export async function claimPlotByCode(code: string, userId: string) {
   return { ok: true as const, plot: plots[idx] };
 }
 
-export async function resetPlotOwner(plotId: string) {
+export async function resetPlotOwner(plotId: string, actorUserId?: string | null) {
   if (!plotId) return;
   const plots = await getPlots();
   const idx = plots.findIndex((p) => p.plotId === plotId);
   if (idx === -1) return;
+  const now = new Date().toISOString();
   plots[idx].ownerUserId = null;
   plots[idx].codeUsedAt = null;
   plots[idx].inviteCodeHash = null;
@@ -320,18 +330,23 @@ export async function resetPlotOwner(plotId: string) {
   plots[idx].delegateInviteTokenHash = null;
   plots[idx].delegateInviteExpiresAt = null;
   plots[idx].delegateInviteUsedAt = null;
+  plots[idx].lastActionAt = now;
+  plots[idx].lastActionBy = actorUserId ? `admin:${actorUserId}` : null;
   await writeJson(plotsPath, plots);
   await removeUserPlotLinks(plotId);
 }
 
-export async function clearInviteCode(plotId: string) {
+export async function clearInviteCode(plotId: string, actorUserId?: string | null) {
   if (!plotId) return;
   const plots = await getPlots();
   const idx = plots.findIndex((p) => p.plotId === plotId);
   if (idx === -1) return;
+  const now = new Date().toISOString();
   plots[idx].inviteCodeHash = null;
   plots[idx].inviteCodeIssuedAt = null;
   plots[idx].codeUsedAt = null;
+  plots[idx].lastActionAt = now;
+  plots[idx].lastActionBy = actorUserId ? `admin:${actorUserId}` : null;
   await writeJson(plotsPath, plots);
 }
 

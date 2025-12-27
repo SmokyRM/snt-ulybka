@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
+import AppLink from "@/components/AppLink";
 import { siteCity, siteName } from "@/config/site";
 
 type HeaderClientProps = {
@@ -34,12 +34,12 @@ export function HeaderClient({ role }: HeaderClientProps) {
     if (isAdmin) {
       return (
         <div className="flex flex-shrink-0 items-center gap-2">
-          <Link
+          <AppLink
             href="/admin"
             className="flex items-center gap-2 rounded-full border border-white/30 bg-white px-4 py-2 text-xs font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
           >
             В админку
-          </Link>
+          </AppLink>
           <LogoutButton
             redirectTo="/"
             className="rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white transition-colors hover:border-white disabled:cursor-not-allowed disabled:opacity-70"
@@ -51,12 +51,12 @@ export function HeaderClient({ role }: HeaderClientProps) {
     if (isUser) {
       return (
         <div className="flex items-center gap-2">
-          <Link
+          <AppLink
             href="/cabinet"
             className="rounded-full border border-white/30 bg-white px-4 py-2 text-xs font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
           >
             Кабинет
-          </Link>
+          </AppLink>
           <LogoutButton
             redirectTo="/"
             className="rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white transition-colors hover:border-white disabled:cursor-not-allowed disabled:opacity-70"
@@ -66,19 +66,19 @@ export function HeaderClient({ role }: HeaderClientProps) {
       );
     }
     return (
-      <Link
+      <AppLink
         href="/login"
         className="flex-shrink-0 rounded-full border border-white/30 bg-white px-5 py-2 text-sm font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
       >
         Войти
-      </Link>
+      </AppLink>
     );
   };
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#2F3827]/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 overflow-x-hidden px-4 py-4 text-white sm:px-6">
-        <Link href="/" className="flex flex-shrink-0 items-center gap-3 text-white">
+        <AppLink href="/" className="flex flex-shrink-0 items-center gap-3 text-white">
           <Image
             src="/brand/logo.svg"
             alt="Логотип СНТ «Улыбка»"
@@ -91,10 +91,10 @@ export function HeaderClient({ role }: HeaderClientProps) {
             <span className="text-base font-semibold">{siteName}</span>
             <span className="text-[11px] font-medium text-white/70">{siteCity}</span>
           </span>
-        </Link>
+        </AppLink>
         <nav className="hidden flex-1 items-center gap-5 text-sm font-medium text-white/80 lg:flex">
           {navItems.map((item) => (
-            <a
+            <AppLink
               key={item.href}
               href={item.href}
               className={`transition-colors hover:text-white ${
@@ -102,7 +102,7 @@ export function HeaderClient({ role }: HeaderClientProps) {
               }`}
             >
               {item.label}
-            </a>
+            </AppLink>
           ))}
         </nav>
         <div className="flex items-center gap-2">
@@ -121,7 +121,7 @@ export function HeaderClient({ role }: HeaderClientProps) {
           <div className="rounded-2xl border border-white/20 bg-[#2F3827]/95 p-4 shadow-lg">
             <div className="flex flex-col gap-2">
               {navItems.map((item) => (
-                <Link
+                <AppLink
                   key={item.href}
                   href={item.href}
                   onClick={() => setMenuOpen(false)}
@@ -130,7 +130,7 @@ export function HeaderClient({ role }: HeaderClientProps) {
                   }`}
                 >
                   {item.label}
-                </Link>
+                </AppLink>
               ))}
               <div className="pt-2">{action()}</div>
             </div>

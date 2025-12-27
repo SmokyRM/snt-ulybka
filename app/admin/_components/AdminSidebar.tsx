@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import AppLink from "@/components/AppLink";
 
 const links = [
   { href: "/admin", label: "Дашборд" },
@@ -28,7 +28,7 @@ export default function AdminSidebar() {
         {links.map((link) => {
           const active = pathname === link.href;
           return (
-            <Link
+            <AppLink
               key={link.href}
               href={link.href}
               className={`rounded px-3 py-2 transition ${
@@ -38,7 +38,7 @@ export default function AdminSidebar() {
               }`}
             >
               {link.label}
-            </Link>
+            </AppLink>
           );
         })}
       </nav>

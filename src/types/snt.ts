@@ -18,6 +18,8 @@ export interface Plot {
   membershipStatus: MembershipStatus;
   isConfirmed: boolean;
   notes?: string | null;
+  lastActionAt?: string | null;
+  lastActionBy?: string | null;
   // legacy/compat fields
   cadastral?: string;
   plotCode?: string;

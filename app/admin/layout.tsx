@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import AdminSidebar from "./_components/AdminSidebar";
 import { serverFetchJson } from "@/lib/serverFetch";
 import { viewAsAdmin, viewAsUser } from "./adminViewActions";
+import AppLink from "@/components/AppLink";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -51,12 +51,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 Смотреть как член СНТ
               </button>
             </form>
-            <Link
+            <AppLink
               href="/"
               className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
             >
               На сайт
-            </Link>
+            </AppLink>
           </div>
         </header>
         <main className="px-6 py-6">{children}</main>

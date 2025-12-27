@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 type Expense = {
   id: string;
@@ -14,7 +14,7 @@ type Expense = {
 };
 
 export default function ExpensesPage() {
-  const router = useRouter();
+  const router = useAppRouter();
   const [items, setItems] = useState<Expense[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);

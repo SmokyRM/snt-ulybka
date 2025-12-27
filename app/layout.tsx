@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import PageTransition from "@/components/PageTransition";
+import { RouteLoaderProvider } from "@/components/RouteLoaderProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,6 +16,12 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -22,7 +30,9 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className="antialiased bg-[#F8F1E9] text-zinc-900">
-        {children}
+        <RouteLoaderProvider>
+          <PageTransition>{children}</PageTransition>
+        </RouteLoaderProvider>
       </body>
     </html>
   );

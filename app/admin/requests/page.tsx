@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { LogoutButton } from "@/components/LogoutButton";
 import { getSessionClient } from "@/lib/session";
 import { User } from "@/types/snt";
 
 export default function AdminRequestsPage() {
-  const router = useRouter();
+  const router = useAppRouter();
   const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
   const [pending, setPending] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);

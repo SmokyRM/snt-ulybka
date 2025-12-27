@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/hooks/useAppRouter";
 import { MembershipStatus } from "@/types/snt";
 
 const membershipOptions: MembershipStatus[] = ["UNKNOWN", "MEMBER", "NON_MEMBER"];
 
 export default function PlotForm() {
-  const router = useRouter();
+  const router = useAppRouter();
   const [street, setStreet] = useState("");
   const [number, setNumber] = useState("");
   const [ownerFullName, setOwnerFullName] = useState("");
@@ -172,4 +172,3 @@ export default function PlotForm() {
     </form>
   );
 }
-

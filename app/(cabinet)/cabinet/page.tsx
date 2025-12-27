@@ -21,6 +21,7 @@ import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { ProfileCard } from "./ProfileCard";
 import { MembershipBlock } from "./MembershipBlock";
+import PlotAccessBlock from "./PlotAccessBlock";
 
 async function submitAppeal(formData: FormData) {
   "use server";
@@ -575,75 +576,12 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           </div>
         ) : null}
 
-        <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Ввести код приглашения</div>
-          <form action={acceptDelegateInviteAction} className="flex flex-col gap-2 sm:flex-row">
-            <input
-              name="inviteToken"
-              placeholder="Код приглашения"
-              className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-              required
-            />
-            <button
-              type="submit"
-              className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
-            >
-              Подтвердить доступ
-            </button>
-          </form>
-          <div className="text-xs text-zinc-600">
-            Нет кода?{" "}
-            <a className="text-[#5E704F] underline" href="#code-request-form">
-              Запросить в правлении
-            </a>
-          </div>
-        </div>
-
-        <div
-          id="code-request-form"
-          className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm"
-        >
-          <div className="text-sm font-semibold text-zinc-900">Запросить код участка</div>
-          {codeRequestSent ? (
-            <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              Запрос отправлен. Правление свяжется с вами и выдаст код.
-            </div>
-          ) : null}
-          <form action={submitCodeRequest} className="space-y-2">
-            <label className="block text-sm text-zinc-800">
-              Улица и участок
-              <input
-                name="plot_display"
-                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                placeholder="Улица Березовая, участок 12"
-                required
-              />
-            </label>
-            <label className="block text-sm text-zinc-800">
-              Кадастровый номер (опционально)
-              <input
-                name="cadastral_number"
-                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                placeholder="74:00:0000000:1234"
-              />
-            </label>
-            <label className="block text-sm text-zinc-800">
-              Комментарий (опционально)
-              <textarea
-                name="comment"
-                rows={2}
-                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                placeholder="Например: когда удобна связь"
-              />
-            </label>
-            <button
-              type="submit"
-              className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
-            >
-              Отправить запрос
-            </button>
-          </form>
-        </div>
+        <PlotAccessBlock
+          hasPlots={userPlots.length > 0}
+          codeRequestSent={codeRequestSent}
+          onSubmitCode={acceptDelegateInviteAction}
+          onRequestCode={submitCodeRequest}
+        />
 
         {userPlot ? (
           <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
