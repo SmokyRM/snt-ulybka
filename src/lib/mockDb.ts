@@ -596,6 +596,8 @@ export const listPlotsWithFilters = (filters?: {
         ? db.persons.find((p) => p.id === ownerLink.userIdentifier)
         : null;
     const haystack = [
+      plot.id,
+      plot.plotId,
       plot.street,
       plot.plotNumber,
       plot.ownerFullName ?? "",

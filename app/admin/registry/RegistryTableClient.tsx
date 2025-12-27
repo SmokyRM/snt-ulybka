@@ -3,6 +3,7 @@
 import AppLink from "@/components/AppLink";
 import { useState } from "react";
 import { formatAdminTime } from "@/lib/settings.shared";
+import EmptyState from "@/components/EmptyState";
 
 export default function RegistryTableClient({
   plots,
@@ -169,8 +170,28 @@ export default function RegistryTableClient({
             ))}
             {plots.length === 0 && (
               <tr>
-                <td className="px-3 py-4 text-center text-zinc-600" colSpan={9}>
-                  Участков не найдено
+                <td className="px-4 py-6" colSpan={9}>
+                  <EmptyState
+                    title={query || status ? "Ничего не найдено" : "Реестр пуст"}
+                    description={
+                      query || status
+                        ? "Попробуйте изменить фильтры или очистить поиск."
+                        : "Скачайте шаблон и загрузите данные участков."
+                    }
+                    actionLabel="Импорт"
+                    onAction={() => {
+                      const trigger = document.getElementById("registry-import-trigger");
+                      trigger?.click();
+                    }}
+                  />
+                  <div className="mt-3">
+                    <a
+                      href="/api/admin/registry/template"
+                      className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100"
+                    >
+                      Скачать шаблон
+                    </a>
+                  </div>
                 </td>
               </tr>
             )}

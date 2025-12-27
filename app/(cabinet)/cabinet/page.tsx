@@ -22,6 +22,7 @@ import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { ProfileCard } from "./ProfileCard";
 import { MembershipBlock } from "./MembershipBlock";
 import PlotAccessBlock from "./PlotAccessBlock";
+import EmptyState from "@/components/EmptyState";
 
 async function submitAppeal(formData: FormData) {
   "use server";
@@ -438,7 +439,10 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
             <div className="font-semibold text-zinc-900">Мои участки</div>
             {userPlots.length === 0 ? (
-              <div>Участки не привязаны</div>
+              <EmptyState
+                title="Участок не привязан"
+                description="Введите код привязки или запросите его в правлении."
+              />
             ) : (
               <ul className="mt-1 space-y-2">
                 {userPlots.map((p) => {

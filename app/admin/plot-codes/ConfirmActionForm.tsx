@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 type ConfirmActionFormProps = {
   action: (formData: FormData) => Promise<void>;
@@ -8,21 +8,32 @@ type ConfirmActionFormProps = {
   confirmText: string;
   buttonClassName: string;
   children: ReactNode;
+  pendingLabel?: string;
 };
 
-export default function ConfirmActionForm({ action, plotId, confirmText, buttonClassName, children }: ConfirmActionFormProps) {
+export default function ConfirmActionForm({
+  action,
+  plotId,
+  confirmText,
+  buttonClassName,
+  children,
+  pendingLabel = "Выполняется...",
+}: ConfirmActionFormProps) {
+  const [submitting, setSubmitting] = useState(false);
   return (
     <form
       action={action}
       onSubmit={(event) => {
         if (!window.confirm(confirmText)) {
           event.preventDefault();
+          return;
         }
+        setSubmitting(true);
       }}
     >
       <input type="hidden" name="plotId" value={plotId} />
-      <button type="submit" className={buttonClassName}>
-        {children}
+      <button type="submit" className={buttonClassName} disabled={submitting}>
+        {submitting ? pendingLabel : children}
       </button>
     </form>
   );

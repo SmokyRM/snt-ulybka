@@ -128,6 +128,9 @@ export default function RegistryImportModalClient() {
 
   const onImport = async () => {
     if (!rows.length) return;
+    if (!window.confirm("Импортировать реестр? Данные будут обновлены.")) {
+      return;
+    }
     setLoading(true);
     setErrors([]);
     setResult(null);
@@ -154,6 +157,7 @@ export default function RegistryImportModalClient() {
     <>
       <button
         type="button"
+        id="registry-import-trigger"
         onClick={() => setOpen(true)}
         className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
       >
@@ -224,9 +228,9 @@ export default function RegistryImportModalClient() {
                 type="button"
                 onClick={onImport}
                 disabled={!rows.length || loading}
-                className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41] disabled:opacity-50"
+                className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Импортировать
+                {loading ? "Импорт..." : "Импортировать"}
               </button>
               <button
                 type="button"

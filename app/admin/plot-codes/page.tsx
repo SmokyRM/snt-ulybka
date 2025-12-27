@@ -32,6 +32,7 @@ async function resetOwner(formData: FormData) {
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await resetPlotOwner(plotId, user?.id ?? null);
+    redirect(`/admin/plot-codes?success=owner_reset&plot=${encodeURIComponent(plotId)}`);
   }
   redirect("/admin/plot-codes");
 }
@@ -54,6 +55,7 @@ async function clearCode(formData: FormData) {
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await clearInviteCode(plotId, user?.id ?? null);
+    redirect(`/admin/plot-codes?success=code_reset&plot=${encodeURIComponent(plotId)}`);
   }
   redirect("/admin/plot-codes");
 }
@@ -86,12 +88,23 @@ export default async function PlotCodesPage({ searchParams }: { searchParams?: R
   const plots = await getPlots();
   const code = typeof searchParams?.code === "string" ? searchParams.code : null;
   const plotParam = typeof searchParams?.plot === "string" ? searchParams.plot : null;
+  const success = typeof searchParams?.success === "string" ? searchParams.success : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-4">
         <h1 className="text-2xl font-semibold">Коды участков и подтверждение</h1>
         <p className="text-sm text-zinc-600">Сгенерируйте код привязки, сбросьте привязку или подтвердите участок.</p>
+        {success === "code_reset" && plotParam ? (
+          <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Код сброшен для участка: {plotParam}.
+          </div>
+        ) : null}
+        {success === "owner_reset" && plotParam ? (
+          <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Привязка владельца сброшена для участка: {plotParam}.
+          </div>
+        ) : null}
         <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           {plots.length === 0 ? (
             <p className="text-sm text-zinc-700">Участков пока нет.</p>

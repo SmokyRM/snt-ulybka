@@ -4,6 +4,7 @@ import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
 import RegistryTableClient from "./RegistryTableClient";
 import RegistryImportModalClient from "./RegistryImportModalClient";
+import RegistryFiltersClient from "./RegistryFiltersClient";
 
 export default async function RegistryPage({
   searchParams,
@@ -46,31 +47,8 @@ export default async function RegistryPage({
           </Link>
         </div>
 
-        <form className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-          <input
-            type="text"
-            name="query"
-            defaultValue={query}
-            placeholder="Поиск по улице, участку, ФИО, телефону, email"
-            className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-          />
-          <select
-            name="status"
-            defaultValue={statusParam}
-            className="rounded border border-zinc-300 px-3 py-2 text-sm"
-          >
-            <option value="">Все статусы</option>
-            <option value="DRAFT">DRAFT</option>
-            <option value="INVITE_READY">INVITE_READY</option>
-            <option value="CLAIMED">CLAIMED</option>
-            <option value="VERIFIED">VERIFIED</option>
-          </select>
-          <button
-            type="submit"
-            className="rounded bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42]"
-          >
-            Найти
-          </button>
+        <div className="space-y-2">
+          <RegistryFiltersClient initialQuery={query} initialStatus={statusParam} />
           <div className="flex flex-wrap gap-2">
             <Link
               href="/api/admin/registry/template"
@@ -86,7 +64,7 @@ export default async function RegistryPage({
               Экспорт
             </Link>
           </div>
-        </form>
+        </div>
 
         <RegistryTableClient plots={items} query={query} status={statusParam} />
 
