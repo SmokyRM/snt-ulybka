@@ -5,7 +5,7 @@ import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
 import { RetryButton } from "./RetryButton";
 import { startTestScenario } from "./impersonationActions";
-import AdminAnalyticsClient from "./AdminAnalyticsClient";
+import AnalyticsBlockClient from "./AnalyticsBlockClient";
 import type { ReactNode } from "react";
 import { getAdminDashboardData, type DashboardData } from "@/lib/adminDashboard";
 import { getCollectionsAnalytics, type CollectionPoint } from "@/lib/analytics";
@@ -235,7 +235,7 @@ export default async function AdminDashboard() {
             </Card>
 
             <Card title="Аналитика (accrued vs paid)">
-              <AdminAnalyticsClient points={analytics} />
+              <AnalyticsBlockClient points={analytics} />
             </Card>
           </Section>
 

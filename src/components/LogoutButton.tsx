@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
+import { useRouteLoader } from "@/components/RouteLoaderProvider";
 
 type LogoutButtonProps = {
   className?: string;
@@ -17,6 +18,7 @@ export const LogoutButton = ({
   busyLabel = "Выходим...",
 }: LogoutButtonProps) => {
   const router = useAppRouter();
+  const { stop } = useRouteLoader();
   const [loading, setLoading] = useState(false);
 
   const handleLogout = async () => {
@@ -27,6 +29,7 @@ export const LogoutButton = ({
     } catch {
       // ignore errors, proceed to redirect
     } finally {
+      stop();
       router.replace(redirectTo);
       router.refresh();
       setLoading(false);

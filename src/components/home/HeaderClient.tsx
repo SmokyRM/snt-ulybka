@@ -13,6 +13,7 @@ type HeaderClientProps = {
 
 const navItems = [
   { label: "Новости", href: "/news" },
+  { label: "Документы", href: "/documents" },
   { label: "Электроэнергия", href: "/electricity" },
   { label: "Взносы", href: "/fees" },
   { label: "Контакты", href: "/contacts" },

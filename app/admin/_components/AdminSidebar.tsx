@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import AppLink from "@/components/AppLink";
+import { usePathname, useRouter } from "next/navigation";
+import { useAdminDirty } from "../AdminDirtyProvider";
 
 const links = [
   { href: "/admin", label: "Дашборд" },
@@ -17,10 +17,13 @@ const links = [
   { href: "/admin/debts", label: "Долги" },
   { href: "/admin/expenses", label: "Расходы" },
   { href: "/admin/targets", label: "Цели" },
+  { href: "/admin/public-content", label: "Публичные данные" },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { confirmIfDirty } = useAdminDirty();
 
   return (
     <aside className="flex w-64 flex-shrink-0 flex-col gap-2 border-r border-zinc-200 bg-white p-4">
@@ -29,17 +32,18 @@ export default function AdminSidebar() {
         {links.map((link) => {
           const active = pathname === link.href;
           return (
-            <AppLink
+            <button
               key={link.href}
-              href={link.href}
-              className={`rounded px-3 py-2 transition ${
+              type="button"
+              onClick={() => confirmIfDirty(() => router.push(link.href))}
+              className={`rounded px-3 py-2 text-left transition ${
                 active
                   ? "bg-[#5E704F] text-white"
                   : "text-zinc-800 hover:bg-zinc-100"
               }`}
             >
               {link.label}
-            </AppLink>
+            </button>
           );
         })}
       </nav>
