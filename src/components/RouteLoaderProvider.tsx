@@ -23,7 +23,11 @@ export function RouteLoaderProvider({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [isLoading, setIsLoading] = useState(false);
   const timerRef = useRef<number | null>(null);
-  const showLoader = pathname.startsWith("/admin") || pathname.startsWith("/cabinet");
+  const isDev = process.env.NODE_ENV !== "production";
+  const showLoader =
+    (pathname.startsWith("/admin") || pathname.startsWith("/cabinet")) &&
+    !pathname.startsWith("/login") &&
+    pathname !== "/";
 
   const stop = useCallback(() => {
     if (timerRef.current) {
@@ -44,6 +48,17 @@ export function RouteLoaderProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     stop();
   }, [pathname, stop]);
+
+  useEffect(() => {
+    if (!showLoader && isLoading) {
+      stop();
+    }
+  }, [showLoader, isLoading, stop]);
+
+  useEffect(() => {
+    if (!isDev || !isLoading) return;
+    console.log("[route-loader]", { pathname, showLoader, isLoading });
+  }, [isDev, isLoading, pathname, showLoader]);
 
   return (
     <RouteLoaderContext.Provider value={{ start, stop, isLoading }}>
