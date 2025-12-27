@@ -11,10 +11,8 @@ const DEV_BOARD_CODE = "2222";
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const code = (body.code as string | undefined)?.trim();
-  const nextRaw =
-    request.nextUrl.searchParams.get("next") ||
-    (body.next as string | undefined) ||
-    "";
+  const url = new URL(request.url);
+  const nextRaw = url.searchParams.get("next") || (body.next as string | undefined) || "";
   const sanitizedNext = sanitizeNext(nextRaw);
 
   if (!code) {
