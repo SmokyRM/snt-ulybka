@@ -1,13 +1,20 @@
 import Link from "next/link";
+import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
+import { PAYMENT_DETAILS } from "@/config/paymentDetails";
+import { getContactsSetting } from "@/lib/settings.server";
 
-export default function HomeOld() {
+const formatUrlLabel = (url: string) => url.replace(/^https?:\/\//, "");
+
+export default async function HomeOld() {
+  const contacts = getContactsSetting().value;
+  const phone = contacts.phone || "—";
+  const email = contacts.email || "—";
   return (
     <main className="bg-[#F8F1E9] pb-16 pt-10 sm:pt-14">
-      <section className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+      <section className="mx-auto w-full max-w-5xl space-y-10 px-4 sm:px-6">
         <div className="rounded-3xl border border-[#5E704F]/20 bg-white/90 p-6 shadow-sm sm:p-10">
-          <p className="text-sm font-semibold uppercase tracking-widest text-[#5E704F]">СНТ «Улыбка»</p>
-          <h1 className="mt-3 text-3xl font-semibold leading-tight text-zinc-900 sm:text-4xl">
-            Официальный портал СНТ «Улыбка»
+          <h1 className="text-3xl font-semibold leading-tight text-zinc-900 sm:text-4xl">
+            СНТ «Улыбка» — официальный портал
           </h1>
           <p className="mt-3 max-w-3xl text-base text-zinc-700">
             Доступ к данным по участку, взносам и электроэнергии — после подтверждения членства.
@@ -17,83 +24,97 @@ export default function HomeOld() {
               href="/login"
               className="rounded-full bg-[#5E704F] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
             >
-              Войти в кабинет
+              Войти в личный кабинет
             </Link>
             <Link
-              href="/access"
+              href="#get-access"
               className="rounded-full border border-[#5E704F] px-6 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F] hover:text-white"
             >
               Как получить доступ
             </Link>
           </div>
-          <p className="mt-2 text-xs text-zinc-600">
-            Если у вас нет кода участка — отправьте запрос в правление из кабинета.
-          </p>
         </div>
 
-        <div className="mt-8 grid gap-4 text-sm text-zinc-800 lg:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-base font-semibold text-zinc-900">Что даёт регистрация</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Доступ к участку и статусам</li>
-              <li>Начисления/взносы и история</li>
-              <li>Электроэнергия, показания и уведомления</li>
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-base font-semibold text-zinc-900">Как получить доступ</div>
-            <ol className="mt-2 list-decimal space-y-1 pl-5">
-              <li>Войдите в кабинет и заполните профиль</li>
-              <li>Введите код участка (если он есть)</li>
-              <li>Если кода нет — запросите его в правление</li>
-              <li>После подтверждения членства откроется доступ</li>
-            </ol>
-            <Link href="/access" className="mt-3 inline-block text-xs font-semibold text-[#5E704F] underline">
-              Подробнее
-            </Link>
-          </div>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="text-base font-semibold text-zinc-900">Частые вопросы</div>
-            <div className="mt-2 space-y-2 text-xs text-zinc-700">
-              <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <summary className="cursor-pointer font-semibold text-zinc-900">Зачем нужна регистрация?</summary>
-                <p className="mt-1">
-                  Чтобы привязать участок и открыть доступ к данным и сервисам СНТ.
-                </p>
-              </details>
-              <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <summary className="cursor-pointer font-semibold text-zinc-900">Где взять код участка?</summary>
-                <p className="mt-1">Код выдаёт правление. Если кода нет — запросите его в кабинете.</p>
-              </details>
-              <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <summary className="cursor-pointer font-semibold text-zinc-900">
-                  Что делать, если участок уже привязан?
-                </summary>
-                <p className="mt-1">
-                  Обратитесь в правление: возможно участок привязан прежним собственником.
-                </p>
-              </details>
-              <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <summary className="cursor-pointer font-semibold text-zinc-900">
-                  Когда откроется полный доступ?
-                </summary>
-                <p className="mt-1">После подтверждения членства/прав владения правлением.</p>
-              </details>
-              <details className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <summary className="cursor-pointer font-semibold text-zinc-900">
-                  Как связаться с правлением?
-                </summary>
-                <p className="mt-1">
-                  Контакты указаны в разделе{" "}
-                  <Link href="/contacts" className="text-[#5E704F] underline">
-                    Контакты
-                  </Link>{" "}
-                  и на странице «О портале».
-                </p>
-              </details>
+        <section className="space-y-6">
+          <div className="grid gap-4 text-sm text-zinc-800 lg:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <div className="text-base font-semibold text-zinc-900">Контакты правления</div>
+              <div className="mt-2 space-y-1 text-sm text-zinc-700">
+                <div>Телефон: {phone}</div>
+                <div>Почта: {email}</div>
+                <div>
+                  Telegram:{" "}
+                  <a
+                    href={OFFICIAL_CHANNELS.telegram}
+                    className="text-[#5E704F] underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {formatUrlLabel(OFFICIAL_CHANNELS.telegram)}
+                  </a>
+                </div>
+                <div>
+                  VK:{" "}
+                  <a
+                    href={OFFICIAL_CHANNELS.vk}
+                    className="text-[#5E704F] underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {formatUrlLabel(OFFICIAL_CHANNELS.vk)}
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <div className="text-base font-semibold text-zinc-900">Реквизиты для оплаты</div>
+              <div className="mt-2 space-y-1 text-sm text-zinc-700">
+                <div>Получатель: {PAYMENT_DETAILS.receiver}</div>
+                <div>ИНН/КПП: {PAYMENT_DETAILS.inn} / {PAYMENT_DETAILS.kpp}</div>
+                <div>Р/с: {PAYMENT_DETAILS.account}</div>
+                <div>Банк: {PAYMENT_DETAILS.bank}</div>
+                <div>БИК: {PAYMENT_DETAILS.bic}</div>
+              </div>
+            </div>
+            <div id="get-access" className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <div className="text-base font-semibold text-zinc-900">Как получить доступ</div>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-zinc-700">
+                <li>Найдите код доступа у правления</li>
+                <li>Введите код на странице входа</li>
+                <li>Заполните профиль и подтвердите участок</li>
+              </ol>
+              <Link href="/login" className="mt-3 inline-block text-xs font-semibold text-[#5E704F] underline">
+                Перейти ко входу
+              </Link>
             </div>
           </div>
-        </div>
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-zinc-900">Частые вопросы</h2>
+          <div className="mt-4 grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
+            <div>
+              <div className="font-semibold text-zinc-900">Как оплатить взносы?</div>
+              <p>Реквизиты и назначения доступны в личном кабинете после входа.</p>
+            </div>
+            <div>
+              <div className="font-semibold text-zinc-900">Как передать показания?</div>
+              <p>Передача показаний доступна в разделе «Электроэнергия» в кабинете.</p>
+            </div>
+            <div>
+              <div className="font-semibold text-zinc-900">Что делать новому собственнику?</div>
+              <p>Заполните профиль и запросите код участка у правления.</p>
+            </div>
+            <div>
+              <div className="font-semibold text-zinc-900">Где найти документы?</div>
+              <p>Официальные документы доступны в личном кабинете и в разделе «Документы».</p>
+            </div>
+            <div>
+              <div className="font-semibold text-zinc-900">Как связаться с правлением?</div>
+              <p>Контакты размещены в разделе «Контакты» и на странице «О портале».</p>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
   );
