@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "userId": "test_user_empty",
+    "status": "unknown",
+    "updatedAt": "2025-12-27T09:13:09.662Z",
+    "updatedBy": "system",
+    "notes": null
+  },
+  {
+    "userId": "test_user_pending",
+    "status": "pending",
+    "updatedAt": "2025-12-27T09:13:09.663Z",
+    "updatedBy": "system",
+    "notes": null
+  },
+  {
+    "userId": "test_user_verified",
+    "status": "member",
+    "updatedAt": "2025-12-27T09:13:09.664Z",
+    "updatedBy": "admin",
+    "notes": null
+  }
+]

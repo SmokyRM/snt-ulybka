@@ -226,6 +226,45 @@ export const getUsersByStatus = (status: UserStatus) => {
   return db.users.filter((user) => user.status === status);
 };
 
+export const listUsers = (limit = 10) => {
+  const db = getDb();
+  return db.users.slice(0, Math.max(0, limit));
+};
+
+export const upsertUserById = (input: {
+  id: string;
+  fullName?: string;
+  phone?: string;
+  email?: string;
+  role?: User["role"];
+  status?: UserStatus;
+}) => {
+  const db = getDb();
+  const existing = db.users.find((user) => user.id === input.id);
+  if (existing) {
+    const updated: User = {
+      ...existing,
+      fullName: input.fullName ?? existing.fullName,
+      phone: input.phone ?? existing.phone,
+      email: input.email ?? existing.email,
+      role: input.role ?? existing.role,
+      status: input.status ?? existing.status,
+    };
+    db.users = db.users.map((u) => (u.id === updated.id ? updated : u));
+    return updated;
+  }
+  const created: User = {
+    id: input.id,
+    fullName: input.fullName,
+    phone: input.phone,
+    email: input.email,
+    role: input.role ?? "user",
+    status: input.status ?? "pending",
+  };
+  db.users.push(created);
+  return created;
+};
+
 export const getPlots = () => getDb().plots;
 
 export const getPlotByNumber = (plotNumber: string) => {

@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import React from "react";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { serverFetchJson } from "@/lib/serverFetch";
 import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
-import { upsertUserProfileByAdmin } from "@/lib/userProfiles";
+import { startTestScenario } from "./impersonationActions";
 
 type DashboardData = {
   registry: { totalPlots: number; unconfirmedPlots: number; missingContactsPlots: number };
@@ -82,30 +81,41 @@ export default async function AdminDashboard() {
         Home views: Old — {homeViews.homeOld} | New — {homeViews.homeNew}
       </div>
 
-      {isDev && user && (
+      {isDev && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold text-emerald-900">Тесты (admin only, dev)</div>
-            <form
-              action={async () => {
-                "use server";
-                const admin = await getSessionUser();
-                if (!isAdmin(admin)) {
-                  redirect("/login");
-                }
-                await upsertUserProfileByAdmin(admin?.id ?? "", { fullName: "", phone: "", cadastralNumbers: [] });
-                redirect("/cabinet");
-              }}
-            >
+          <div className="font-semibold text-emerald-900">Тестовые сценарии</div>
+          <p className="mt-1 text-xs text-emerald-700">
+            Создаёт/обновляет тестовые данные, не влияет на реальные записи.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={startTestScenario}>
+              <input type="hidden" name="scenario" value="empty" />
               <button
                 type="submit"
                 className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
               >
-                Симулировать первый вход
+                Открыть кабинет: первый вход
+              </button>
+            </form>
+            <form action={startTestScenario}>
+              <input type="hidden" name="scenario" value="pending" />
+              <button
+                type="submit"
+                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
+              >
+                Профиль заполнен, членство не подтверждено
+              </button>
+            </form>
+            <form action={startTestScenario}>
+              <input type="hidden" name="scenario" value="verified" />
+              <button
+                type="submit"
+                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
+              >
+                Подтверждено + участок привязан
               </button>
             </form>
           </div>
-          <p className="mt-1 text-xs text-emerald-700">Очищает ФИО/телефон текущего админа для проверки онбординга.</p>
         </div>
       )}
 

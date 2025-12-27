@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 import CopyToClipboard from "@/components/CopyToClipboard";
-import { FEES_RATE_RUB_PER_M2, FEES_RATE_RUB_PER_SOTKA } from "@/content/fees";
-
 type Unit = "sotka" | "m2";
 
 const format = (value: number | null) => {
@@ -11,7 +9,11 @@ const format = (value: number | null) => {
   return value.toFixed(2);
 };
 
-export default function FeesCalculator() {
+type FeesCalculatorProps = {
+  rateRubPerSotka: number;
+};
+
+export default function FeesCalculator({ rateRubPerSotka }: FeesCalculatorProps) {
   const [area, setArea] = useState("");
   const [unit, setUnit] = useState<Unit>("sotka");
   const [street, setStreet] = useState("");
@@ -27,7 +29,7 @@ export default function FeesCalculator() {
     return num;
   }, [area]);
 
-  const rate = unit === "sotka" ? FEES_RATE_RUB_PER_SOTKA : FEES_RATE_RUB_PER_M2;
+  const rate = unit === "sotka" ? rateRubPerSotka : rateRubPerSotka / 100;
 
   const total = useMemo(() => {
     if (parsedArea === null) return null;

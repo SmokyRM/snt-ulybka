@@ -13,7 +13,7 @@ import { getUserCharges } from "@/lib/charges";
 import { acknowledgeDoc, getRequiredDocsForUser } from "@/lib/requiredDocs";
 import { getDecisions } from "@/lib/decisions";
 import { getLatestMembershipRequestForUser, getMembershipStatus, submitMembershipRequest } from "@/lib/membership";
-import { getUserProfile, upsertUserProfileByAdmin, upsertUserProfileByUser } from "@/lib/userProfiles";
+import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { getUserPreferences, setActivePlot } from "@/lib/userPreferences";
 import { submitPlotProposal } from "@/lib/plots";
 import { createCodeRequest } from "@/lib/codeRequests";
@@ -218,16 +218,6 @@ async function setActivePlotAction(formData: FormData) {
   redirect("/cabinet?section=home");
 }
 
-async function simulateFirstEntry() {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "board")) {
-    redirect("/login");
-  }
-  await upsertUserProfileByAdmin(user.id ?? "", { fullName: "", phone: "", cadastralNumbers: [] });
-  redirect("/cabinet?section=home");
-}
-
 async function createDelegateInviteAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
@@ -413,23 +403,6 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
           Разделы кабинета откроются после подтверждения членства.
           {locked ? " Запросите подтверждение на этой странице." : null}
-        </div>
-      )}
-
-      {process.env.NODE_ENV !== "production" && user.role === "admin" && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold text-emerald-900">Тесты (admin only)</div>
-            <form action={simulateFirstEntry}>
-              <button
-                type="submit"
-                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
-              >
-                Симулировать первый вход
-              </button>
-            </form>
-          </div>
-          <p className="mt-1 text-xs text-emerald-700">Очищает профиль (ФИО/телефон) текущего пользователя.</p>
         </div>
       )}
 
@@ -1071,5 +1044,13 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
   })();
 
-  return <CabinetShell sections={sections} unreadCount={unreadCount} quickActions={quickActions} initialActive={initialSection} />;
+  return (
+    <CabinetShell
+      sections={sections}
+      unreadCount={unreadCount}
+      quickActions={quickActions}
+      initialActive={initialSection}
+      isImpersonating={Boolean(user.isImpersonating)}
+    />
+  );
 }

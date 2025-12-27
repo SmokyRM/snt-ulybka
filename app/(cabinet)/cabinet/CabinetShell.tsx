@@ -23,9 +23,16 @@ type Props = {
   unreadCount: number;
   quickActions?: Array<{ key: SectionKey; title: string; desc?: string; targetId?: string }>;
   initialActive?: SectionKey;
+  isImpersonating?: boolean;
 };
 
-export function CabinetShell({ sections, unreadCount, quickActions = [], initialActive = "home" }: Props) {
+export function CabinetShell({
+  sections,
+  unreadCount,
+  quickActions = [],
+  initialActive = "home",
+  isImpersonating = false,
+}: Props) {
   const [active, setActive] = useState<SectionKey>(initialActive);
   const activeContent = sections.find((s) => s.key === active)?.content;
   const activeTitle = sections.find((s) => s.key === active)?.title ?? "Секция";
@@ -35,7 +42,14 @@ export function CabinetShell({ sections, unreadCount, quickActions = [], initial
       <div className="mx-auto w-full max-w-4xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Личный кабинет</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold">Личный кабинет</h1>
+              {isImpersonating && (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                  Режим теста
+                </span>
+              )}
+            </div>
             <div className="text-xs text-zinc-600">Уведомления: {unreadCount > 0 ? `${unreadCount} новых` : "нет новых"}</div>
           </div>
           <LogoutButton

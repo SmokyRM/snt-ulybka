@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ELECTRICITY_TARIFF_RUB_PER_KWH } from "@/content/electricity";
-
 const formatNumber = (value: number | null) => {
   if (value === null || Number.isNaN(value)) return "—";
   return value.toFixed(2);
 };
 
-export default function ElectricityCalculator() {
+type ElectricityCalculatorProps = {
+  tariffRubPerKwh: number;
+};
+
+export default function ElectricityCalculator({ tariffRubPerKwh }: ElectricityCalculatorProps) {
   const [input, setInput] = useState("");
 
   const parsedKwh = useMemo(() => {
@@ -20,14 +22,14 @@ export default function ElectricityCalculator() {
 
   const total = useMemo(() => {
     if (parsedKwh === null) return null;
-    return parsedKwh * ELECTRICITY_TARIFF_RUB_PER_KWH;
-  }, [parsedKwh]);
+    return parsedKwh * tariffRubPerKwh;
+  }, [parsedKwh, tariffRubPerKwh]);
 
   return (
     <div className="rounded-3xl border border-zinc-200 bg-white/90 p-6 shadow-sm">
       <h3 className="text-lg font-semibold text-zinc-900">Калькулятор оплаты</h3>
       <p className="mt-2 text-sm text-zinc-600">
-        Тариф: {ELECTRICITY_TARIFF_RUB_PER_KWH.toFixed(2)} ₽ за 1 кВт·ч.
+        Тариф: {tariffRubPerKwh.toFixed(2)} ₽ за 1 кВт·ч.
       </p>
       <div className="mt-4 space-y-3">
         <label className="text-sm font-medium text-zinc-800">

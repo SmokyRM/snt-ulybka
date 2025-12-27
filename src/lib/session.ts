@@ -4,6 +4,8 @@ interface SessionPayload {
   userId?: string;
   contact?: string;
   role?: "user" | "admin";
+  impersonateUserId?: string;
+  impersonatorAdminId?: string;
 }
 
 const parseCookie = (value: string | undefined): SessionPayload | null => {

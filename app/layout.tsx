@@ -27,7 +27,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const enableUx = process.env.NODE_ENV !== "production";
+  const enableUx = process.env.NEXT_PUBLIC_ENABLE_UX === "1" || process.env.NODE_ENV !== "production";
   return (
     <html lang="ru">
       <body className="antialiased bg-[#F8F1E9] text-zinc-900">

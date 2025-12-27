@@ -62,6 +62,15 @@ export interface SettingEntry<T = unknown> {
   updatedAt: string;
 }
 
+export interface SntSettings {
+  electricityTariffRubPerKwh: number;
+  electricityPaymentDeadlineDay: number;
+  membershipFeeRubPerYear: number;
+  targetFeeRubPerYear?: number;
+  feesPaymentDeadlineDay: number;
+  bankRequisitesText: string;
+}
+
 export interface ContactsSetting {
   phone?: string;
   email?: string;

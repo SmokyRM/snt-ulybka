@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "userId": "test_user_verified",
+    "plotId": "mjo31vz6-lo0a38",
+    "status": "active",
+    "updatedAt": "2025-12-27T09:13:09.668Z",
+    "updatedBy": "admin",
+    "ownershipStatus": "verified",
+    "ownershipProof": {
+      "type": "other",
+      "note": "Тестовый профиль",
+      "verifiedAt": "2025-12-27T09:13:09.667Z",
+      "verifiedBy": "admin"
+    },
+    "role": "OWNER"
+  }
+]

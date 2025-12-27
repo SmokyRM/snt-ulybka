@@ -61,6 +61,31 @@ export async function getMembershipStatus(userId: string): Promise<MembershipRec
   return { userId, status: "unknown", updatedAt: new Date().toISOString(), updatedBy: "system", notes: null };
 }
 
+export async function setMembershipStatusForUser(input: {
+  userId: string;
+  status: MembershipStatus;
+  updatedBy: MembershipRecord["updatedBy"];
+  notes?: string | null;
+}) {
+  if (!input.userId) return;
+  const items = await readJson<MembershipRecord[]>(membershipPath, []);
+  const now = new Date().toISOString();
+  const record: MembershipRecord = {
+    userId: input.userId,
+    status: input.status,
+    updatedAt: now,
+    updatedBy: input.updatedBy,
+    notes: input.notes ?? null,
+  };
+  const idx = items.findIndex((m) => m.userId === input.userId);
+  if (idx === -1) {
+    items.push(record);
+  } else {
+    items[idx] = record;
+  }
+  await writeJson(membershipPath, items);
+}
+
 export async function submitMembershipRequest(input: {
   userId: string;
   fullName: string;
