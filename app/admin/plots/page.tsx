@@ -29,7 +29,7 @@ export default async function AdminPlotsPage({
 }) {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   const filters = parseFilters(searchParams);

@@ -13,7 +13,7 @@ export default async function RegistryPage({
 }) {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   const query = typeof searchParams.query === "string" ? searchParams.query : "";

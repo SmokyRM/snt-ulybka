@@ -5,7 +5,7 @@ import DebtorsClient from "./DebtorsClient";
 export default async function DebtorsPage() {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   return (

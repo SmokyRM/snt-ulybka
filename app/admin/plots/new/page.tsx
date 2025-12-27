@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/session.server";
 export default async function NewPlotPage() {
   const user = await getSessionUser();
   if (!user || user.role !== "admin") {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   return (

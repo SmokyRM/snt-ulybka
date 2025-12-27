@@ -9,7 +9,7 @@ async function saveProfile(formData: FormData) {
   "use server";
   const admin = await getSessionUser();
   if (!admin || (admin.role !== "admin" && admin.role !== "board")) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
   const userId = ((formData.get("userId") as string | null) ?? "").trim();
   if (!userId) {
@@ -29,7 +29,7 @@ export default async function AdminUsersPage({
 }) {
   const admin = await getSessionUser();
   if (!admin || (admin.role !== "admin" && admin.role !== "board")) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
 
   const userIdParam = typeof searchParams?.userId === "string" ? searchParams.userId.trim() : "";

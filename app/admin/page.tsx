@@ -44,7 +44,7 @@ const loadBlock = async <T,>(block: string, loader: () => Promise<T>): Promise<L
 export default async function AdminDashboard() {
   const user = await getSessionUser();
   if (!isAdmin(user)) {
-    redirect("/login");
+    redirect("/login?next=/admin");
   }
   const isDev = process.env.NODE_ENV === "development";
 

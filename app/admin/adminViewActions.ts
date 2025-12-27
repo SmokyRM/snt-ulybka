@@ -14,7 +14,7 @@ const COOKIE_OPTIONS = {
 
 export async function viewAsAdmin() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const store = await Promise.resolve(cookies());
   store.set(COOKIE_NAME, "admin", COOKIE_OPTIONS);
   redirect("/admin");
@@ -22,7 +22,7 @@ export async function viewAsAdmin() {
 
 export async function viewAsUser() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const store = await Promise.resolve(cookies());
   store.set(COOKIE_NAME, "user", COOKIE_OPTIONS);
   redirect("/cabinet");

@@ -18,7 +18,7 @@ const formatAmount = (n: number) => n.toFixed(2);
 async function createPeriodAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
   const year = Number(formData.get("year"));
   const month = Number(formData.get("month"));
@@ -31,7 +31,7 @@ async function createPeriodAction(formData: FormData) {
 async function massAccrualAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const periodId = formData.get("periodId") as string;
   const amount = Number(formData.get("amount"));
   if (!periodId || !Number.isFinite(amount) || amount <= 0) return;
@@ -46,7 +46,7 @@ async function massAccrualAction(formData: FormData) {
 async function recalcElectricity(year: number, month: number) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const { accrueElectricityForPeriod } = await import("@/lib/mockDb");
   accrueElectricityForPeriod({ year, month });
 }
@@ -57,7 +57,7 @@ export default async function BillingPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
   const typeParam = (typeof searchParams?.type === "string" ? searchParams.type : "membership_fee") as PeriodType;
   const periods = listAccrualPeriods().filter((p) => p.type === typeParam);

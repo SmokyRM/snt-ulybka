@@ -10,7 +10,7 @@ const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetFundDetail({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
   const fund = getTargetFundWithStats(params.id);
   if (!fund) {

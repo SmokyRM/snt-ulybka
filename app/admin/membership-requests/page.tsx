@@ -9,7 +9,7 @@ import {
 async function updateStatus(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
   const id = (formData.get("id") as string | null) ?? "";
   const status = (formData.get("status") as MembershipRequestStatus | null) ?? "new";
   const comment = (formData.get("comment") as string | null) ?? null;
@@ -21,7 +21,7 @@ async function updateStatus(formData: FormData) {
 
 export default async function MembershipRequestsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login");
+  if (!isAdmin(user)) redirect("/login?next=/admin");
 
   const requests = await getMembershipRequests();
   const newRequests = requests.filter((r) => r.status === "new");
