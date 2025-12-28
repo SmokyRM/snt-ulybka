@@ -1,0 +1,4 @@
+cadastral_number,plotNumber,street,ownerName,phone,email,membershipStatus,confirmed
+,,Лесная,Сидоров С.С.,12345,invalid-email,invalid_status,maybe
+74:00:0000000:9999,,Полевая,,+7 999 12,wrong@,member,1
+74:00:0000000:8888,15,Солнечная,Петров П.П.,+7999abc,bad-email,member,true

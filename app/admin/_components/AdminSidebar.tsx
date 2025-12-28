@@ -9,6 +9,7 @@ const sections = [
     links: [
       { href: "/admin", label: "Дашборд" },
       { href: "/admin/plots", label: "Реестр участков" },
+      { href: "/admin/imports/plots", label: "Импорт CSV" },
       { href: "/admin/analytics", label: "Аналитика реестра" },
     ],
   },
