@@ -7,12 +7,14 @@ type AdminDirtyContextValue = {
   isDirty: boolean;
   setDirty: (next: boolean) => void;
   confirmIfDirty: (cb: () => void) => void;
+  setConfirmHandler: (handler: ((cb: () => void) => void) | null) => void;
 };
 
 const AdminDirtyContext = createContext<AdminDirtyContextValue>({
   isDirty: false,
   setDirty: () => {},
   confirmIfDirty: (cb) => cb(),
+  setConfirmHandler: () => {},
 });
 
 export function useAdminDirty() {
@@ -23,6 +25,7 @@ export default function AdminDirtyProvider({ children }: { children: React.React
   const [isDirty, setIsDirty] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const pendingAction = useRef<(() => void) | null>(null);
+  const confirmHandlerRef = useRef<((cb: () => void) => void) | null>(null);
 
   const setDirty = useCallback((next: boolean) => {
     setIsDirty(next);
@@ -34,11 +37,19 @@ export default function AdminDirtyProvider({ children }: { children: React.React
         cb();
         return;
       }
+      if (confirmHandlerRef.current) {
+        confirmHandlerRef.current(cb);
+        return;
+      }
       pendingAction.current = cb;
       setDialogOpen(true);
     },
     [isDirty]
   );
+
+  const setConfirmHandler = useCallback((handler: ((cb: () => void) => void) | null) => {
+    confirmHandlerRef.current = handler;
+  }, []);
 
   const handleConfirm = () => {
     const action = pendingAction.current;
@@ -54,7 +65,7 @@ export default function AdminDirtyProvider({ children }: { children: React.React
   };
 
   return (
-    <AdminDirtyContext.Provider value={{ isDirty, setDirty, confirmIfDirty }}>
+    <AdminDirtyContext.Provider value={{ isDirty, setDirty, confirmIfDirty, setConfirmHandler }}>
       {children}
       <ConfirmDialog
         open={dialogOpen}
