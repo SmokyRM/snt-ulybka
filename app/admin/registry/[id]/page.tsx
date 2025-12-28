@@ -100,6 +100,25 @@ export default async function RegistryDetail({ params }: { params: { id: string 
           </Link>
         </div>
 
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-semibold text-zinc-900">Редактирование данных</p>
+              <p>
+                Данные участков редактируются через импорт CSV, чтобы сохранять консистентность
+                реестра.
+              </p>
+              <p className="text-xs text-zinc-500">Почему так? Импорт исключает случайные расхождения.</p>
+            </div>
+            <Link
+              href="/admin/registry"
+              className="rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
+            >
+              Перейти в импорт
+            </Link>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Профиль</h2>
           <div className="mt-3 grid gap-3 text-sm text-zinc-800 sm:grid-cols-2">

@@ -2,21 +2,21 @@
   {
     "userId": "test_user_empty",
     "status": "unknown",
-    "updatedAt": "2025-12-27T09:13:09.662Z",
+    "updatedAt": "2025-12-28T09:52:47.154Z",
     "updatedBy": "system",
     "notes": null
   },
   {
     "userId": "test_user_pending",
     "status": "pending",
-    "updatedAt": "2025-12-27T09:13:09.663Z",
+    "updatedAt": "2025-12-28T09:52:47.155Z",
     "updatedBy": "system",
     "notes": null
   },
   {
     "userId": "test_user_verified",
     "status": "member",
-    "updatedAt": "2025-12-27T09:13:09.664Z",
+    "updatedAt": "2025-12-28T09:52:47.157Z",
     "updatedBy": "admin",
     "notes": null
   }

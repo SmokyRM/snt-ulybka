@@ -31,6 +31,23 @@ export default async function PlotDetailsPage({ params }: { params: Promise<{ id
         </Link>
       </div>
 
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="font-semibold text-zinc-900">Этот раздел — просмотр данных участка</p>
+            <p>
+              Изменение данных (ФИО, телефон, статус членства) выполняется через импорт CSV реестра.
+            </p>
+          </div>
+          <Link
+            href="/admin/registry"
+            className="rounded-full border border-[#5E704F] px-4 py-2 text-xs font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
+          >
+            Перейти в импорт CSV
+          </Link>
+        </div>
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold text-zinc-900">Профиль</h2>

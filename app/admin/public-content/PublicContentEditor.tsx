@@ -83,7 +83,7 @@ export default function PublicContentEditor({
     confirmText?: string;
     destructive?: boolean;
   }>({ open: false, title: "" });
-  const { setDirty: setDirtyGlobal, setConfirmHandler } = useAdminDirty();
+  const { setDirty: setDirtyGlobal } = useAdminDirty();
   const isDev = process.env.NODE_ENV !== "production";
   const initialSerialized = useMemo(() => JSON.stringify(initialContent), [initialContent]);
   const initialContentRef = useRef(initialContent);
@@ -560,20 +560,10 @@ export default function PublicContentEditor({
   }, [content, isDirty]);
 
   useEffect(() => {
-    setConfirmHandler((cb) => {
-      if (!dirtyRef.current) {
-        cb();
-        return;
-      }
-      pendingNavigationRef.current = cb;
-      setLeaveDiffs(buildDiffList(contentRef.current, initialContentRef.current));
-      setLeaveDialogOpen(true);
-    });
     return () => {
-      setConfirmHandler(null);
       setDirty(false);
     };
-  }, [setConfirmHandler]);
+  }, []);
 
   useEffect(() => {
     if (!isDirty) return;

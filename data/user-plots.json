@@ -3,13 +3,13 @@
     "userId": "test_user_verified",
     "plotId": "mjo31vz6-lo0a38",
     "status": "active",
-    "updatedAt": "2025-12-27T09:13:09.668Z",
+    "updatedAt": "2025-12-28T09:52:47.160Z",
     "updatedBy": "admin",
     "ownershipStatus": "verified",
     "ownershipProof": {
       "type": "other",
       "note": "Тестовый профиль",
-      "verifiedAt": "2025-12-27T09:13:09.667Z",
+      "verifiedAt": "2025-12-28T09:52:47.159Z",
       "verifiedBy": "admin"
     },
     "role": "OWNER"

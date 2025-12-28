@@ -7,7 +7,7 @@ import {
   savePublicContent,
 } from "@/lib/publicContentStore";
 import type { PublicContent } from "@/lib/publicContentDefaults";
-import PublicContentEditor from "./PublicContentEditor";
+import PublicContentEditorClient from "./PublicContentEditorClient";
 
 export default async function AdminPublicContentPage() {
   const user = await getSessionUser();
@@ -59,7 +59,7 @@ export default async function AdminPublicContentPage() {
           ) : null}
         </div>
 
-        <PublicContentEditor
+        <PublicContentEditorClient
           initialContent={content}
           canSave={canSave}
           onSave={saveAction}
