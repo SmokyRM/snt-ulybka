@@ -62,8 +62,7 @@ export default function ImportPlotsClient() {
     }
   };
 
-  const canApply =
-    Boolean(summary) && summary.invalid === 0 && rows.length > 0 && !applying;
+  const canApply = !!summary && summary.invalid === 0 && rows.length > 0 && !applying;
   const errorMap = new Map(errors.map((item) => [item.rowIndex, item.messages]));
 
   const onApply = async () => {
