@@ -46,10 +46,37 @@ export default function PublicContentEditor({
   onSave,
   onReset,
 }: PublicContentEditorProps) {
-  const [content, setContent] = useState<PublicContent>(initialContent);
+  if (
+    !initialContent ||
+    !initialContent.contacts ||
+    !initialContent.paymentDetails ||
+    !Array.isArray(initialContent.faq) ||
+    !Array.isArray(initialContent.documentsByCategory) ||
+    !Array.isArray(initialContent.accessSteps)
+  ) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
+        <div className="font-semibold">initialContent missing</div>
+        <pre className="mt-2 whitespace-pre-wrap text-xs text-rose-700">
+          {JSON.stringify(initialContent, null, 2)}
+        </pre>
+      </div>
+    );
+  }
+  const [state, setState] = useState<{ baseline: PublicContent; form: PublicContent }>({
+    baseline: initialContent,
+    form: initialContent,
+  });
+  const content = state.form;
+  const baselineContent = state.baseline;
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "error" | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
+  const formSerialized = useMemo(() => JSON.stringify(content), [content]);
+  const baselineSerialized = useMemo(
+    () => JSON.stringify(baselineContent),
+    [baselineContent]
+  );
+  const isDirty = formSerialized !== baselineSerialized;
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [draftFound, setDraftFound] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
@@ -60,14 +87,17 @@ export default function PublicContentEditor({
   const [rehydrationLock, setRehydrationLock] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [gateMode, setGateMode] = useState<"unknown" | "baseline" | "draft">("unknown");
+  const [bootState, setBootState] = useState<"checking" | "ready">("checking");
   const [formDomKey, setFormDomKey] = useState(() => Date.now().toString());
   const [previewOpen, setPreviewOpen] = useState(false);
   const [dragFaqIndex, setDragFaqIndex] = useState<number | null>(null);
   const [dragFaqOverIndex, setDragFaqOverIndex] = useState<number | null>(null);
+  const [faqDropPosition, setFaqDropPosition] = useState<"above" | "below" | null>(null);
   const [dragDoc, setDragDoc] = useState<{ categoryIndex: number; index: number } | null>(null);
   const [dragDocOver, setDragDocOver] = useState<{ categoryIndex: number; index: number } | null>(
     null
   );
+  const [docDropPosition, setDocDropPosition] = useState<"above" | "below" | null>(null);
   const [isPending, startTransition] = useTransition();
   const confirmActionRef = useRef<(() => void) | null>(null);
   const contentRef = useRef(content);
@@ -85,9 +115,12 @@ export default function PublicContentEditor({
   }>({ open: false, title: "" });
   const { setDirty: setDirtyGlobal } = useAdminDirty();
   const isDev = process.env.NODE_ENV !== "production";
-  const initialSerialized = useMemo(() => JSON.stringify(initialContent), [initialContent]);
   const initialContentRef = useRef(initialContent);
   const initialLoadedAtRef = useRef(Date.now());
+
+  useEffect(() => {
+    initialContentRef.current = state.baseline;
+  }, [state.baseline]);
 
   const reorderList = <T,>(items: T[], from: number, to: number) => {
     const next = [...items];
@@ -261,9 +294,13 @@ export default function PublicContentEditor({
     Boolean(validationErrors.payment.kpp) ||
     Object.keys(validationErrors.documents).length > 0;
 
-  const setDirty = (value: boolean) => {
-    setIsDirty(value);
-    setDirtyGlobal(value);
+  const setContent = (
+    updater: PublicContent | ((prev: PublicContent) => PublicContent)
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      form: typeof updater === "function" ? (updater as (prev: PublicContent) => PublicContent)(prev.form) : updater,
+    }));
   };
 
   const updateContacts = (field: keyof PublicContent["contacts"], value: string) => {
@@ -272,7 +309,6 @@ export default function PublicContentEditor({
       ...prev,
       contacts: { ...prev.contacts, [field]: value },
     }));
-    setDirty(true);
   };
 
   const updatePayment = (field: keyof PublicContent["paymentDetails"], value: string) => {
@@ -281,7 +317,6 @@ export default function PublicContentEditor({
       ...prev,
       paymentDetails: { ...prev.paymentDetails, [field]: value },
     }));
-    setDirty(true);
   };
 
   const updateAccessStep = (index: number, value: string) => {
@@ -291,7 +326,6 @@ export default function PublicContentEditor({
       next[index] = value;
       return { ...prev, accessSteps: next };
     });
-    setDirty(true);
   };
 
   const updateFaqItem = (index: number, field: keyof PublicContentFaqItem, value: string) => {
@@ -301,7 +335,6 @@ export default function PublicContentEditor({
       next[index] = { ...next[index], [field]: value };
       return { ...prev, faq: next };
     });
-    setDirty(true);
   };
 
   const updateCategory = (index: number, value: Partial<PublicDocumentCategory>) => {
@@ -311,7 +344,6 @@ export default function PublicContentEditor({
       next[index] = { ...next[index], ...value };
       return { ...prev, documentsByCategory: next };
     });
-    setDirty(true);
   };
 
   const updateDocument = (
@@ -329,7 +361,6 @@ export default function PublicContentEditor({
       categories[categoryIndex] = { ...category, documents: docs };
       return { ...prev, documentsByCategory: categories };
     });
-    setDirty(true);
   };
 
   const handleFaqDragStart = (index: number, event: DragEvent) => {
@@ -343,7 +374,11 @@ export default function PublicContentEditor({
   const handleFaqDragOver = (index: number, event: DragEvent) => {
     if (rehydrationLock) return;
     event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const nextPosition =
+      event.clientY < rect.top + rect.height / 2 ? "above" : "below";
     if (dragFaqOverIndex !== index) setDragFaqOverIndex(index);
+    if (faqDropPosition !== nextPosition) setFaqDropPosition(nextPosition);
   };
 
   const handleFaqDrop = (index: number, event: DragEvent) => {
@@ -352,16 +387,17 @@ export default function PublicContentEditor({
     if (dragFaqIndex === null) return;
     if (index !== dragFaqIndex) {
       setContent((prev) => ({ ...prev, faq: reorderList(prev.faq, dragFaqIndex, index) }));
-      setDirty(true);
     }
     setDragFaqIndex(null);
     setDragFaqOverIndex(null);
+    setFaqDropPosition(null);
   };
 
   const handleFaqDragEnd = () => {
     if (rehydrationLock) return;
     setDragFaqIndex(null);
     setDragFaqOverIndex(null);
+    setFaqDropPosition(null);
   };
 
   const handleDocDragStart = (
@@ -384,9 +420,13 @@ export default function PublicContentEditor({
     if (rehydrationLock) return;
     if (!dragDoc || dragDoc.categoryIndex !== categoryIndex) return;
     event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const nextPosition =
+      event.clientY < rect.top + rect.height / 2 ? "above" : "below";
     if (!dragDocOver || dragDocOver.index !== index) {
       setDragDocOver({ categoryIndex, index });
     }
+    if (docDropPosition !== nextPosition) setDocDropPosition(nextPosition);
   };
 
   const handleDocDrop = (categoryIndex: number, index: number, event: DragEvent) => {
@@ -401,16 +441,17 @@ export default function PublicContentEditor({
         categories[categoryIndex] = { ...category, documents: nextDocs };
         return { ...prev, documentsByCategory: categories };
       });
-      setDirty(true);
     }
     setDragDoc(null);
     setDragDocOver(null);
+    setDocDropPosition(null);
   };
 
   const handleDocDragEnd = () => {
     if (rehydrationLock) return;
     setDragDoc(null);
     setDragDocOver(null);
+    setDocDropPosition(null);
   };
 
   const handleSave = () => {
@@ -422,7 +463,7 @@ export default function PublicContentEditor({
         setStatus("✓ Сохранено");
         setStatusTone("success");
         setLastSavedAt(Date.now());
-        setDirty(false);
+        setState({ baseline: content, form: content });
         clearDraft();
         window.setTimeout(() => {
           setStatus((prev) => (prev === "✓ Сохранено" ? null : prev));
@@ -440,11 +481,10 @@ export default function PublicContentEditor({
     setStatusTone(null);
     startTransition(async () => {
       const result = await onReset();
-      setContent(result.content);
+      setState({ baseline: result.content, form: result.content });
       if (result.ok) {
         setStatus("Сброшено к дефолту");
         setStatusTone("success");
-        setDirty(false);
         clearDraft();
         window.setTimeout(() => {
           setStatus((prev) => (prev === "Сброшено к дефолту" ? null : prev));
@@ -491,48 +531,105 @@ export default function PublicContentEditor({
     setGateMode("unknown");
   };
 
+  useEffect(() => {
+    initialContentRef.current = initialContent;
+    setState({ baseline: initialContent, form: initialContent });
+  }, [initialContent]);
+
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(DRAFT_KEY);
-    const baseline = initialContentRef.current;
-    const baselineSerialized = JSON.stringify(baseline);
-    const currentSerialized = JSON.stringify(contentRef.current);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as DraftPayload;
-        if (parsed?.content) {
-          const differs = JSON.stringify(parsed.content) !== baselineSerialized;
-          setDraftPayload(parsed);
-          setDraftSavedAt(parsed.savedAt);
-          setDraftFound(true);
-          setDraftDiffersFromServer(differs);
-          setDraftCalloutOpen(false);
-          setGateOpen(true);
-          setGateMode("draft");
-        } else {
+    try {
+      if (process.env.NODE_ENV !== "production") {
+        const baselinePhone = initialContent.contacts.phone;
+        const formPhone = content.contacts.phone;
+        const filter = /(persist|zustand|admin|public|content|draft|autosave|form|cache|next)/i;
+        const filterKeys = (storage: Storage) =>
+          Object.keys(storage).filter((key) => filter.test(key));
+        const localKeys = filterKeys(window.localStorage);
+        const sessionKeys = filterKeys(window.sessionStorage);
+        const dumpKeyValues = (storage: Storage, keys: string[]) =>
+          keys.map((key) => {
+            try {
+              const value = storage.getItem(key) ?? "";
+              return { key, preview: value.slice(0, 200) };
+            } catch {
+              return { key, preview: "[unreadable]" };
+            }
+          });
+        const findKeysByValue = (storage: Storage, needle: string) => {
+          if (!needle) return [];
+          const matches: string[] = [];
+          for (const key of Object.keys(storage)) {
+            try {
+              const value = storage.getItem(key) ?? "";
+              if (value.includes(needle)) matches.push(key);
+            } catch {
+              // ignore
+            }
+          }
+          return matches;
+        };
+        console.log("[pc] baseline phone", baselinePhone);
+        console.log("[pc] first render phone", formPhone);
+        console.log("[pc] localStorage keys (filtered)", localKeys);
+        console.log("[pc] sessionStorage keys (filtered)", sessionKeys);
+        console.log("[pc] localStorage values (preview)", dumpKeyValues(window.localStorage, localKeys));
+        console.log(
+          "[pc] sessionStorage values (preview)",
+          dumpKeyValues(window.sessionStorage, sessionKeys)
+        );
+        console.log("[pc] keysContainingPhone", {
+          local: findKeysByValue(window.localStorage, formPhone),
+          session: findKeysByValue(window.sessionStorage, formPhone),
+        });
+      }
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      let hasDraft = false;
+      const baseline = initialContentRef.current;
+      const baselineSerialized = JSON.stringify(baseline);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as DraftPayload;
+          if (parsed?.content) {
+            const differs = JSON.stringify(parsed.content) !== baselineSerialized;
+            if (!differs) {
+              window.localStorage.removeItem(DRAFT_KEY);
+              setDraftFound(false);
+              setDraftSavedAt(null);
+              setDraftDiffersFromServer(false);
+              setDraftPayload(null);
+              setDraftCalloutOpen(false);
+              setGateOpen(false);
+              setGateMode("unknown");
+            } else {
+              hasDraft = true;
+              setDraftPayload(parsed);
+              setDraftSavedAt(parsed.savedAt);
+              setDraftFound(true);
+              setDraftDiffersFromServer(true);
+              setDraftCalloutOpen(false);
+              setGateOpen(true);
+              setGateMode("draft");
+            }
+          } else {
+            window.localStorage.removeItem(DRAFT_KEY);
+          }
+        } catch {
           window.localStorage.removeItem(DRAFT_KEY);
         }
-      } catch {
-        window.localStorage.removeItem(DRAFT_KEY);
       }
-    }
-    if (baselineSerialized !== currentSerialized && !raw) {
-      setContent(baseline);
-      setIsDirty(false);
-      setDraftFound(true);
-      setDraftDiffersFromServer(true);
-      setRehydrationDetected(true);
+      if (!hasDraft) {
+        setState((prev) => ({ ...prev, form: prev.baseline }));
+        setRehydrationLock(false);
+        return;
+      }
+      // Always start from baseline; draft applies only via explicit user action.
+      setState((prev) => ({ ...prev, form: prev.baseline }));
       setRehydrationLock(true);
-      setGateOpen(true);
-      setGateMode("baseline");
       setFormDomKey(Date.now().toString());
+    } finally {
+      setBootState("ready");
     }
-    if (!raw) return;
-    // Always start from baseline; draft applies only via explicit user action.
-    setContent(baseline);
-    setIsDirty(false);
-    setRehydrationLock(true);
-    setFormDomKey(Date.now().toString());
   }, []);
 
   useEffect(() => {
@@ -540,30 +637,15 @@ export default function PublicContentEditor({
     const baseline = initialContentRef.current;
     // Keep baseline while the draft banner is visible; draft applies only via user action.
     if (JSON.stringify(content) !== JSON.stringify(baseline)) {
-      setContent(baseline);
-      setIsDirty(false);
+      setState((prev) => ({ ...prev, form: prev.baseline }));
     }
   }, [content, draftPayload, draftCalloutOpen]);
 
   useEffect(() => {
-    const baseline = initialContentRef.current;
-    const baselineSerialized = JSON.stringify(baseline);
-    const nextDirty = JSON.stringify(content) !== baselineSerialized;
-    if (nextDirty !== isDirty) {
-      setIsDirty(nextDirty);
-    }
-  }, [content, isDirty]);
-
-  useEffect(() => {
     contentRef.current = content;
     dirtyRef.current = isDirty;
-  }, [content, isDirty]);
-
-  useEffect(() => {
-    return () => {
-      setDirty(false);
-    };
-  }, []);
+    setDirtyGlobal(isDirty);
+  }, [content, isDirty, setDirtyGlobal]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -576,7 +658,9 @@ export default function PublicContentEditor({
         window.localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
         setDraftFound(true);
         setDraftSavedAt(payload.savedAt);
-        setDraftDiffersFromServer(JSON.stringify(payload.content) !== initialSerialized);
+        setDraftDiffersFromServer(
+          JSON.stringify(payload.content) !== JSON.stringify(initialContentRef.current)
+        );
         setDraftPayload(payload);
       } catch {
         // ignore storage errors
@@ -588,6 +672,15 @@ export default function PublicContentEditor({
       }
     };
   }, [content, isDirty]);
+
+  if (bootState !== "ready") {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm">
+        <div className="font-semibold">Проверяем наличие черновика…</div>
+        <div className="mt-1 text-xs text-zinc-500">Это займет несколько секунд.</div>
+      </div>
+    );
+  }
 
   if (gateOpen) {
     const draftTimestamp = draftSavedAt
@@ -607,11 +700,9 @@ export default function PublicContentEditor({
               type="button"
               onClick={() => {
                 if (gateMode === "draft" && draftPayload?.content) {
-                  setContent(draftPayload.content);
-                  setDirty(true);
+                  setState((prev) => ({ ...prev, form: draftPayload.content }));
                 } else {
-                  setContent(initialContentRef.current);
-                  setDirty(false);
+                  setState((prev) => ({ ...prev, form: prev.baseline }));
                 }
                 setRehydrationLock(false);
                 setRehydrationDetected(false);
@@ -626,8 +717,7 @@ export default function PublicContentEditor({
             <button
               type="button"
               onClick={() => {
-                setContent(initialContentRef.current);
-                setDirty(false);
+                setState((prev) => ({ ...prev, form: prev.baseline }));
                 setRehydrationLock(false);
                 setRehydrationDetected(false);
                 setDraftCalloutOpen(false);
@@ -642,8 +732,7 @@ export default function PublicContentEditor({
               type="button"
               onClick={() => {
                 clearDraft();
-                setContent(initialContentRef.current);
-                setDirty(false);
+                setState((prev) => ({ ...prev, form: prev.baseline }));
                 setRehydrationLock(false);
                 setRehydrationDetected(false);
                 setGateOpen(false);
@@ -688,8 +777,7 @@ export default function PublicContentEditor({
               type="button"
               onClick={() => {
                 if (draftPayload) {
-                  setContent(draftPayload.content);
-                  setDirty(true);
+                  setState((prev) => ({ ...prev, form: draftPayload.content }));
                 } else {
                   setDraftFound(false);
                 }
@@ -704,8 +792,7 @@ export default function PublicContentEditor({
             <button
               type="button"
               onClick={() => {
-                setContent(initialContentRef.current);
-                setDirty(false);
+                setState((prev) => ({ ...prev, form: prev.baseline }));
                 setRehydrationLock(false);
                 setRehydrationDetected(false);
                 setDraftCalloutOpen(false);
@@ -718,8 +805,7 @@ export default function PublicContentEditor({
               type="button"
               onClick={() => {
                 clearDraft();
-                setContent(initialContentRef.current);
-                setDirty(false);
+                setState((prev) => ({ ...prev, form: prev.baseline }));
                 setRehydrationLock(false);
                 setRehydrationDetected(false);
               }}
@@ -860,7 +946,6 @@ export default function PublicContentEditor({
                 accessSteps: [...prev.accessSteps, ""],
               }));
             }}
-            onClickCapture={() => setDirty(true)}
             className="text-xs font-semibold text-[#5E704F] underline"
           >
             Добавить шаг
@@ -885,7 +970,6 @@ export default function PublicContentEditor({
                           ...prev,
                           accessSteps: prev.accessSteps.filter((_, i) => i !== index),
                         }));
-                        setDirty(true);
                       }
                     )
                   }
@@ -911,7 +995,6 @@ export default function PublicContentEditor({
                 faq: [...prev.faq, createFaqItem()],
               }));
             }}
-            onClickCapture={() => setDirty(true)}
             className="text-xs font-semibold text-[#5E704F] underline"
           >
             Добавить вопрос
@@ -920,16 +1003,23 @@ export default function PublicContentEditor({
         <div className="mt-4 space-y-4">
           {content.faq.map((item, index) => (
             <div key={`faq-${index}`} className="space-y-3">
-              {dragFaqIndex !== null && dragFaqOverIndex === index && dragFaqIndex !== index ? (
-                <div className="h-0.5 rounded-full bg-blue-300" />
-              ) : null}
               <div
                 onDragOver={(event) => handleFaqDragOver(index, event)}
                 onDrop={(event) => handleFaqDrop(index, event)}
-                className={`rounded-2xl border border-zinc-200 p-4 ${
+                className={`relative rounded-2xl border border-zinc-200 p-4 ${
                   dragFaqIndex === index ? "opacity-60" : ""
                 }`}
               >
+                {dragFaqIndex !== null &&
+                dragFaqOverIndex === index &&
+                dragFaqIndex !== index &&
+                faqDropPosition ? (
+                  <div
+                    className={`pointer-events-none absolute left-0 right-0 h-0.5 rounded-full bg-sky-500 ${
+                      faqDropPosition === "above" ? "top-0" : "bottom-0"
+                    }`}
+                  />
+                ) : null}
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -973,7 +1063,6 @@ export default function PublicContentEditor({
                                 ...prev,
                                 faq: prev.faq.filter((_, i) => i !== index),
                               }));
-                              setDirty(true);
                             }
                           )
                         }
@@ -1004,22 +1093,27 @@ export default function PublicContentEditor({
               <div className="space-y-3">
                 {category.documents.map((doc, docIndex) => (
                   <div key={doc.id} className="space-y-3">
-                    {dragDoc &&
-                    dragDocOver &&
-                    dragDoc.categoryIndex === categoryIndex &&
-                    dragDocOver.index === docIndex &&
-                    dragDoc.index !== docIndex ? (
-                      <div className="h-0.5 rounded-full bg-blue-300" />
-                    ) : null}
                     <div
                       onDragOver={(event) => handleDocDragOver(categoryIndex, docIndex, event)}
                       onDrop={(event) => handleDocDrop(categoryIndex, docIndex, event)}
-                      className={`rounded-2xl border border-zinc-200 p-4 ${
+                      className={`relative rounded-2xl border border-zinc-200 p-4 ${
                         dragDoc?.categoryIndex === categoryIndex && dragDoc.index === docIndex
                           ? "opacity-60"
                           : ""
                       }`}
                     >
+                      {dragDoc &&
+                      dragDocOver &&
+                      dragDoc.categoryIndex === categoryIndex &&
+                      dragDocOver.index === docIndex &&
+                      dragDoc.index !== docIndex &&
+                      docDropPosition ? (
+                        <div
+                          className={`pointer-events-none absolute left-0 right-0 h-0.5 rounded-full bg-sky-500 ${
+                            docDropPosition === "above" ? "top-0" : "bottom-0"
+                          }`}
+                        />
+                      ) : null}
                       <div className="flex gap-3">
                         <button
                           type="button"
@@ -1119,7 +1213,6 @@ export default function PublicContentEditor({
                     documents: [...category.documents, createDocumentItem()],
                   });
                 }}
-                onClickCapture={() => setDirty(true)}
                 className="text-xs font-semibold text-[#5E704F] underline"
               >
                 Добавить документ
@@ -1375,7 +1468,7 @@ export default function PublicContentEditor({
                     if (result.ok) {
                       setStatus("✓ Опубликовано");
                       setStatusTone("success");
-                      setDirty(false);
+                      setState({ baseline: contentRef.current, form: contentRef.current });
                       clearDraft();
                       setLeaveDialogOpen(false);
                       pendingNavigationRef.current?.();
@@ -1397,7 +1490,6 @@ export default function PublicContentEditor({
               <button
                 type="button"
                 onClick={() => {
-                  setDirty(false);
                   setLeaveDialogOpen(false);
                   pendingNavigationRef.current?.();
                   pendingNavigationRef.current = null;

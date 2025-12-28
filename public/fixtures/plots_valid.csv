@@ -1,0 +1,3 @@
+plotNumber;street;ownerName;phone;email;membershipStatus;confirmed;cadastral
+12;Берёзовая;Иванов Иван Иванович;+7 (999) 123-45-67;ivanov@example.com;member;да;74:00:0000000:1234
+15;Садовая;Петров Пётр Петрович;8 912 345 67 89;petrov@example.com;unknown;нет;
