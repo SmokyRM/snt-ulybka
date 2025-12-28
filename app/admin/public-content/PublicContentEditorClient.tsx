@@ -13,11 +13,7 @@ type PublicContentEditorClientProps = {
   onReset: () => Promise<ResetResult>;
 };
 
-const PublicContentEditor = lazy(() =>
-  import("./PublicContentEditor").then((mod) => ({
-    default: mod.default ?? mod.PublicContentEditor,
-  }))
-);
+const PublicContentEditor = lazy(() => import("./PublicContentEditor"));
 
 type ErrorBoundaryProps = { children: React.ReactNode };
 type ErrorBoundaryState = { error: Error | null };
