@@ -7,6 +7,7 @@ import type {
   PublicContentFaqItem,
   PublicDocumentCategory,
 } from "@/lib/publicContentDefaults";
+import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAdminDirty } from "../AdminDirtyProvider";
 
@@ -27,6 +28,62 @@ type DraftPayload = {
 
 const DRAFT_KEY = "publicContentDraft:v1";
 
+const normalizeDigits = (value: string) => value.replace(/\D/g, "");
+const formatPhone = (value: string) => {
+  const digits = normalizeDigits(value);
+  if (!digits) return "";
+  const normalized = digits.startsWith("8") ? `7${digits.slice(1)}` : digits;
+  const body = normalized.slice(0, 11);
+  const parts = [body.slice(1, 4), body.slice(4, 7), body.slice(7, 9), body.slice(9, 11)];
+  let formatted = `+${body[0] ?? "7"}`;
+  if (parts[0]) formatted += ` (${parts[0]}`;
+  if (parts[0] && parts[0].length === 3) formatted += ")";
+  if (parts[1]) formatted += ` ${parts[1]}`;
+  if (parts[2]) formatted += `-${parts[2]}`;
+  if (parts[3]) formatted += `-${parts[3]}`;
+  return formatted;
+};
+const validatePhone = (value: string) => {
+  const digits = normalizeDigits(value);
+  if (!digits) return "Введите телефон";
+  if (digits.length !== 11 || (digits[0] !== "7" && digits[0] !== "8")) {
+    return "Телефон должен содержать 11 цифр и начинаться с 7 или 8";
+  }
+  return null;
+};
+const validateEmail = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "Введите email";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "Некорректный email";
+  return null;
+};
+const validateUrl = (value: string, required = false) => {
+  const trimmed = value.trim();
+  if (!trimmed) return required ? "Укажите ссылку" : null;
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("javascript:") || lower.startsWith("data:")) {
+    return "Недопустимый URL";
+  }
+  if (lower.startsWith("//") || lower.startsWith("http://")) {
+    return "Разрешены только https:// или относительные ссылки";
+  }
+  if (lower.startsWith("https://") || lower.startsWith("/")) return null;
+  if (lower.includes("://")) return "Разрешены только https:// или относительные ссылки";
+  return "URL должен начинаться с https:// или /";
+};
+const validateInn = (value: string) => {
+  const digits = normalizeDigits(value);
+  if (!digits) return "Укажите ИНН";
+  if (digits.length !== 10 && digits.length !== 12) return "ИНН должен быть 10 или 12 цифр";
+  return null;
+};
+const validateKpp = (value: string) => {
+  const digits = normalizeDigits(value);
+  if (!digits) return "Укажите КПП";
+  if (digits.length !== 9) return "КПП должен быть 9 цифр";
+  return null;
+};
+
 const createFaqItem = (): PublicContentFaqItem => ({
   question: "",
   answer: "",
@@ -46,26 +103,17 @@ export default function PublicContentEditor({
   onSave,
   onReset,
 }: PublicContentEditorProps) {
-  if (
-    !initialContent ||
-    !initialContent.contacts ||
-    !initialContent.paymentDetails ||
-    !Array.isArray(initialContent.faq) ||
-    !Array.isArray(initialContent.documentsByCategory) ||
-    !Array.isArray(initialContent.accessSteps)
-  ) {
-    return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
-        <div className="font-semibold">initialContent missing</div>
-        <pre className="mt-2 whitespace-pre-wrap text-xs text-rose-700">
-          {JSON.stringify(initialContent, null, 2)}
-        </pre>
-      </div>
-    );
-  }
+  const hasInitialContent =
+    Boolean(initialContent) &&
+    Boolean(initialContent.contacts) &&
+    Boolean(initialContent.paymentDetails) &&
+    Array.isArray(initialContent.faq) &&
+    Array.isArray(initialContent.documentsByCategory) &&
+    Array.isArray(initialContent.accessSteps);
+  const safeInitialContent = hasInitialContent ? initialContent : PUBLIC_CONTENT_DEFAULTS;
   const [state, setState] = useState<{ baseline: PublicContent; form: PublicContent }>({
-    baseline: initialContent,
-    form: initialContent,
+    baseline: safeInitialContent,
+    form: safeInitialContent,
   });
   const content = state.form;
   const baselineContent = state.baseline;
@@ -103,7 +151,6 @@ export default function PublicContentEditor({
   const contentRef = useRef(content);
   const dirtyRef = useRef(isDirty);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
-  const [leaveDiffs, setLeaveDiffs] = useState<string[]>([]);
   const pendingNavigationRef = useRef<(() => void) | null>(null);
   const draftTimerRef = useRef<number | null>(null);
   const [confirmState, setConfirmState] = useState<{
@@ -115,8 +162,13 @@ export default function PublicContentEditor({
   }>({ open: false, title: "" });
   const { setDirty: setDirtyGlobal } = useAdminDirty();
   const isDev = process.env.NODE_ENV !== "production";
-  const initialContentRef = useRef(initialContent);
+  const initialContentRef = useRef(safeInitialContent);
   const initialLoadedAtRef = useRef(Date.now());
+
+  const leaveDiffs = useMemo(
+    () => buildDiffList(content, baselineContent),
+    [content, baselineContent]
+  );
 
   useEffect(() => {
     initialContentRef.current = state.baseline;
@@ -206,62 +258,6 @@ export default function PublicContentEditor({
     });
 
     return diffs;
-  };
-
-  const normalizeDigits = (value: string) => value.replace(/\D/g, "");
-  const formatPhone = (value: string) => {
-    const digits = normalizeDigits(value);
-    if (!digits) return "";
-    const normalized = digits.startsWith("8") ? `7${digits.slice(1)}` : digits;
-    const body = normalized.slice(0, 11);
-    const parts = [body.slice(1, 4), body.slice(4, 7), body.slice(7, 9), body.slice(9, 11)];
-    let formatted = `+${body[0] ?? "7"}`;
-    if (parts[0]) formatted += ` (${parts[0]}`;
-    if (parts[0] && parts[0].length === 3) formatted += ")";
-    if (parts[1]) formatted += ` ${parts[1]}`;
-    if (parts[2]) formatted += `-${parts[2]}`;
-    if (parts[3]) formatted += `-${parts[3]}`;
-    return formatted;
-  };
-  const validatePhone = (value: string) => {
-    const digits = normalizeDigits(value);
-    if (!digits) return "Введите телефон";
-    if (digits.length !== 11 || (digits[0] !== "7" && digits[0] !== "8")) {
-      return "Телефон должен содержать 11 цифр и начинаться с 7 или 8";
-    }
-    return null;
-  };
-  const validateEmail = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return "Введите email";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "Некорректный email";
-    return null;
-  };
-  const validateUrl = (value: string, required = false) => {
-    const trimmed = value.trim();
-    if (!trimmed) return required ? "Укажите ссылку" : null;
-    const lower = trimmed.toLowerCase();
-    if (lower.startsWith("javascript:") || lower.startsWith("data:")) {
-      return "Недопустимый URL";
-    }
-    if (lower.startsWith("//") || lower.startsWith("http://")) {
-      return "Разрешены только https:// или относительные ссылки";
-    }
-    if (lower.startsWith("https://") || lower.startsWith("/")) return null;
-    if (lower.includes("://")) return "Разрешены только https:// или относительные ссылки";
-    return "URL должен начинаться с https:// или /";
-  };
-  const validateInn = (value: string) => {
-    const digits = normalizeDigits(value);
-    if (!digits) return "Укажите ИНН";
-    if (digits.length !== 10 && digits.length !== 12) return "ИНН должен быть 10 или 12 цифр";
-    return null;
-  };
-  const validateKpp = (value: string) => {
-    const digits = normalizeDigits(value);
-    if (!digits) return "Укажите КПП";
-    if (digits.length !== 9) return "КПП должен быть 9 цифр";
-    return null;
   };
 
   const validationErrors = useMemo(() => {
@@ -532,57 +528,13 @@ export default function PublicContentEditor({
   };
 
   useEffect(() => {
-    initialContentRef.current = initialContent;
-    setState({ baseline: initialContent, form: initialContent });
-  }, [initialContent]);
+    initialContentRef.current = safeInitialContent;
+    setState({ baseline: safeInitialContent, form: safeInitialContent });
+  }, [safeInitialContent]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      if (process.env.NODE_ENV !== "production") {
-        const baselinePhone = initialContent.contacts.phone;
-        const formPhone = content.contacts.phone;
-        const filter = /(persist|zustand|admin|public|content|draft|autosave|form|cache|next)/i;
-        const filterKeys = (storage: Storage) =>
-          Object.keys(storage).filter((key) => filter.test(key));
-        const localKeys = filterKeys(window.localStorage);
-        const sessionKeys = filterKeys(window.sessionStorage);
-        const dumpKeyValues = (storage: Storage, keys: string[]) =>
-          keys.map((key) => {
-            try {
-              const value = storage.getItem(key) ?? "";
-              return { key, preview: value.slice(0, 200) };
-            } catch {
-              return { key, preview: "[unreadable]" };
-            }
-          });
-        const findKeysByValue = (storage: Storage, needle: string) => {
-          if (!needle) return [];
-          const matches: string[] = [];
-          for (const key of Object.keys(storage)) {
-            try {
-              const value = storage.getItem(key) ?? "";
-              if (value.includes(needle)) matches.push(key);
-            } catch {
-              // ignore
-            }
-          }
-          return matches;
-        };
-        console.log("[pc] baseline phone", baselinePhone);
-        console.log("[pc] first render phone", formPhone);
-        console.log("[pc] localStorage keys (filtered)", localKeys);
-        console.log("[pc] sessionStorage keys (filtered)", sessionKeys);
-        console.log("[pc] localStorage values (preview)", dumpKeyValues(window.localStorage, localKeys));
-        console.log(
-          "[pc] sessionStorage values (preview)",
-          dumpKeyValues(window.sessionStorage, sessionKeys)
-        );
-        console.log("[pc] keysContainingPhone", {
-          local: findKeysByValue(window.localStorage, formPhone),
-          session: findKeysByValue(window.sessionStorage, formPhone),
-        });
-      }
       const raw = window.localStorage.getItem(DRAFT_KEY);
       let hasDraft = false;
       const baseline = initialContentRef.current;
@@ -672,6 +624,17 @@ export default function PublicContentEditor({
       }
     };
   }, [content, isDirty]);
+
+  if (!hasInitialContent) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
+        <div className="font-semibold">initialContent missing</div>
+        <pre className="mt-2 whitespace-pre-wrap text-xs text-rose-700">
+          {JSON.stringify(initialContent, null, 2)}
+        </pre>
+      </div>
+    );
+  }
 
   if (bootState !== "ready") {
     return (

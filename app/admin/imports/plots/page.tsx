@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import ImportPlotsClient from "./ImportPlotsClient";
@@ -16,12 +17,12 @@ export default async function PlotsImportPage() {
             <h1 className="text-2xl font-semibold">Импорт реестра</h1>
             <p className="text-sm text-zinc-600">Формат CSV с разделителем ; или ,.</p>
           </div>
-          <a
+          <Link
             href="/admin/registry"
             className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
           >
             Назад к реестру
-          </a>
+          </Link>
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">

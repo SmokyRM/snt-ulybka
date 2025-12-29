@@ -3,7 +3,6 @@ import { PUBLIC_CONTENT_DEFAULTS, type PublicContent } from "@/lib/publicContent
 type SaveResult = { ok: boolean; reason?: string };
 
 declare global {
-  // eslint-disable-next-line no-var
   var __PUBLIC_CONTENT__: PublicContent | undefined;
 }
 

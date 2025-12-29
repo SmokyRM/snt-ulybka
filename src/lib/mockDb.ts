@@ -550,7 +550,10 @@ export const linkOwnerToPlot = (plotId: string, personId: string) => {
   return { plot, person };
 };
 
-export const findPlotById = (id: string) => getDb().plots.find((p) => p.id === id) ?? null;
+export const findPlotById = (id: string) =>
+  getDb().plots.find(
+    (p) => p.id === id || p.plotId === id || p.plotNumber === id || p.number === id
+  ) ?? null;
 
 export const updatePlotStatus = (id: string, patch: Partial<Plot>) => {
   const db = getDb();

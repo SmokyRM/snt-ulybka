@@ -23,6 +23,24 @@ const parsePeriod = (value: string | null) => {
 const sumPayments = (payments: Payment[]) =>
   payments.filter((p) => !p.isVoided).reduce((sum, p) => sum + p.amount, 0);
 
+const normalizeSearch = (value: string) =>
+  value.toLowerCase().replace(/[,\s]+/g, " ").trim();
+
+const splitStreetAndNumber = (value: string) => {
+  const normalized = normalizeSearch(value);
+  if (!normalized) return null;
+  const parts = normalized.split(" ").filter(Boolean);
+  const numberIndex = parts.findIndex((part, idx) => {
+    if (!/^\d+[А-Яа-яA-Za-z-]*$/.test(part)) return false;
+    return idx === parts.length - 1 || parts.length > 1;
+  });
+  if (numberIndex === -1) return null;
+  const number = parts[numberIndex];
+  const street = parts.slice(0, numberIndex).join(" ").trim();
+  if (!street || !number) return null;
+  return { street, number };
+};
+
 export const getDebtsData = (params: {
   period: string | null;
   type: DebtTypeFilter;
@@ -84,7 +102,9 @@ export const getDebtsData = (params: {
     target: targetPeriod ? listDebtNotifications({ periodId: targetPeriod.id, type: "membership" }) : [], // target пока без отдельного типа уведомлений
   };
 
-  const q = params.q?.trim().toLowerCase() ?? "";
+  const q = params.q?.trim() ?? "";
+  const normalizedQuery = normalizeSearch(q);
+  const streetNumberQuery = splitStreetAndNumber(q);
 
   const items = plots.map((plot) => {
     const membershipAcc = accrualsByType.membership.find((a) => a.plotId === plot.id);
@@ -107,6 +127,7 @@ export const getDebtsData = (params: {
 
     return {
       plotId: plot.id,
+      plotCardId: plot.id || plot.plotId,
       street: plot.street,
       number: plot.plotNumber,
       ownerName: plot.ownerFullName ?? "—",
@@ -132,8 +153,13 @@ export const getDebtsData = (params: {
     if (params.type === "all" && item.debtTotal <= 0) return false;
     if (params.minDebt && item.debtTotal < params.minDebt) return false;
     if (q) {
-      const hay = `${item.street} ${item.number} ${item.ownerName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      const hay = normalizeSearch(`${item.street} ${item.number} ${item.ownerName}`);
+      if (streetNumberQuery) {
+        if (!hay.includes(normalizeSearch(streetNumberQuery.street))) return false;
+        if (!hay.includes(normalizeSearch(streetNumberQuery.number))) return false;
+      } else if (normalizedQuery && !hay.includes(normalizedQuery)) {
+        return false;
+      }
     }
     return true;
   });

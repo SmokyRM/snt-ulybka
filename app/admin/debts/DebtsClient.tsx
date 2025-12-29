@@ -7,6 +7,7 @@ import type { DebtTypeFilter } from "@/lib/debts";
 
 type Item = {
   plotId: string;
+  plotCardId?: string;
   street: string;
   number: string;
   ownerName: string;
@@ -20,13 +21,12 @@ type Item = {
 
 interface Props {
   initialItems: Item[];
-  totals: { count: number; sumMembership: number; sumTarget: number; sumElectricity: number; sumTotal: number };
   filters: { period: string; type: DebtTypeFilter; minDebt?: number; q?: string; onlyUnnotified?: boolean };
 }
 
 const formatCurrency = (v: number) => `${v.toFixed(2)} ₽`;
 
-export default function DebtsClient({ initialItems, totals, filters }: Props) {
+export default function DebtsClient({ initialItems, filters }: Props) {
   const router = useAppRouter();
   const [items, setItems] = useState(initialItems);
   const [loading, setLoading] = useState(false);
@@ -46,6 +46,35 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
     if (onlyUnnotified) sp.set("onlyUnnotified", "1");
     return sp.toString();
   }, [period, type, minDebt, q, onlyUnnotified]);
+
+  const totals = useMemo(() => {
+    const summary = items.reduce(
+      (acc, item) => {
+        acc.count += 1;
+        acc.sumMembership += item.debtMembership;
+        acc.sumTarget += item.debtTarget;
+        acc.sumElectricity += item.debtElectricity;
+        acc.sumTotal += item.debtTotal;
+        return acc;
+      },
+      { count: 0, sumMembership: 0, sumTarget: 0, sumElectricity: 0, sumTotal: 0 }
+    );
+    if (process.env.NODE_ENV !== "production") {
+      const invalidTotals = Object.values(summary).some((value) =>
+        Number.isNaN(value as number)
+      );
+      if (invalidTotals) {
+        console.warn("[debts] totals contain NaN, falling back to 0");
+      }
+    }
+    return {
+      count: Number.isFinite(summary.count) ? summary.count : 0,
+      sumMembership: Number.isFinite(summary.sumMembership) ? summary.sumMembership : 0,
+      sumTarget: Number.isFinite(summary.sumTarget) ? summary.sumTarget : 0,
+      sumElectricity: Number.isFinite(summary.sumElectricity) ? summary.sumElectricity : 0,
+      sumTotal: Number.isFinite(summary.sumTotal) ? summary.sumTotal : 0,
+    };
+  }, [items]);
 
   const refresh = async () => {
     setLoading(true);
@@ -277,7 +306,10 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
                 <td className="px-3 py-2 font-semibold">{formatCurrency(item.debtTotal)}</td>
                 <td className="px-3 py-2">{item.notificationStatus}</td>
                 <td className="px-3 py-2 space-x-2">
-                  <AppLink href={`/admin/registry/${item.plotId}`} className="text-[#5E704F] underline">
+                  <AppLink
+                    href={`/admin/registry/${item.plotCardId ?? item.plotId}`}
+                    className="text-[#5E704F] underline"
+                  >
                     Карточка
                   </AppLink>
                   <button

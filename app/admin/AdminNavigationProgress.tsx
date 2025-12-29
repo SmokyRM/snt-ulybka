@@ -32,6 +32,7 @@ export default function AdminNavigationProgressProvider({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchKey = searchParams?.toString() ?? "";
   const [isNavigating, setIsNavigating] = useState(false);
   const [show, setShow] = useState(false);
   const startAtRef = useRef<number | null>(null);
@@ -78,7 +79,7 @@ export default function AdminNavigationProgressProvider({
 
   useEffect(() => {
     stop();
-  }, [pathname, searchParams?.toString(), stop]);
+  }, [pathname, searchKey, stop]);
 
   const value = useMemo(
     () => ({

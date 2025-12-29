@@ -9,16 +9,20 @@ export default function AdminViewAsUserButton({ action }: { action: ViewAsUserAc
   const [loading, setLoading] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchKey = searchParams?.toString() ?? "";
   const safetyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!loading) return;
-    setLoading(false);
-    if (safetyTimerRef.current) {
-      window.clearTimeout(safetyTimerRef.current);
-      safetyTimerRef.current = null;
-    }
-  }, [pathname, searchParams?.toString(), loading]);
+    const resetTimer = window.setTimeout(() => {
+      setLoading(false);
+      if (safetyTimerRef.current) {
+        window.clearTimeout(safetyTimerRef.current);
+        safetyTimerRef.current = null;
+      }
+    }, 0);
+    return () => window.clearTimeout(resetTimer);
+  }, [pathname, searchKey, loading]);
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     if (loading) {

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAdminDirty } from "../AdminDirtyProvider";
 import { useAdminNavigationProgress } from "../AdminNavigationProgress";
 
-const sections = [
+const baseSections = [
   {
     title: "Управление данными",
     links: [
@@ -58,18 +58,43 @@ const sections = [
   },
 ];
 
-export default function AdminSidebar() {
+type AdminSidebarProps = {
+  isDev: boolean;
+  isAdmin: boolean;
+};
+
+export default function AdminSidebar({ isDev, isAdmin }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { confirmIfDirty } = useAdminDirty();
   const { isNavigating, start } = useAdminNavigationProgress();
 
-  useEffect(() => {
-    const prefetchTargets = ["/admin", "/admin/plots", "/admin/imports/plots", "/admin/analytics"];
-    prefetchTargets.forEach((href) => router.prefetch(href));
-  }, [router]);
+  const sections = baseSections.map((section) => ({
+    ...section,
+    links: [...section.links],
+  }));
 
-  if (process.env.NODE_ENV !== "production") {
+  if (isDev && isAdmin) {
+    sections[0].links.push({
+      href: "/admin/dev/seed",
+      label: "Тестовые данные",
+    });
+  }
+
+  useEffect(() => {
+    const prefetchTargets = [
+      "/admin",
+      "/admin/plots",
+      "/admin/imports/plots",
+      "/admin/analytics",
+    ];
+    if (isDev && isAdmin) {
+      prefetchTargets.push("/admin/dev/seed");
+    }
+    prefetchTargets.forEach((href) => router.prefetch(href));
+  }, [isAdmin, isDev, router]);
+
+  if (isDev) {
     const seen = new Set<string>();
     sections.forEach((section) => {
       section.links.forEach((link) => {

@@ -2,12 +2,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isAdmin } from "@/lib/session.server";
 import { getDebtsData, DebtTypeFilter } from "@/lib/debts";
+import { listAccrualItems, listAccrualPeriods } from "@/lib/mockDb";
 import DebtsClient from "./DebtsClient";
 import { logAdminAction } from "@/lib/audit";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
 const today = new Date();
 const defaultPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+const getLatestPeriodKey = () => {
+  const periods = listAccrualPeriods()
+    .filter((period) => listAccrualItems(period.id).length > 0)
+    .sort((a, b) => (b.year - a.year) || b.month - a.month);
+  if (!periods.length) return null;
+  const latest = periods[0];
+  return `${latest.year}-${String(latest.month).padStart(2, "0")}`;
+};
 
 export default async function DebtsPage({
   searchParams,
@@ -18,7 +28,11 @@ export default async function DebtsPage({
   if (!isAdmin(user)) redirect("/login?next=/admin");
   const flags = await getFeatureFlags();
   const debtsV2On = isFeatureEnabled(flags, "debtsV2");
-  const period = typeof searchParams?.period === "string" ? searchParams.period : defaultPeriod;
+  const latestPeriod = getLatestPeriodKey();
+  const period =
+    typeof searchParams?.period === "string"
+      ? searchParams.period
+      : latestPeriod ?? defaultPeriod;
   const type = (typeof searchParams?.type === "string" ? searchParams.type : "all") as DebtTypeFilter;
   const minDebt =
     typeof searchParams?.minDebt === "string" && searchParams.minDebt.trim() !== ""
@@ -65,7 +79,6 @@ export default async function DebtsPage({
         </div>
         <DebtsClient
           initialItems={data.items}
-          totals={data.totals}
           filters={{ period, type, minDebt: minDebt ?? undefined, q, onlyUnnotified }}
         />
       </div>

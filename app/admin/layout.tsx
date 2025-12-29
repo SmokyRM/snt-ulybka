@@ -10,9 +10,11 @@ import AdminViewAsUserButton from "./AdminViewAsUserButton";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  const admin = isAdmin(user);
+  if (!admin) {
     redirect("/login?next=/admin");
   }
+  const isDev = process.env.NODE_ENV !== "production";
 
   let buildInfo: { sha: string; builtAt: string } | null = null;
   try {
@@ -25,7 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <AdminDirtyProvider>
       <AdminNavigationProgressProvider>
         <div className="flex min-h-screen bg-[#F8F1E9] text-zinc-900">
-          <AdminSidebar />
+          <AdminSidebar isAdmin={admin} isDev={isDev} />
           <div className="flex-1">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white px-6 py-4">
               <div className="space-y-1">

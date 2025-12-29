@@ -46,13 +46,20 @@ export function RouteLoaderProvider({ children }: { children: React.ReactNode })
   }, [isLoading]);
 
   useEffect(() => {
-    stop();
+    const id = window.setTimeout(() => {
+      stop();
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [pathname, stop]);
 
   useEffect(() => {
     if (!showLoader && isLoading) {
-      stop();
+      const id = window.setTimeout(() => {
+        stop();
+      }, 0);
+      return () => window.clearTimeout(id);
     }
+    return undefined;
   }, [showLoader, isLoading, stop]);
 
   useEffect(() => {
