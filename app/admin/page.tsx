@@ -46,7 +46,7 @@ export default async function AdminDashboard() {
   if (!isAdmin(user)) {
     redirect("/login?next=/admin");
   }
-  const isDev = process.env.NODE_ENV === "development";
+  const showTestScenarios = process.env.NODE_ENV !== "production";
 
   const dashboardBlock = await loadBlock<DashboardData>("dashboard", async () => getAdminDashboardData());
   const analyticsBlock = await loadBlock("analytics", async () => getAnalyticsPoints());
@@ -97,7 +97,7 @@ export default async function AdminDashboard() {
         </div>
       )}
 
-      {isDev && (
+      {showTestScenarios && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
           <div className="font-semibold text-emerald-900">Тестовые сценарии</div>
           <p className="mt-1 text-xs text-emerald-700">
@@ -186,12 +186,30 @@ export default async function AdminDashboard() {
                   <div>Период: {dashboardData.billing.membership.period}</div>
                   <div>Начислено: {formatAmount(dashboardData.billing.membership.accruedSum)} ₽</div>
                   <div>Оплачено: {formatAmount(dashboardData.billing.membership.paidSum)} ₽</div>
-                  <div>Долг: {formatAmount(dashboardData.billing.membership.debtSum)} ₽</div>
+                  <Link
+                    href="/admin/debts?type=membership"
+                    className="inline-flex items-center gap-1 text-[#5E704F] hover:underline"
+                    title="Открыть долги по членским"
+                  >
+                    Долг: {formatAmount(dashboardData.billing.membership.debtSum)} ₽
+                  </Link>
                 </div>
               ) : (
                 <Placeholder />
               )}
-              <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
+              <CTAGroup
+                className="mt-auto"
+                primary={{
+                  href: "/admin/billing",
+                  label: "Биллинг",
+                  title: "Перейти в биллинг",
+                }}
+                secondary={{
+                  href: "/admin/notifications/debtors?type=membership",
+                  label: "Должники",
+                  title: "Список должников",
+                }}
+              />
             </Card>
 
             <Card title="Целевые взносы">
@@ -200,17 +218,30 @@ export default async function AdminDashboard() {
                   <div>Период: {dashboardData.billing.target.period}</div>
                   <div>Начислено: {formatAmount(dashboardData.billing.target.accruedSum)} ₽</div>
                   <div>Оплачено: {formatAmount(dashboardData.billing.target.paidSum)} ₽</div>
-                  <div>Долг: {formatAmount(dashboardData.billing.target.debtSum)} ₽</div>
+                  <Link
+                    href="/admin/debts?type=target"
+                    className="inline-flex items-center gap-1 text-[#5E704F] hover:underline"
+                    title="Открыть долги по целевым"
+                  >
+                    Долг: {formatAmount(dashboardData.billing.target.debtSum)} ₽
+                  </Link>
                 </div>
               ) : (
                 <Placeholder />
               )}
-              <div className="flex gap-2">
-                <LinkBtn href="/admin/billing">Биллинг</LinkBtn>
-                <LinkBtn href="/admin/targets" variant="secondary">
-                  Цели
-                </LinkBtn>
-              </div>
+              <CTAGroup
+                className="mt-auto"
+                primary={{
+                  href: "/admin/billing",
+                  label: "Биллинг",
+                  title: "Перейти в биллинг",
+                }}
+                secondary={{
+                  href: "/admin/targets",
+                  label: "Цели",
+                  title: "Список целей",
+                }}
+              />
             </Card>
 
             <Card title="Импорты платежей">
@@ -226,12 +257,19 @@ export default async function AdminDashboard() {
               ) : (
                 <Placeholder />
               )}
-              <div className="flex gap-2">
-                <LinkBtn href="/admin/billing/import">Импорт</LinkBtn>
-                <LinkBtn href="/admin/billing/imports" variant="secondary">
-                  История
-                </LinkBtn>
-              </div>
+              <CTAGroup
+                className="mt-auto"
+                primary={{
+                  href: "/admin/billing/import",
+                  label: "Импорт",
+                  title: "Создать импорт",
+                }}
+                secondary={{
+                  href: "/admin/billing/imports",
+                  label: "История",
+                  title: "История импортов",
+                }}
+              />
             </Card>
 
             <Card title="Аналитика (accrued vs paid)">
@@ -321,10 +359,16 @@ function LinkBtn({
   href,
   children,
   variant = "primary",
+  className,
+  ariaLabel,
+  title,
 }: {
   href: string;
   children: ReactNode;
   variant?: "primary" | "secondary";
+  className?: string;
+  ariaLabel?: string;
+  title?: string;
 }) {
   const base = "inline-flex rounded-full px-4 py-2 text-sm font-semibold transition";
   const cls =
@@ -332,9 +376,41 @@ function LinkBtn({
       ? `${base} border border-[#5E704F] text-[#5E704F] hover:bg-[#5E704F] hover:text-white`
       : `${base} bg-[#5E704F] text-white hover:bg-[#4f5f42]`;
   return (
-    <Link href={href} className={cls}>
+    <Link href={href} className={`${cls} ${className ?? ""}`} aria-label={ariaLabel} title={title}>
       {children}
     </Link>
+  );
+}
+
+function CTAGroup({
+  primary,
+  secondary,
+  className,
+}: {
+  primary: { href: string; label: string; title: string };
+  secondary: { href: string; label: string; title: string };
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-2 sm:flex-row ${className ?? ""}`}>
+      <LinkBtn
+        href={primary.href}
+        ariaLabel={primary.title}
+        title={primary.title}
+        className="w-full justify-center text-center sm:w-auto"
+      >
+        {primary.label}
+      </LinkBtn>
+      <LinkBtn
+        href={secondary.href}
+        variant="secondary"
+        ariaLabel={secondary.title}
+        title={secondary.title}
+        className="w-full justify-center text-center sm:w-auto"
+      >
+        {secondary.label}
+      </LinkBtn>
+    </div>
   );
 }
 

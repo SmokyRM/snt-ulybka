@@ -113,7 +113,19 @@ export default function ClientTable({ plots }: { plots: Plot[] }) {
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Участок</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">ФИО</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Контакты</th>
-              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Членство</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">
+                <span className="inline-flex items-center gap-1">
+                  Членство
+                  <span
+                    className="relative cursor-help text-xs text-zinc-400"
+                    title={
+                      "Член — подтверждён член СНТ\nНе член — собственник, но не член СНТ\nНе определён — требуется подтверждение членства или не хватает данных\nЧто делать: подтвердите членство документом или обновите реестр через «Импорт реестра»"
+                    }
+                  >
+                    ⓘ
+                  </span>
+                </span>
+              </th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Подтв.</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Открыть</th>
             </tr>
@@ -147,6 +159,11 @@ export default function ClientTable({ plots }: { plots: Plot[] }) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="text-xs text-zinc-500">
+        ⓘ Не определён = нет подтверждения. Обновите реестр через Импорт реестра или подтвердите
+        документом.
       </div>
     </div>
   );

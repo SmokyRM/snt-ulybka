@@ -44,6 +44,8 @@ interface MockDb {
   targetFunds: TargetFund[];
 }
 
+export type MockDbSnapshot = MockDb;
+
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizePhone = (value: string) => value.replace(/\D/g, "");
 const normalizeIdentifier = (value: string) =>
@@ -153,6 +155,16 @@ const getDb = (): MockDb => {
     };
   }
   return g.__SNT_DB__ as MockDb;
+};
+
+export const setMockDbSnapshot = (snapshot: MockDbSnapshot) => {
+  const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
+  g.__SNT_DB__ = snapshot;
+};
+
+export const getMockDbSnapshot = (): MockDbSnapshot | null => {
+  const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
+  return g.__SNT_DB__ ?? null;
 };
 
 const createId = (prefix: string) =>

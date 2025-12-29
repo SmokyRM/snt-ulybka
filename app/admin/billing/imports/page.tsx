@@ -20,6 +20,9 @@ export default async function ImportBatchesPage() {
             Новый импорт
           </a>
         </div>
+        <p className="text-sm text-zinc-600">
+          История CSV-импортов с их статусами и количеством обработанных строк.
+        </p>
         <ImportBatchesClient initialBatches={batches} />
       </div>
     </main>

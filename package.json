@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "deploy": "npm run lint && npm run typecheck && npm run build && node scripts/release.js",
     "deploy:prod": "npm run deploy",
-    "deploy:dry": "node scripts/release.js --dry-run"
+    "deploy:dry": "node scripts/release.js --dry-run",
+    "seed:test": "ALLOW_SEED_TEST_DATA=true tsx seed/seed-test.ts"
   },
   "dependencies": {
     "framer-motion": "^11.5.4",
@@ -27,6 +28,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.7.1",
     "typescript": "^5",
     "vercel": "^39.4.1"
   }

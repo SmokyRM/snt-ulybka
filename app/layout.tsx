@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { RouteLoaderProvider } from "@/components/RouteLoaderProvider";
+import { ensureMockDbFromFile } from "@/lib/mockDbFile";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,11 +22,12 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await ensureMockDbFromFile();
   const enableUx = process.env.NEXT_PUBLIC_ENABLE_UX === "1" || process.env.NODE_ENV !== "production";
   return (
     <html lang="ru">

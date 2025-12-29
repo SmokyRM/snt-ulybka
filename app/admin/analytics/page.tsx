@@ -45,7 +45,7 @@ export default async function RegistryAnalyticsPage() {
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Аналитика реестра</h1>
+            <h1 className="text-2xl font-semibold">Проблемы и сводка</h1>
             <p className="text-sm text-zinc-600">Сводка по статусам и проблемным участкам.</p>
           </div>
           <Link

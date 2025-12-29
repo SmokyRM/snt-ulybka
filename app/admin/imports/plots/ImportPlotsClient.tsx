@@ -102,7 +102,7 @@ export default function ImportPlotsClient() {
               className="hidden"
             />
           </label>
-          {loading ? <span className="text-sm text-zinc-600">Загрузка...</span> : null}
+          {loading ? <span className="text-sm text-zinc-600">Парсим файл…</span> : null}
           {errorMessage ? (
             <span className="text-sm text-rose-700">{errorMessage}</span>
           ) : null}

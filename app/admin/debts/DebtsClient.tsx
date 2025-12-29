@@ -186,7 +186,15 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
               onChange={(e) => setOnlyUnnotified(e.target.checked)}
               className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
             />
-            Только без закрытых
+            <span className="inline-flex items-center gap-1">
+              Только без закрытых
+              <span
+                className="cursor-help text-xs text-zinc-400"
+                title="Закрытые долги — полностью погашенные"
+              >
+                ⓘ
+              </span>
+            </span>
           </label>
           <div className="flex gap-2">
             <button
@@ -211,28 +219,35 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm">
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100"
-        >
-          Экспорт CSV
-        </button>
-        <button
-          type="button"
-          onClick={exportPdf}
-          className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100"
-        >
-          PDF
-        </button>
-        <button
-          type="button"
-          onClick={sendTelegram}
-          className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100"
-          disabled={loading}
-        >
-          Telegram
-        </button>
+        <details className="relative">
+          <summary className="cursor-pointer rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100">
+            Экспорт
+          </summary>
+          <div className="absolute z-10 mt-2 w-44 rounded-xl border border-zinc-200 bg-white p-2 shadow-md">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportPdf}
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+            >
+              PDF
+            </button>
+            <button
+              type="button"
+              onClick={sendTelegram}
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+              disabled={loading}
+            >
+              Telegram
+            </button>
+          </div>
+        </details>
       </div>
 
       <div className="overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">

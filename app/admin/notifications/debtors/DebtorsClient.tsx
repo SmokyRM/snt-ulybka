@@ -126,7 +126,7 @@ export default function DebtorsClient() {
           disabled={loading}
           className="rounded bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4f5f42] disabled:cursor-not-allowed disabled:bg-zinc-400"
         >
-          Показать
+          Применить фильтры
         </button>
         <button
           type="button"

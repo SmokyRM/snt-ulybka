@@ -12,7 +12,10 @@ export default async function PlotsImportPage() {
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">Импорт реестра участков (CSV)</h1>
+          <div>
+            <h1 className="text-2xl font-semibold">Импорт реестра</h1>
+            <p className="text-sm text-zinc-600">Формат CSV с разделителем ; или ,.</p>
+          </div>
           <a
             href="/admin/registry"
             className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
