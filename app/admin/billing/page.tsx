@@ -31,6 +31,13 @@ async function createPeriodAction(
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
     return { status: "error", message: "Некорректный период" };
   }
+  const exists = listAccrualPeriods().some((p) => p.year === year && p.month === month && p.type === type);
+  if (exists) {
+    return {
+      status: "warning",
+      message: `Период ${year}-${String(month).padStart(2, "0")} уже существует`,
+    };
+  }
   try {
     createAccrualPeriod({ year, month, type, title });
   } catch (error) {

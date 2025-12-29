@@ -149,10 +149,35 @@ export default function DebtsClient({ initialItems, filters }: Props) {
           onlyUnnotified,
         }),
       });
+      const text = await res.text();
+      let data: { ok?: boolean; error?: string } | null = null;
+      if (text) {
+        try {
+          data = JSON.parse(text) as { ok?: boolean; error?: string };
+        } catch (parseError) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[debts] telegram export non-json response", {
+              status: res.status,
+              text,
+              parseError,
+            });
+          }
+        }
+      }
       if (!res.ok) {
-        const data = await res.json();
-        setError((data as { error?: string }).error ?? "Ошибка отправки");
+        const message = data?.error || text || "Ошибка отправки";
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[debts] telegram export failed", { status: res.status, text });
+        }
+        setError(message);
         return;
+      }
+      if (data?.ok === false) {
+        setError(data.error ?? "Ошибка отправки");
+        return;
+      }
+      if (!text && process.env.NODE_ENV !== "production") {
+        console.warn("[debts] telegram export empty response", { status: res.status });
       }
     } catch (e) {
       setError((e as Error).message);
