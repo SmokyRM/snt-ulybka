@@ -2,15 +2,9 @@
 
 import { useState } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
+import type { SectionKey } from "@/lib/cabinetRoutes";
 
-export type SectionKey =
-  | "home"
-  | "finance"
-  | "electricity"
-  | "charges"
-  | "appeals"
-  | "docs"
-  | "events";
+export type { SectionKey };
 
 type Section = {
   key: SectionKey;

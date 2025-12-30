@@ -14,6 +14,8 @@ type LoginFormProps = {
   nextParam?: string;
 };
 
+type LoginRole = "user" | "admin" | "board" | "accountant" | "operator";
+
 export default function LoginForm({ nextParam }: LoginFormProps) {
   const router = useAppRouter();
   const [code, setCode] = useState("");
@@ -25,9 +27,10 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
   const sanitizedNext = useMemo(() => sanitizeNext(nextParam), [nextParam]);
 
   const allowedNextForRole = useCallback(
-    (role: "user" | "admin"): string | null => {
+    (role: LoginRole): string | null => {
       if (!sanitizedNext) return null;
-      if (role === "admin") {
+      const isAdminRole = role !== "user";
+      if (isAdminRole) {
         if (sanitizedNext.startsWith("/admin")) return sanitizedNext;
         if (sanitizedNext.startsWith("/cabinet")) {
           // Do not read admin_view on client; it can be HttpOnly or scoped by path. Rely on server guard.
@@ -54,7 +57,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     if (isSubmittingRef.current) return;
     if (sanitizedNext) return;
     if (session?.role) {
-      const fallback = session.role === "admin" ? "/admin" : "/cabinet";
+      const fallback = session.role === "user" ? "/cabinet" : "/admin";
       const target = allowedNextForRole(session.role) ?? fallback;
       if (process.env.NODE_ENV !== "production") {
         console.log(
@@ -90,8 +93,8 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         setError(res.status === 401 ? "Неверный код доступа" : "Ошибка входа, попробуйте позже");
         return;
       }
-      const role: "user" | "admin" = data.role === "admin" ? "admin" : "user";
-      if (role === "admin") {
+      const role: LoginRole = (data.role as LoginRole) ?? "user";
+      if (role !== "user") {
         const fallback = "/admin";
         const nextAllowed = allowedNextForRole(role);
         const target = nextAllowed ?? fallback;

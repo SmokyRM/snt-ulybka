@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getUserProfile, upsertUserProfileByAdmin } from "@/lib/userProfiles";
 import { getMembershipStatus } from "@/lib/membership";
 import { getUserPlots } from "@/lib/plots";
@@ -8,7 +8,7 @@ import { getUserPlots } from "@/lib/plots";
 async function saveProfile(formData: FormData) {
   "use server";
   const admin = await getSessionUser();
-  if (!admin || (admin.role !== "admin" && admin.role !== "board")) {
+  if (!hasAdminAccess(admin)) {
     redirect("/login?next=/admin");
   }
   const userId = ((formData.get("userId") as string | null) ?? "").trim();
@@ -28,7 +28,7 @@ export default async function AdminUsersPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const admin = await getSessionUser();
-  if (!admin || (admin.role !== "admin" && admin.role !== "board")) {
+  if (!hasAdminAccess(admin)) {
     redirect("/login?next=/admin");
   }
 

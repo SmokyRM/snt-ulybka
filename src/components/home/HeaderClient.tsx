@@ -8,7 +8,7 @@ import AppLink from "@/components/AppLink";
 import { siteCity, siteName } from "@/config/site";
 
 type HeaderClientProps = {
-  role?: "user" | "admin" | "board" | null;
+  role?: "user" | "admin" | "board" | "accountant" | "operator" | null;
 };
 
 const navItems = [
@@ -17,6 +17,7 @@ const navItems = [
   { label: "Электроэнергия", href: "/electricity" },
   { label: "Взносы", href: "/fees" },
   { label: "Контакты", href: "/contacts" },
+  { label: "Помощь", href: "/help" },
 ];
 
 const isActive = (pathname: string, href: string) => {
@@ -27,8 +28,8 @@ const isActive = (pathname: string, href: string) => {
 
 export function HeaderClient({ role }: HeaderClientProps) {
   const pathname = usePathname();
-  const isAdmin = role === "admin";
-  const isUser = role === "user" || role === "board";
+  const isAdmin = role === "admin" || role === "board" || role === "accountant" || role === "operator";
+  const isUser = role === "user";
   const [menuOpen, setMenuOpen] = useState(false);
 
   const action = () => {

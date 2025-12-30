@@ -44,6 +44,7 @@ npm run deploy
 Что делает скрипт:
 - прогоняет lint/typecheck/build;
 - выводит сведения о текущем коммите/ветке/окружении, не выполняя git push и не вызывая Vercel CLI.
+Примечание: в dev можно использовать Turbopack, но `npm run build` всегда запускается без него (webpack).
 
 Требуемые переменные (см. `.env.example`):
 - `VERCEL_TOKEN` — получить через `vercel login` → `vercel tokens create`;
@@ -63,4 +64,21 @@ npm run deploy
 - Работа ведётся в ветке `dev`; push в `dev` даёт Preview-деплой в Vercel.
 - Релиз в прод: merge `dev` → `main` и push `main` (можно через `npm run deploy`, который сделает merge/push и проверки локально).
 - Проверить задеплоенный SHA и окружение можно на странице `/admin/build-info`.
+
+## Assistant API (MVP)
+POST `/api/assistant` возвращает справку по ключевым словам и контексту страницы.
+
+Примеры:
+
+```bash
+curl -X POST http://localhost:3000/api/assistant \
+  -H "Content-Type: application/json" \
+  -d '{"message":"как импортировать платежи","pageContext":{"path":"/admin/billing/import"},"role":"admin"}'
+```
+
+```bash
+curl -X POST http://localhost:3000/api/assistant \
+  -H "Content-Type: application/json" \
+  -d '{"message":"как получить доступ","pageContext":{"path":"/help"},"role":"member"}'
+```
 # snt-ulybka

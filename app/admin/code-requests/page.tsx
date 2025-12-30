@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listCodeRequests, resolveCodeRequest } from "@/lib/codeRequests";
 import { getPlots, generateInviteCode } from "@/lib/plots";
 import CodeRequestsClient from "./CodeRequestsClient";
@@ -8,7 +8,7 @@ import CodeRequestsClient from "./CodeRequestsClient";
 async function resolveAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const id = (formData.get("id") as string | null) ?? "";
   const plotId = (formData.get("plotId") as string | null) ?? "";
   const comment = (formData.get("adminComment") as string | null) ?? "";
@@ -25,7 +25,7 @@ async function resolveAction(formData: FormData) {
 
 export default async function CodeRequestsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const requests = await listCodeRequests();
   const plots = await getPlots();
   const resolvedPlot = typeof searchParams?.code_for === "string" ? searchParams.code_for : null;

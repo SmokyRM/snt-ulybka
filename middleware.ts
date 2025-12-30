@@ -4,7 +4,7 @@ import { isAdminPath, isUserPath } from "@/config/routesAccess";
 
 const SESSION_COOKIE = "snt_session";
 
-type SessionRole = "user" | "admin" | "board";
+type SessionRole = "user" | "admin" | "board" | "accountant" | "operator";
 
 const readSessionRole = (
   request: NextRequest
@@ -13,7 +13,14 @@ const readSessionRole = (
   if (!raw) return { role: null, hasSession: false };
   try {
     const parsed = JSON.parse(raw) as { role?: SessionRole };
-    const role: SessionRole = parsed.role ?? "user";
+    const role: SessionRole =
+      parsed.role === "admin" ||
+      parsed.role === "board" ||
+      parsed.role === "accountant" ||
+      parsed.role === "operator" ||
+      parsed.role === "user"
+        ? parsed.role
+        : "user";
     return { role, hasSession: true };
   } catch {
     return { role: null, hasSession: false };
@@ -40,7 +47,7 @@ export function middleware(request: NextRequest) {
         }
         return NextResponse.redirect(url);
       }
-      if (role !== "admin") {
+      if (role !== "admin" && role !== "accountant" && role !== "operator" && role !== "board") {
         if (isApiAdmin) {
           return NextResponse.json({ error: "forbidden" }, { status: 403 });
         }
@@ -58,7 +65,7 @@ export function middleware(request: NextRequest) {
         }
         return NextResponse.redirect(url);
       }
-      if (role !== "user" && role !== "admin") {
+      if (role !== "user" && role !== "admin" && role !== "board") {
         return NextResponse.redirect(new URL("/", request.url));
       }
     }

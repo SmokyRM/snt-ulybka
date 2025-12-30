@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
 
 export async function GET() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const { items } = listPlotsWithFilters({ page: 1, pageSize: 10000 });

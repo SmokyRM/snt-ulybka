@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import {
   findPlotById,
   listAccrualItems,
@@ -19,7 +19,7 @@ const formatCurrency = (value: number) => `${value.toFixed(2)} ₽`;
 
 export default async function RegistryDetail({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const plot = findPlotById(params.id);
   if (!plot) {

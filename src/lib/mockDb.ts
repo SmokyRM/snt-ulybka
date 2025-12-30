@@ -44,6 +44,8 @@ interface MockDb {
   targetFunds: TargetFund[];
 }
 
+export type MockDbSnapshot = MockDb;
+
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizePhone = (value: string) => value.replace(/\D/g, "");
 const normalizeIdentifier = (value: string) =>
@@ -137,6 +139,12 @@ const getDb = (): MockDb => {
           createdAt: now,
           updatedAt: now,
         },
+        {
+          key: "membership_monthly_amount",
+          value: 5000,
+          createdAt: now,
+          updatedAt: now,
+        },
       ],
       entityVersions: [],
       persons: [],
@@ -153,6 +161,16 @@ const getDb = (): MockDb => {
     };
   }
   return g.__SNT_DB__ as MockDb;
+};
+
+export const setMockDbSnapshot = (snapshot: MockDbSnapshot) => {
+  const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
+  g.__SNT_DB__ = snapshot;
+};
+
+export const getMockDbSnapshot = (): MockDbSnapshot | null => {
+  const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
+  return g.__SNT_DB__ ?? null;
 };
 
 const createId = (prefix: string) =>
@@ -428,6 +446,12 @@ export const resetMockDb = () => {
         createdAt: now,
         updatedAt: now,
       },
+      {
+        key: "membership_monthly_amount",
+        value: 5000,
+        createdAt: now,
+        updatedAt: now,
+      },
     ],
     entityVersions: [],
     persons: [],
@@ -452,6 +476,7 @@ export const logAdminAction = (entry: {
   entityId?: string | null;
   before?: unknown;
   after?: unknown;
+  meta?: Record<string, unknown> | null;
   ip?: string | null;
   userAgent?: string | null;
   comment?: string | null;
@@ -466,6 +491,7 @@ export const logAdminAction = (entry: {
     entityId: entry.entityId ?? null,
     before: entry.before,
     after: entry.after,
+    meta: entry.meta ?? undefined,
     ip: entry.ip ?? null,
     userAgent: entry.userAgent ?? null,
     comment: entry.comment ?? null,
@@ -538,7 +564,10 @@ export const linkOwnerToPlot = (plotId: string, personId: string) => {
   return { plot, person };
 };
 
-export const findPlotById = (id: string) => getDb().plots.find((p) => p.id === id) ?? null;
+export const findPlotById = (id: string) =>
+  getDb().plots.find(
+    (p) => p.id === id || p.plotId === id || p.plotNumber === id || p.number === id
+  ) ?? null;
 
 export const updatePlotStatus = (id: string, patch: Partial<Plot>) => {
   const db = getDb();

@@ -3,13 +3,15 @@ import { findUserByContact, findUserById } from "@/lib/mockDb";
 
 const SESSION_COOKIE = "snt_session";
 
+export type SessionRole = "user" | "admin" | "board" | "accountant" | "operator";
+
 export interface SessionUser {
   id?: string;
   contact?: string;
   email?: string;
   phone?: string;
   fullName?: string;
-  role: "user" | "admin" | "board";
+  role: SessionRole;
   status?: string;
   isImpersonating?: boolean;
   impersonatorAdminId?: string | null;
@@ -18,7 +20,7 @@ export interface SessionUser {
 interface SessionPayload {
   userId?: string;
   contact?: string;
-  role?: "user" | "admin" | "board";
+  role?: SessionRole;
   impersonateUserId?: string;
   impersonatorAdminId?: string;
 }
@@ -29,6 +31,19 @@ const parseCookie = (value: string | undefined): SessionPayload | null => {
     return JSON.parse(value) as SessionPayload;
   } catch {
     return null;
+  }
+};
+
+const normalizeRole = (value: unknown): SessionRole => {
+  switch (value) {
+    case "admin":
+    case "board":
+    case "accountant":
+    case "operator":
+    case "user":
+      return value;
+    default:
+      return "user";
   }
 };
 
@@ -78,12 +93,7 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
       email: impersonated?.email,
       phone: impersonated?.phone,
       fullName: impersonated?.fullName,
-      role:
-        impersonated?.role === "admin"
-          ? "admin"
-          : impersonated?.role === "board"
-          ? "board"
-          : "user",
+      role: normalizeRole(impersonated?.role),
       status: impersonated?.status,
       isImpersonating: true,
       impersonatorAdminId: payload.impersonatorAdminId ?? payload.userId ?? null,
@@ -94,13 +104,7 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
     (payload.contact && findUserByContact(payload.contact)) ||
     null;
   const roleFromPayload = payload.role;
-  const role: SessionUser["role"] =
-    roleFromPayload ||
-    (userRecord?.role === "admin"
-      ? "admin"
-      : userRecord?.role === "board"
-      ? "board"
-      : "user");
+  const role: SessionUser["role"] = normalizeRole(roleFromPayload ?? userRecord?.role);
   return {
     id: userRecord?.id ?? payload.userId,
     contact: payload.contact ?? userRecord?.email ?? userRecord?.phone,
@@ -132,3 +136,12 @@ export const isAdmin = (user: SessionUser | null | undefined): boolean =>
 
 export const isAdminPayload = (payload: SessionPayload | null | undefined): boolean =>
   Boolean(payload && payload.role === "admin");
+
+export const hasAdminAccess = (user: SessionUser | null | undefined): boolean =>
+  Boolean(user && ["admin", "board"].includes(user.role));
+
+export const hasFinanceAccess = (user: SessionUser | null | undefined): boolean =>
+  Boolean(user && ["admin", "accountant", "board"].includes(user.role));
+
+export const hasImportAccess = (user: SessionUser | null | undefined): boolean =>
+  Boolean(user && ["admin", "accountant", "operator", "board"].includes(user.role));

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import { listPlotsWithFilters, upsertRegistryPlot } from "@/lib/mockDb";
 
 type IncomingRow = {
@@ -14,7 +14,7 @@ const normalizePhone = (value: string) => value.replace(/\D+/g, "");
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasImportAccess(user)) {
     return NextResponse.json({ ok: false, errors: ["forbidden"] }, { status: 403 });
   }
   const body = (await request.json().catch(() => null)) as { rows?: IncomingRow[]; mode?: "upsert" | "create_only" } | null;

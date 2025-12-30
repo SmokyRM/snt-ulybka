@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 type PreviewRow = {
   rowIndex: number;
@@ -102,7 +103,7 @@ export default function ImportPlotsClient() {
               className="hidden"
             />
           </label>
-          {loading ? <span className="text-sm text-zinc-600">Загрузка...</span> : null}
+          {loading ? <span className="text-sm text-zinc-600">Парсим файл…</span> : null}
           {errorMessage ? (
             <span className="text-sm text-rose-700">{errorMessage}</span>
           ) : null}
@@ -152,12 +153,12 @@ export default function ImportPlotsClient() {
         {summary && summary.invalid > 0 ? (
           <span className="text-sm text-rose-700">Исправьте ошибки перед импортом</span>
         ) : null}
-        <a
+        <Link
           href="/admin/plots"
           className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
         >
           Открыть реестр участков
-        </a>
+        </Link>
       </div>
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">

@@ -23,6 +23,24 @@ const parsePeriod = (value: string | null) => {
 const sumPayments = (payments: Payment[]) =>
   payments.filter((p) => !p.isVoided).reduce((sum, p) => sum + p.amount, 0);
 
+const normalizeSearch = (value: string) =>
+  value.toLowerCase().replace(/[,\s]+/g, " ").trim();
+
+const splitStreetAndNumber = (value: string) => {
+  const normalized = normalizeSearch(value);
+  if (!normalized) return null;
+  const parts = normalized.split(" ").filter(Boolean);
+  const numberIndex = parts.findIndex((part, idx) => {
+    if (!/^\d+[А-Яа-яA-Za-z-]*$/.test(part)) return false;
+    return idx === parts.length - 1 || parts.length > 1;
+  });
+  if (numberIndex === -1) return null;
+  const number = parts[numberIndex];
+  const street = parts.slice(0, numberIndex).join(" ").trim();
+  if (!street || !number) return null;
+  return { street, number };
+};
+
 export const getDebtsData = (params: {
   period: string | null;
   type: DebtTypeFilter;
@@ -84,16 +102,19 @@ export const getDebtsData = (params: {
     target: targetPeriod ? listDebtNotifications({ periodId: targetPeriod.id, type: "membership" }) : [], // target пока без отдельного типа уведомлений
   };
 
-  const q = params.q?.trim().toLowerCase() ?? "";
+  const q = params.q?.trim() ?? "";
+  const normalizedQuery = normalizeSearch(q);
+  const streetNumberQuery = splitStreetAndNumber(q);
 
   const items = plots.map((plot) => {
-    const membershipAcc = accrualsByType.membership.find((a) => a.plotId === plot.id);
-    const targetAcc = accrualsByType.target.find((a) => a.plotId === plot.id);
-    const elecAcc = accrualsByType.electricity.find((a) => a.plotId === plot.id);
+    const plotIds = [plot.id, plot.plotId, plot.plotNumber].filter(Boolean);
+    const membershipAcc = accrualsByType.membership.find((a) => plotIds.includes(a.plotId));
+    const targetAcc = accrualsByType.target.find((a) => plotIds.includes(a.plotId));
+    const elecAcc = accrualsByType.electricity.find((a) => plotIds.includes(a.plotId));
 
-    const membershipPaid = sumPayments(paymentsByType.membership.filter((p) => p.plotId === plot.id));
-    const targetPaid = sumPayments(paymentsByType.target.filter((p) => p.plotId === plot.id));
-    const elecPaid = sumPayments(paymentsByType.electricity.filter((p) => p.plotId === plot.id));
+    const membershipPaid = sumPayments(paymentsByType.membership.filter((p) => plotIds.includes(p.plotId)));
+    const targetPaid = sumPayments(paymentsByType.target.filter((p) => plotIds.includes(p.plotId)));
+    const elecPaid = sumPayments(paymentsByType.electricity.filter((p) => plotIds.includes(p.plotId)));
 
     const debtMembership = Math.max((membershipAcc?.amountAccrued ?? 0) - membershipPaid, 0);
     const debtTarget = Math.max((targetAcc?.amountAccrued ?? 0) - targetPaid, 0);
@@ -107,6 +128,7 @@ export const getDebtsData = (params: {
 
     return {
       plotId: plot.id,
+      plotCardId: plot.id || plot.plotId,
       street: plot.street,
       number: plot.plotNumber,
       ownerName: plot.ownerFullName ?? "—",
@@ -132,8 +154,13 @@ export const getDebtsData = (params: {
     if (params.type === "all" && item.debtTotal <= 0) return false;
     if (params.minDebt && item.debtTotal < params.minDebt) return false;
     if (q) {
-      const hay = `${item.street} ${item.number} ${item.ownerName}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      const hay = normalizeSearch(`${item.street} ${item.number} ${item.ownerName}`);
+      if (streetNumberQuery) {
+        if (!hay.includes(normalizeSearch(streetNumberQuery.street))) return false;
+        if (!hay.includes(normalizeSearch(streetNumberQuery.number))) return false;
+      } else if (normalizedQuery && !hay.includes(normalizedQuery)) {
+        return false;
+      }
     }
     return true;
   });

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getUsersByStatus } from "@/lib/mockDb";
 
 export async function GET() {
   const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "board")) {
+  if (!hasAdminAccess(user)) {
     return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 

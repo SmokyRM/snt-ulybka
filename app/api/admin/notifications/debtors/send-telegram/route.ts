@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { getAccrualDebtors } from "../utils";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { logAdminAction } from "@/lib/audit";
@@ -15,35 +15,86 @@ const chunkMessages = (lines: string[], header: string) => {
 };
 
 export async function POST(request: Request) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    if (!hasFinanceAccess(user)) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
 
-  const body = await request.json().catch(() => ({}));
-  const type = (body.type as "membership" | "electricity" | undefined) ?? "membership";
-  const period = body.period as string | undefined;
+    const body = await request.json().catch(() => ({}));
+    const type = (body.type as "membership" | "electricity" | undefined) ?? "membership";
+    const period = body.period as string | undefined;
 
-  const { items, periodLabel, error } = getAccrualDebtors(type, period ?? null);
-  if (error) return NextResponse.json({ error }, { status: 400 });
+    const { items, periodLabel, error } = getAccrualDebtors(type, period ?? null);
+    if (error) return NextResponse.json({ ok: false, error }, { status: 400 });
 
-  const totalDebt = items.reduce((sum, i) => sum + i.debt, 0);
-  const header = `СНТ «Улыбка» — должники (${type === "membership" ? "взносы" : "электроэнергия"}) за ${periodLabel}`;
-  const summary = `Всего: ${items.length}, долг: ${totalDebt.toFixed(2)} ₽`;
+    if (items.length === 0) {
+      await logAdminAction({
+        action: "export_debtors_telegram",
+        entity: "debt_notifications",
+        after: { type, period: periodLabel, count: 0, totalDebt: 0, sentCount: 0, skippedCount: 0, errorCount: 0 },
+        meta: {
+          period: periodLabel,
+          type,
+          rowsCount: 0,
+          totals: { totalDebt: 0 },
+          telegram: { sentCount: 0, skippedCount: 0, errorCount: 0 },
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        sentMessages: 0,
+        skipped: 0,
+        message: "Нет должников за выбранный период",
+      });
+    }
 
-  const lines = items.map((i) => `${i.street}-${i.number} — ${i.debt.toFixed(2)} ₽ (${i.notificationStatus ?? "new"})`);
-  const messages = chunkMessages(lines, `${header}\n${summary}`);
+    const totalDebt = items.reduce((sum, i) => sum + i.debt, 0);
+    const header = `СНТ «Улыбка» — должники (${type === "membership" ? "взносы" : "электроэнергия"}) за ${periodLabel}`;
+    const summary = `Всего: ${items.length}, долг: ${totalDebt.toFixed(2)} ₽`;
 
-  let sent = 0;
-  for (const msg of messages) {
-    await sendTelegramMessage(msg);
-    sent += 1;
+    const lines = items.map(
+      (i) => `${i.street}-${i.number} — ${i.debt.toFixed(2)} ₽ (${i.notificationStatus ?? "new"})`
+    );
+    const messages = chunkMessages(lines, `${header}\n${summary}`);
+
+    let sent = 0;
+    for (const msg of messages) {
+      await sendTelegramMessage(msg);
+      sent += 1;
+    }
+
+    await logAdminAction({
+      action: "export_debtors_telegram",
+      entity: "debt_notifications",
+      after: {
+        type,
+        period: periodLabel,
+        count: items.length,
+        totalDebt,
+        sentCount: sent,
+        skippedCount: 0,
+        errorCount: 0,
+      },
+      meta: {
+        period: periodLabel,
+        type,
+        rowsCount: items.length,
+        totals: { totalDebt },
+        telegram: { sentCount: sent, skippedCount: 0, errorCount: 0 },
+      },
+    });
+
+    return NextResponse.json({ ok: true, sentMessages: sent, skipped: 0 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    await logAdminAction({
+      action: "export_debtors_telegram",
+      entity: "debt_notifications",
+      after: { errorMessage: message, sentCount: 0, skippedCount: 0, errorCount: 1 },
+      meta: {
+        telegram: { sentCount: 0, skippedCount: 0, errorCount: 1, errorMessage: message },
+      },
+    });
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-
-  await logAdminAction({
-    action: "send_debt_notifications_telegram",
-    entity: "debt_notifications",
-    after: { type, period: periodLabel, count: items.length, totalDebt, sentMessages: sent },
-  });
-
-  return NextResponse.json({ ok: true, sentMessages: sent });
 }

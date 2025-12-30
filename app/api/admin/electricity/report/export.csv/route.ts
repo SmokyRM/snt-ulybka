@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getElectricityReport } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 
@@ -12,7 +12,7 @@ const toCsvValue = (value: string | number) => {
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const url = new URL(request.url);
   const year = Number(url.searchParams.get("year") ?? new Date().getFullYear());

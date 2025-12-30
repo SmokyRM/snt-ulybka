@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listTargetFundsWithStats } from "@/lib/targets";
 
 const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const funds = listTargetFundsWithStats(false);
 
   return (

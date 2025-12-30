@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { getPlots, listPayments } from "@/lib/mockDb";
 import { classifyPurposeCategory } from "@/lib/paymentCategory";
@@ -180,7 +180,7 @@ const matchPlot = (
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasImportAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const form = await request.formData();
   const file = form.get("file");

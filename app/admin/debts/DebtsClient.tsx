@@ -1,12 +1,14 @@
 "use client";
 
 import { useAppRouter } from "@/hooks/useAppRouter";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppLink from "@/components/AppLink";
 import type { DebtTypeFilter } from "@/lib/debts";
+import { useSearchParams } from "next/navigation";
 
 type Item = {
   plotId: string;
+  plotCardId?: string;
   street: string;
   number: string;
   ownerName: string;
@@ -20,13 +22,29 @@ type Item = {
 
 interface Props {
   initialItems: Item[];
-  totals: { count: number; sumMembership: number; sumTarget: number; sumElectricity: number; sumTotal: number };
   filters: { period: string; type: DebtTypeFilter; minDebt?: number; q?: string; onlyUnnotified?: boolean };
 }
 
 const formatCurrency = (v: number) => `${v.toFixed(2)} ₽`;
 
-export default function DebtsClient({ initialItems, totals, filters }: Props) {
+const buildQuery = (next: {
+  period: string;
+  type: DebtTypeFilter;
+  minDebt?: string;
+  q?: string;
+  onlyUnnotified?: boolean;
+}) => {
+  const sp = new URLSearchParams();
+  if (next.period) sp.set("period", next.period);
+  if (next.type) sp.set("type", next.type);
+  if (next.minDebt) sp.set("minDebt", next.minDebt);
+  if (next.q) sp.set("q", next.q);
+  if (next.onlyUnnotified) sp.set("onlyUnnotified", "1");
+  return sp.toString();
+};
+
+export default function DebtsClient({ initialItems, filters }: Props) {
+  const searchParams = useSearchParams();
   const router = useAppRouter();
   const [items, setItems] = useState(initialItems);
   const [loading, setLoading] = useState(false);
@@ -36,35 +54,116 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
   const [minDebt, setMinDebt] = useState(filters.minDebt ? String(filters.minDebt) : "");
   const [q, setQ] = useState(filters.q ?? "");
   const [onlyUnnotified, setOnlyUnnotified] = useState(Boolean(filters.onlyUnnotified));
+  const editingRef = useRef(false);
+  const lastAppliedRef = useRef<string | null>(null);
 
-  const queryString = useMemo(() => {
-    const sp = new URLSearchParams();
-    if (period) sp.set("period", period);
-    if (type) sp.set("type", type);
-    if (minDebt) sp.set("minDebt", minDebt);
-    if (q) sp.set("q", q);
-    if (onlyUnnotified) sp.set("onlyUnnotified", "1");
-    return sp.toString();
-  }, [period, type, minDebt, q, onlyUnnotified]);
+  const queryString = useMemo(
+    () =>
+      buildQuery({
+        period,
+        type,
+        minDebt,
+        q,
+        onlyUnnotified,
+      }),
+    [period, type, minDebt, q, onlyUnnotified]
+  );
 
-  const refresh = async () => {
+  const totals = useMemo(() => {
+    const summary = items.reduce(
+      (acc, item) => {
+        acc.count += 1;
+        acc.sumMembership += item.debtMembership;
+        acc.sumTarget += item.debtTarget;
+        acc.sumElectricity += item.debtElectricity;
+        acc.sumTotal += item.debtTotal;
+        return acc;
+      },
+      { count: 0, sumMembership: 0, sumTarget: 0, sumElectricity: 0, sumTotal: 0 }
+    );
+    if (process.env.NODE_ENV !== "production") {
+      const invalidTotals = Object.values(summary).some((value) =>
+        Number.isNaN(value as number)
+      );
+      if (invalidTotals) {
+        console.warn("[debts] totals contain NaN, falling back to 0");
+      }
+    }
+    return {
+      count: Number.isFinite(summary.count) ? summary.count : 0,
+      sumMembership: Number.isFinite(summary.sumMembership) ? summary.sumMembership : 0,
+      sumTarget: Number.isFinite(summary.sumTarget) ? summary.sumTarget : 0,
+      sumElectricity: Number.isFinite(summary.sumElectricity) ? summary.sumElectricity : 0,
+      sumTotal: Number.isFinite(summary.sumTotal) ? summary.sumTotal : 0,
+    };
+  }, [items]);
+
+  const load = useCallback(async (
+    next: {
+      period: string;
+      type: DebtTypeFilter;
+      minDebt?: string;
+      q?: string;
+      onlyUnnotified?: boolean;
+    },
+    options?: { pushUrl?: boolean }
+  ) => {
+    const query = buildQuery(next);
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/debts?${queryString}`, { cache: "no-store" });
+      const res = await fetch(`/api/admin/debts?${query}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
         setError((data as { error?: string }).error ?? "Ошибка загрузки");
         return;
       }
       setItems(data.items as Item[]);
-      router.push(`/admin/debts?${queryString}`);
+      lastAppliedRef.current = query;
+      if (options?.pushUrl) {
+        router.push(`/admin/debts?${query}`);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    const nextPeriod = searchParams.get("period") ?? filters.period;
+    const nextType =
+      (searchParams.get("type") as DebtTypeFilter | null) ?? filters.type;
+    const nextMinDebt = searchParams.get("minDebt") ?? "";
+    const nextQ = searchParams.get("q") ?? "";
+    const nextOnlyUnnotified = searchParams.get("onlyUnnotified") === "1";
+    const nextQuery = buildQuery({
+      period: nextPeriod,
+      type: nextType,
+      minDebt: nextMinDebt,
+      q: nextQ,
+      onlyUnnotified: nextOnlyUnnotified,
+    });
+
+    if (lastAppliedRef.current === nextQuery && !editingRef.current) return;
+
+    editingRef.current = false;
+    setPeriod(nextPeriod);
+    setType(nextType);
+    setMinDebt(nextMinDebt);
+    setQ(nextQ);
+    setOnlyUnnotified(nextOnlyUnnotified);
+    load(
+      {
+        period: nextPeriod,
+        type: nextType,
+        minDebt: nextMinDebt,
+        q: nextQ,
+        onlyUnnotified: nextOnlyUnnotified,
+      },
+      { pushUrl: false }
+    );
+  }, [filters.period, filters.type, load, searchParams]);
 
   const markStatus = async (item: Item, status: "notified" | "resolved") => {
     if (!item.periodId) return;
@@ -120,10 +219,35 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
           onlyUnnotified,
         }),
       });
+      const text = await res.text();
+      let data: { ok?: boolean; error?: string } | null = null;
+      if (text) {
+        try {
+          data = JSON.parse(text) as { ok?: boolean; error?: string };
+        } catch (parseError) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[debts] telegram export non-json response", {
+              status: res.status,
+              text,
+              parseError,
+            });
+          }
+        }
+      }
       if (!res.ok) {
-        const data = await res.json();
-        setError((data as { error?: string }).error ?? "Ошибка отправки");
+        const message = data?.error || text || "Ошибка отправки";
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[debts] telegram export failed", { status: res.status, text });
+        }
+        setError(message);
         return;
+      }
+      if (data?.ok === false) {
+        setError(data.error ?? "Ошибка отправки");
+        return;
+      }
+      if (!text && process.env.NODE_ENV !== "production") {
+        console.warn("[debts] telegram export empty response", { status: res.status });
       }
     } catch (e) {
       setError((e as Error).message);
@@ -141,7 +265,10 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
             <input
               type="text"
               value={period}
-              onChange={(e) => setPeriod(e.target.value)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setPeriod(e.target.value);
+              }}
               placeholder="YYYY-MM"
               className="rounded border border-zinc-300 px-3 py-2"
             />
@@ -150,7 +277,10 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
             <span className="font-semibold text-zinc-800">Тип</span>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as DebtTypeFilter)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setType(e.target.value as DebtTypeFilter);
+              }}
               className="rounded border border-zinc-300 px-3 py-2"
             >
               <option value="all">Все</option>
@@ -165,7 +295,10 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
               type="number"
               min={0}
               value={minDebt}
-              onChange={(e) => setMinDebt(e.target.value)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setMinDebt(e.target.value);
+              }}
               className="rounded border border-zinc-300 px-3 py-2"
             />
           </label>
@@ -174,7 +307,10 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
             <input
               type="text"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setQ(e.target.value);
+              }}
               placeholder="Улица/участок/ФИО"
               className="rounded border border-zinc-300 px-3 py-2"
             />
@@ -183,15 +319,31 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
             <input
               type="checkbox"
               checked={onlyUnnotified}
-              onChange={(e) => setOnlyUnnotified(e.target.checked)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setOnlyUnnotified(e.target.checked);
+              }}
               className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
             />
-            Только без закрытых
+            <span className="inline-flex items-center gap-1">
+              Только без закрытых
+              <span
+                className="cursor-help text-xs text-zinc-400"
+                title="Закрытые долги — полностью погашенные"
+              >
+                ⓘ
+              </span>
+            </span>
           </label>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={refresh}
+              onClick={() =>
+                load(
+                  { period, type, minDebt, q, onlyUnnotified },
+                  { pushUrl: true }
+                )
+              }
               className="mt-1 rounded bg-[#5E704F] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4f5f42]"
               disabled={loading}
             >
@@ -211,28 +363,35 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm">
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100"
-        >
-          Экспорт CSV
-        </button>
-        <button
-          type="button"
-          onClick={exportPdf}
-          className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100"
-        >
-          PDF
-        </button>
-        <button
-          type="button"
-          onClick={sendTelegram}
-          className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100"
-          disabled={loading}
-        >
-          Telegram
-        </button>
+        <details className="relative">
+          <summary className="cursor-pointer rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-100">
+            Экспорт
+          </summary>
+          <div className="absolute z-10 mt-2 w-44 rounded-xl border border-zinc-200 bg-white p-2 shadow-md">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportPdf}
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+            >
+              PDF
+            </button>
+            <button
+              type="button"
+              onClick={sendTelegram}
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+              disabled={loading}
+            >
+              Telegram
+            </button>
+          </div>
+        </details>
       </div>
 
       <div className="overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -262,7 +421,10 @@ export default function DebtsClient({ initialItems, totals, filters }: Props) {
                 <td className="px-3 py-2 font-semibold">{formatCurrency(item.debtTotal)}</td>
                 <td className="px-3 py-2">{item.notificationStatus}</td>
                 <td className="px-3 py-2 space-x-2">
-                  <AppLink href={`/admin/registry/${item.plotId}`} className="text-[#5E704F] underline">
+                  <AppLink
+                    href={`/admin/registry/${item.plotCardId ?? item.plotId}`}
+                    className="text-[#5E704F] underline"
+                  >
                     Карточка
                   </AppLink>
                   <button

@@ -17,6 +17,7 @@ export const logAdminAction = async (params: {
   entityId?: string | null;
   before?: unknown;
   after?: unknown;
+  meta?: Record<string, unknown> | null;
   headers?: ReadonlyHeaders | Headers | null;
   comment?: string | null;
 }) => {
@@ -34,6 +35,7 @@ export const logAdminAction = async (params: {
     entityId: params.entityId ?? null,
     before: params.before,
     after: params.after,
+    meta: params.meta ?? null,
     ip,
     userAgent,
     comment: params.comment ?? null,

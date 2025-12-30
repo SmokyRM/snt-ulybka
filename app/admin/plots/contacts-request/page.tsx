@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import CopyActions from "./CopyActions";
 import { membershipLabel } from "@/lib/membershipLabels";
 import { listPlots } from "@/lib/plotsDb";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 
 const matchesSearch = (street: string, number: string, name?: string | null, q?: string) => {
   if (!q) return true;
@@ -17,7 +17,7 @@ export default async function ContactsRequestPage({
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 

@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import DebtorsClient from "./DebtorsClient";
+import OnboardingHintBanner from "../../_components/OnboardingHintBanner";
 
 export default async function DebtorsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasFinanceAccess(user)) {
     redirect("/login?next=/admin");
   }
 
@@ -20,6 +21,17 @@ export default async function DebtorsPage() {
             Назад
           </a>
         </div>
+        <OnboardingHintBanner
+          role={user?.role}
+          storageKey="admin.onboarding.debtors"
+          title="С чего начать"
+          description="Сформируйте список и подготовьте уведомления."
+          steps={[
+            { label: "Выбрать тип и период" },
+            { label: "Сформировать список должников", href: "/admin/notifications/debtors" },
+            { label: "Экспортировать или отправить в Telegram", href: "/admin/notifications/debtors" },
+          ]}
+        />
         <DebtorsClient />
       </div>
     </main>

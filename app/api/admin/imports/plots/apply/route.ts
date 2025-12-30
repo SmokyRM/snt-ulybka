@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import { getPlots, updatePlotStatus, upsertRegistryPlot } from "@/lib/mockDb";
 import type { Plot } from "@/types/snt";
 
@@ -37,7 +37,7 @@ const mapMembershipStatus = (value: IncomingRow["membershipStatus"]): Plot["memb
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasImportAccess(user)) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 

@@ -26,7 +26,7 @@ export interface Plot {
   ownerUserId?: string | null;
 }
 
-export type UserRole = "user" | "board" | "admin";
+export type UserRole = "user" | "board" | "admin" | "accountant" | "operator";
 export type UserStatus = "pending" | "verified" | "rejected";
 
 export interface User {
@@ -49,6 +49,7 @@ export interface AuditLog {
   entityId?: string | null;
   before?: unknown;
   after?: unknown;
+  meta?: Record<string, unknown>;
   ip?: string | null;
   userAgent?: string | null;
   comment?: string | null;
@@ -154,6 +155,7 @@ export interface AuditLog {
   entityId?: string | null;
   before?: unknown;
   after?: unknown;
+  meta?: Record<string, unknown>;
   ip?: string | null;
   userAgent?: string | null;
   comment?: string | null;

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import PlotForm from "./PlotForm";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 
 export default async function NewPlotPage() {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 
@@ -29,4 +29,3 @@ export default async function NewPlotPage() {
     </main>
   );
 }
-

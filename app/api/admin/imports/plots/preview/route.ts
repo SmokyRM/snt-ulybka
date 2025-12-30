@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 
 type PreviewRow = {
   rowIndex: number;
@@ -128,7 +128,7 @@ const parseConfirmed = (value: string) => {
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasImportAccess(user)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

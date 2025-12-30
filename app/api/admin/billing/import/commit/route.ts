@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import {
   addPayment,
   createAccrualPeriod,
@@ -35,7 +35,7 @@ const parseDate = (iso: string | undefined) => {
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasImportAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const rowsInput = Array.isArray(body.rows) ? (body.rows as RowInput[]) : [];
@@ -47,6 +47,15 @@ export async function POST(request: Request) {
     importedByUserId: user.id ?? null,
     totalRows: rowsInput.length,
     comment: importComment,
+  });
+
+  await logAdminAction({
+    action: "import_payments_csv_start",
+    entity: "payment",
+    entityId: batch.id,
+    before: null,
+    after: { totalRows: rowsInput.length },
+    comment: importComment || null,
   });
 
   let createdCount = 0;
@@ -165,7 +174,7 @@ export async function POST(request: Request) {
     entity: "payment",
     entityId: batch.id,
     before: null,
-    after: { createdCount, skippedCount },
+    after: { createdCount, skippedCount, warningsCount: warnings?.length ?? 0 },
     comment: importComment || null,
   });
 

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { upsertDebtNotification } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!hasFinanceAccess(user)) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const plotId = (body.plotId as string | undefined)?.trim();
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const debtAmount = Number(body.debtAmount);
   const comment = (body.comment as string | undefined) ?? null;
   if (!plotId || !periodId || !type || !status || !Number.isFinite(debtAmount)) {
-    return NextResponse.json({ error: "invalid payload" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "invalid payload" }, { status: 400 });
   }
 
   const saved = upsertDebtNotification({
@@ -36,5 +36,5 @@ export async function POST(request: Request) {
     after: saved,
   });
 
-  return NextResponse.json({ notification: saved });
+  return NextResponse.json({ ok: true, notification: saved });
 }

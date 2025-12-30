@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { getSntSettings, updateSntSettingsByAdmin } from "@/lib/sntSettings";
 
@@ -10,7 +10,7 @@ export default async function AdminSettingsPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const settings = getSntSettings();
   const saved = typeof searchParams?.saved === "string";
@@ -18,7 +18,7 @@ export default async function AdminSettingsPage({
   async function saveSettings(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!isAdmin(session)) redirect("/login?next=/admin");
+    if (!hasAdminAccess(session)) redirect("/login?next=/admin");
 
     const parseNumber = (value: FormDataEntryValue | null, fallback: number) => {
       const raw = typeof value === "string" ? value.trim() : "";

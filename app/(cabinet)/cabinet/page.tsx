@@ -2,7 +2,14 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
-import { clearDelegate, getPlots, getUserPlots, generateDelegateInvite, acceptDelegateInvite } from "@/lib/plots";
+import {
+  acceptDelegateInvite,
+  clearDelegate,
+  generateDelegateInvite,
+  getPlots,
+  getUserOwnershipVerifications,
+  getUserPlots,
+} from "@/lib/plots";
 import { createAppeal, getUserAppeals } from "@/lib/appeals";
 import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 import { getUserElectricity, getUserElectricityHistory, submitReading } from "@/lib/electricity";
@@ -21,6 +28,7 @@ import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { ProfileCard } from "./ProfileCard";
 import { MembershipBlock } from "./MembershipBlock";
+import { AIHelper } from "./AIHelper";
 import PlotAccessBlock from "./PlotAccessBlock";
 import EmptyState from "@/components/EmptyState";
 
@@ -312,6 +320,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   }
 
   const userPlots = await getUserPlots(user.id ?? "");
+  const ownershipVerifications = await getUserOwnershipVerifications(user.id ?? "");
   const prefs = await getUserPreferences(user.id ?? "");
   const userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.linkStatus === "active") || userPlots[0] || null;
   const membership = await getMembershipStatus(user.id ?? "");
@@ -382,6 +391,25 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const unpaidChargesSum = charges
     .filter((c) => c.status === "unpaid")
     .reduce((sum, c) => sum + c.amount, 0);
+  const plotsCount = userPlots.length;
+  const verificationsApproved = ownershipVerifications.filter((v) => v.status === "approved").length;
+  const verificationsSent = ownershipVerifications.filter((v) => v.status === "sent").length;
+  const verificationsRejected = ownershipVerifications.filter((v) => v.status === "rejected").length;
+  const plotsCta =
+    plotsCount === 0 && verificationsSent === 0
+      ? { label: "Подтвердить участок", href: "/cabinet/plots/new" }
+      : verificationsSent > 0
+        ? { label: "Посмотреть заявку", href: "/cabinet/plots" }
+        : { label: "Открыть мои участки", href: "/cabinet/plots" };
+  const aiContext = {
+    membershipStatus: membership.status,
+    plotsCount,
+    hasVerifiedPlot: userPlots.some((p) => p.ownershipStatus === "verified"),
+    verificationsSent,
+    verificationsRejected,
+    membershipDebt: finance.membershipDebt,
+    electricityDebt: finance.electricityDebt,
+  };
 
   const homeSection = (
     <div className="space-y-4">
@@ -457,8 +485,10 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
                 })}
               </ul>
             )}
-            <div className="mt-2 text-sm text-zinc-800">Статус: {membershipStatusText}</div>
-          </div>
+        <div className="mt-2 text-sm text-zinc-800">Статус: {membershipStatusText}</div>
+      </div>
+
+      <AIHelper context={aiContext} />
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
             <div className="font-semibold text-zinc-900">Электроэнергия</div>
             <div>{electricity?.lastReading != null ? "Показания переданы" : "Не переданы"}</div>
@@ -1014,9 +1044,42 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     </div>
   );
 
+  const plotsSection = (
+    <div id="plots-section" className="space-y-4 text-sm text-zinc-700">
+      <p>Список ваших участков и статусы подтверждения.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-200 bg-white px-3 py-3">
+          <div className="text-xs text-zinc-500">Участков</div>
+          <div className="text-lg font-semibold text-zinc-900">{plotsCount}</div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white px-3 py-3">
+          <div className="text-xs text-zinc-500">Заявки</div>
+          <div className="mt-1 text-sm text-zinc-800">
+            Подтверждено: {verificationsApproved}
+          </div>
+          <div className="text-sm text-zinc-800">На проверке: {verificationsSent}</div>
+          <div className="text-sm text-zinc-800">Отклонено: {verificationsRejected}</div>
+          {verificationsSent > 0 && (
+            <div className="mt-1 text-xs text-zinc-500">На проверке — обычно 1–3 дня.</div>
+          )}
+          {verificationsSent === 0 && verificationsRejected > 0 && (
+            <div className="mt-1 text-xs text-zinc-500">Отклонено — проверь причину.</div>
+          )}
+        </div>
+      </div>
+      <Link
+        href={plotsCta.href}
+        className="inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+      >
+        {plotsCta.label}
+      </Link>
+    </div>
+  );
+
   const sections: { key: SectionKey; title: string; content: React.ReactNode }[] = [
     { key: "home", title: "Домой (ЛК)", content: homeSection },
   ];
+  sections.push({ key: "plots", title: "Мои участки", content: plotsSection });
   if (isProfileComplete && isMembershipApproved) {
     sections.push(
       { key: "electricity", title: "Электроэнергия", content: electricitySection },

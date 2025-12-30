@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 
 export async function GET() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasImportAccess(user)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const headers = ["plot_display", "cadastral_number", "seed_owner_name", "seed_owner_phone", "note"];

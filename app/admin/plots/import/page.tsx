@@ -2,14 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import CsvImportForm from "./CsvImportForm";
 import { listPlots } from "@/lib/plotsDb";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 
 const normalizeKey = (street: string, number: string) =>
   `${street.trim().toLowerCase()}|${number.trim().toLowerCase()}`;
 
 export default async function ImportPlotsPage() {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!hasImportAccess(user)) {
     redirect("/login?next=/admin");
   }
 
@@ -38,4 +38,3 @@ export default async function ImportPlotsPage() {
     </main>
   );
 }
-

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import {
   findImportBatch,
   updateImportBatch,
@@ -12,7 +12,7 @@ type ParamsPromise<T> = { params: Promise<T> };
 export async function POST(_req: Request, { params }: ParamsPromise<{ id: string }>) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasImportAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { id } = await params;
   const batch = findImportBatch(id);

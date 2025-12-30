@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isAdmin, getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import {
   generateInviteCode,
   getPlots,
@@ -9,12 +9,13 @@ import {
   rejectPlotProposal,
   clearInviteCode,
 } from "@/lib/plots";
+import { plotStatusLabel } from "@/lib/plotStatusLabels";
 import ConfirmActionForm from "./ConfirmActionForm";
 
 async function generate(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     const code = await generateInviteCode(plotId, user?.id ?? null);
@@ -28,7 +29,7 @@ async function generate(formData: FormData) {
 async function resetOwner(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await resetPlotOwner(plotId, user?.id ?? null);
@@ -40,7 +41,7 @@ async function resetOwner(formData: FormData) {
 async function verify(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await verifyPlot(plotId);
@@ -51,7 +52,7 @@ async function verify(formData: FormData) {
 async function clearCode(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await clearInviteCode(plotId, user?.id ?? null);
@@ -63,7 +64,7 @@ async function clearCode(formData: FormData) {
 async function approveProposal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await approvePlotProposal(plotId);
@@ -74,7 +75,7 @@ async function approveProposal(formData: FormData) {
 async function rejectProposal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await rejectPlotProposal(plotId);
@@ -84,7 +85,7 @@ async function rejectProposal(formData: FormData) {
 
 export default async function PlotCodesPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plots = await getPlots();
   const code = typeof searchParams?.code === "string" ? searchParams.code : null;
   const plotParam = typeof searchParams?.plot === "string" ? searchParams.plot : null;
@@ -120,7 +121,7 @@ export default async function PlotCodesPage({ searchParams }: { searchParams?: R
                     <div className="text-xs text-zinc-600">
                       Статус:{" "}
                       <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-semibold">
-                        {plot.status || "DRAFT"}
+                        {plotStatusLabel(plot.status || "DRAFT")}
                       </span>
                     </div>
                     {plotParam === plot.plotId && code ? (
@@ -169,7 +170,7 @@ export default async function PlotCodesPage({ searchParams }: { searchParams?: R
                         type="submit"
                         className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300"
                       >
-                        Подтвердить (VERIFIED)
+                        Подтвердить ({plotStatusLabel("VERIFIED")})
                       </button>
                     </form>
                   </div>

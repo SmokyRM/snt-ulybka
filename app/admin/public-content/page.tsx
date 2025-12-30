@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import {
   getPublicContent,
   resetPublicContent,
@@ -11,7 +11,7 @@ import PublicContentEditorClient from "./PublicContentEditorClient";
 
 export default async function AdminPublicContentPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const content = await getPublicContent();
   const canSave = process.env.NODE_ENV !== "production";
@@ -19,7 +19,7 @@ export default async function AdminPublicContentPage() {
   async function saveAction(next: PublicContent) {
     "use server";
     const session = await getSessionUser();
-    if (!isAdmin(session)) redirect("/login?next=/admin");
+    if (!hasAdminAccess(session)) redirect("/login?next=/admin");
 
     const result = await savePublicContent(next);
     if (result.ok) {
@@ -33,7 +33,7 @@ export default async function AdminPublicContentPage() {
   async function resetAction() {
     "use server";
     const session = await getSessionUser();
-    if (!isAdmin(session)) redirect("/login?next=/admin");
+    if (!hasAdminAccess(session)) redirect("/login?next=/admin");
 
     const result = await resetPublicContent();
     if (result.ok) {

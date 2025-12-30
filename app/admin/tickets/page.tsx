@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import TicketStatusActions from "./TicketStatusActions";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listTickets } from "@/lib/ticketsDb";
 import { Ticket } from "@/types/snt";
 
@@ -29,7 +29,7 @@ export default async function AdminTicketsPage({
   searchParams?: { status?: string };
 }) {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 
@@ -120,4 +120,3 @@ export default async function AdminTicketsPage({
     </main>
   );
 }
-

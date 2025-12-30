@@ -1,4 +1,4 @@
-const PUBLIC_ROUTES = ["/", "/docs", "/electricity", "/fees", "/contacts", "/login"] as const;
+const PUBLIC_ROUTES = ["/", "/docs", "/electricity", "/fees", "/contacts", "/login", "/help"] as const;
 const USER_PREFIXES = ["/cabinet"] as const;
 const ADMIN_PREFIXES = ["/admin"] as const;
 
