@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
 const STORAGE_KEY = "onboarding.billing.completed";
 const allowedRoles = new Set(["admin", "board", "accountant"]);
@@ -10,18 +10,17 @@ type BillingOnboardingBannerProps = {
 };
 
 export default function BillingOnboardingBanner({ role }: BillingOnboardingBannerProps) {
-  const [visible, setVisible] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const visible = useMemo(() => {
+    if (!role || !allowedRoles.has(role)) return false;
+    if (dismissed) return false;
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(STORAGE_KEY) !== "true";
+  }, [dismissed, role]);
 
-  useEffect(() => {
-    if (!role || !allowedRoles.has(role)) {
-      setVisible(false);
-      return;
-    }
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    setVisible(stored !== "true");
-  }, [role]);
-
-  if (!visible) return null;
+  if (!visible) {
+    return null;
+  }
 
   return (
     <div className="rounded-2xl border border-[#5E704F]/20 bg-[#F8F1E9] p-4 text-sm text-zinc-800">
@@ -36,7 +35,7 @@ export default function BillingOnboardingBanner({ role }: BillingOnboardingBanne
         type="button"
         onClick={() => {
           window.localStorage.setItem(STORAGE_KEY, "true");
-          setVisible(false);
+          setDismissed(true);
         }}
         className="mt-3 rounded border border-[#5E704F] px-3 py-1 text-sm text-[#5E704F] hover:bg-white"
       >
@@ -45,4 +44,3 @@ export default function BillingOnboardingBanner({ role }: BillingOnboardingBanne
     </div>
   );
 }
-

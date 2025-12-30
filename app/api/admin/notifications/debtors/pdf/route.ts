@@ -45,6 +45,12 @@ export async function GET(request: Request) {
     action: "export_debtors_pdf",
     entity: "debt_notifications",
     after: { type, period: periodLabel, count: items.length, totalDebt },
+    meta: {
+      period: periodLabel,
+      type,
+      rowsCount: items.length,
+      totals: { totalDebt },
+    },
   });
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

@@ -13,7 +13,7 @@ import {
 import { categoryForAccrualType } from "@/lib/paymentCategory";
 import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import CreatePeriodFormClient, { type PeriodActionState } from "./CreatePeriodFormClient";
-import BillingOnboardingBanner from "./BillingOnboardingBanner";
+import OnboardingHintBanner from "../_components/OnboardingHintBanner";
 
 type PeriodType = "membership_fee" | "target_fee" | "electricity";
 
@@ -181,7 +181,18 @@ export default async function BillingPage({
 
   return (
     <div className="space-y-6">
-      <BillingOnboardingBanner role={user?.role} />
+        <OnboardingHintBanner
+          role={user?.role}
+          storageKey="admin.onboarding.billing"
+          title="С чего начать"
+          description="Короткий план, чтобы запустить биллинг и контроль оплат."
+          steps={[
+            { label: "Создать период начислений" },
+            { label: "Проверить начисления", href: "/admin/billing" },
+            { label: "Импортировать платежи", href: "/admin/billing/import" },
+            { label: "Контролировать долги", href: "/admin/debts" },
+          ]}
+        />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Биллинг</h1>
         <div className="flex gap-2 text-sm">

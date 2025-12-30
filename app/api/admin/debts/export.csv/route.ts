@@ -29,7 +29,15 @@ export async function GET(request: Request) {
     onlyUnnotified,
   });
   if (error) return NextResponse.json({ error }, { status: 400 });
-  const totalDebt = items.reduce((sum, i) => sum + i.debtTotal, 0);
+  const totals = items.reduce(
+    (acc, i) => ({
+      totalDebt: acc.totalDebt + i.debtTotal,
+      membership: acc.membership + i.debtMembership,
+      target: acc.target + i.debtTarget,
+      electricity: acc.electricity + i.debtElectricity,
+    }),
+    { totalDebt: 0, membership: 0, target: 0, electricity: 0 }
+  );
 
   const header = [
     "Улица",
@@ -59,7 +67,13 @@ export async function GET(request: Request) {
   await logAdminAction({
     action: "export_debts_csv",
     entity: "debts",
-    after: { type, period, count: items.length, totalDebt },
+    after: { type, period, count: items.length, totalDebt: totals.totalDebt },
+    meta: {
+      period,
+      type,
+      rowsCount: items.length,
+      totals,
+    },
   });
 
   return new NextResponse(content, {

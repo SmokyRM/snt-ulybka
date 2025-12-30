@@ -28,6 +28,18 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ ok: false, error }, { status: 400 });
 
     if (items.length === 0) {
+      await logAdminAction({
+        action: "export_debtors_telegram",
+        entity: "debt_notifications",
+        after: { type, period: periodLabel, count: 0, totalDebt: 0, sentCount: 0, skippedCount: 0, errorCount: 0 },
+        meta: {
+          period: periodLabel,
+          type,
+          rowsCount: 0,
+          totals: { totalDebt: 0 },
+          telegram: { sentCount: 0, skippedCount: 0, errorCount: 0 },
+        },
+      });
       return NextResponse.json({
         ok: true,
         sentMessages: 0,
@@ -63,6 +75,13 @@ export async function POST(request: Request) {
         skippedCount: 0,
         errorCount: 0,
       },
+      meta: {
+        period: periodLabel,
+        type,
+        rowsCount: items.length,
+        totals: { totalDebt },
+        telegram: { sentCount: sent, skippedCount: 0, errorCount: 0 },
+      },
     });
 
     return NextResponse.json({ ok: true, sentMessages: sent, skipped: 0 });
@@ -72,6 +91,9 @@ export async function POST(request: Request) {
       action: "export_debtors_telegram",
       entity: "debt_notifications",
       after: { errorMessage: message, sentCount: 0, skippedCount: 0, errorCount: 1 },
+      meta: {
+        telegram: { sentCount: 0, skippedCount: 0, errorCount: 1, errorMessage: message },
+      },
     });
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

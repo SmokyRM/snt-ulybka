@@ -4,6 +4,7 @@ import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { getDebtsData, DebtTypeFilter } from "@/lib/debts";
 import { listAccrualItems, listAccrualPeriods } from "@/lib/mockDb";
 import DebtsClient from "./DebtsClient";
+import OnboardingHintBanner from "../_components/OnboardingHintBanner";
 import { logAdminAction } from "@/lib/audit";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
@@ -77,6 +78,17 @@ export default async function DebtsPage({
             Админка
           </Link>
         </div>
+        <OnboardingHintBanner
+          role={user?.role}
+          storageKey="admin.onboarding.debts"
+          title="С чего начать"
+          description="Быстрые шаги для контроля задолженности."
+          steps={[
+            { label: "Выбрать период и тип долгов" },
+            { label: "Проверить список должников", href: "/admin/debts" },
+            { label: "Экспортировать отчёт", href: "/admin/debts" },
+          ]}
+        />
         <DebtsClient
           initialItems={data.items}
           filters={{ period, type, minDebt: minDebt ?? undefined, q, onlyUnnotified }}

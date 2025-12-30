@@ -7,6 +7,7 @@ import AdminSiteLink from "./AdminSiteLink";
 import AdminDirtyProvider from "./AdminDirtyProvider";
 import AdminNavigationProgressProvider from "./AdminNavigationProgress";
 import AdminViewAsUserButton from "./AdminViewAsUserButton";
+import AssistantWidget from "@/components/AssistantWidget";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -59,6 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <main className="px-6 py-6">{children}</main>
           </div>
         </div>
+        {hasAccess ? <AssistantWidget variant="admin" /> : null}
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>
   );

@@ -133,8 +133,22 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
   const router = useRouter();
   const { confirmIfDirty } = useAdminDirty();
   const { isNavigating, start } = useAdminNavigationProgress();
-  const [collapsed, setCollapsed] = useState(false);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const storedCollapsed = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    const isSmallScreen = window.innerWidth < 640;
+    return storedCollapsed === "true" || (storedCollapsed === null && isSmallScreen);
+  });
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    const storedSections = window.localStorage.getItem(SIDEBAR_SECTIONS_KEY);
+    if (!storedSections) return {};
+    try {
+      return JSON.parse(storedSections) as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  });
 
   const hasFinanceAccess = role === "admin" || role === "accountant" || role === "board";
   const hasMembershipTariffAccess = role === "admin" || role === "board";
@@ -211,35 +225,11 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
     return matched?.title ?? null;
   }, [pathname, sections]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedCollapsed = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    const isSmallScreen = window.innerWidth < 640;
-    if (storedCollapsed === "true" || (storedCollapsed === null && isSmallScreen)) {
-      setCollapsed(true);
-    }
-    const storedSections = window.localStorage.getItem(SIDEBAR_SECTIONS_KEY);
-    if (storedSections) {
-      try {
-        const parsed = JSON.parse(storedSections) as Record<string, boolean>;
-        setOpenSections(parsed);
-      } catch {
-        setOpenSections({});
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!activeSectionTitle) return;
-    setOpenSections((prev) => {
-      if (prev[activeSectionTitle]) return prev;
-      const next = { ...prev, [activeSectionTitle]: true };
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(next));
-      }
-      return next;
-    });
-  }, [activeSectionTitle]);
+  const visibleSections = useMemo(() => {
+    if (!activeSectionTitle) return openSections;
+    if (openSections[activeSectionTitle] !== false) return openSections;
+    return { ...openSections, [activeSectionTitle]: true };
+  }, [activeSectionTitle, openSections]);
 
   useEffect(() => {
     const prefetchTargets = [
@@ -323,13 +313,13 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
               <span>{section.title}</span>
               <span
                 className={`text-xs transition-transform ${
-                  openSections[section.title] === false ? "rotate-0" : "rotate-90"
+                  visibleSections[section.title] === false ? "rotate-0" : "rotate-90"
                 }`}
               >
                 ▶
               </span>
             </button>
-            {(collapsed || openSections[section.title] !== false) &&
+            {(collapsed || visibleSections[section.title] !== false) &&
               section.links.map((link) => {
               const rawHref = link.label === "Дашборд" ? "/admin" : link.href;
               const href = rawHref.startsWith("/") ? rawHref : `/${rawHref}`;

@@ -57,6 +57,8 @@ export default function DebtorsClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hideResolved, setHideResolved] = useState(false);
+  const [assistantDraft, setAssistantDraft] = useState<string | null>(null);
+  const [notificationMessage, setNotificationMessage] = useState("");
   const editingRef = useRef(false);
   const lastAppliedRef = useRef<string | null>(null);
 
@@ -98,6 +100,14 @@ export default function DebtorsClient() {
     setPeriod(nextPeriod);
     load(nextType, nextPeriod);
   }, [defaultPeriod, load, searchParams]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const draft = window.sessionStorage.getItem("assistant.draft.debtorsMessage");
+    if (draft) {
+      setAssistantDraft(draft);
+    }
+  }, []);
 
   const copyText = async (text: string) => {
     try {
@@ -260,6 +270,60 @@ export default function DebtorsClient() {
         </label>
         {loading && <span className="text-sm text-zinc-600">Загрузка...</span>}
         {error && <span className="text-sm text-red-700">{error}</span>}
+      </div>
+
+      {assistantDraft ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Найден черновик уведомления из помощника</p>
+          <p className="text-xs text-amber-800">
+            Можно вставить его в поле текста уведомления или отказаться.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationMessage(assistantDraft);
+                window.sessionStorage.removeItem("assistant.draft.debtorsMessage");
+                setAssistantDraft(null);
+              }}
+              className="rounded bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
+            >
+              Вставить
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                window.sessionStorage.removeItem("assistant.draft.debtorsMessage");
+                setAssistantDraft(null);
+              }}
+              className="rounded border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-900"
+            >
+              Отменить
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <label className="text-sm text-zinc-700">
+          Текст уведомления
+          <textarea
+            value={notificationMessage}
+            onChange={(event) => setNotificationMessage(event.target.value)}
+            rows={4}
+            className="mt-2 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+            placeholder="Подготовьте текст уведомления для копирования..."
+          />
+        </label>
+        {notificationMessage ? (
+          <button
+            type="button"
+            onClick={() => copyText(notificationMessage)}
+            className="mt-2 rounded border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+          >
+            Скопировать текст
+          </button>
+        ) : null}
       </div>
 
       <div className="overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
