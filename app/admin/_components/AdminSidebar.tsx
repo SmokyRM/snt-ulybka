@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAdminDirty } from "../AdminDirtyProvider";
 import { useAdminNavigationProgress } from "../AdminNavigationProgress";
-
-const SIDEBAR_COLLAPSED_KEY = "admin.sidebar.collapsed";
-const SIDEBAR_SECTIONS_KEY = "admin.sidebar.sections";
+import { sidebarStore, type SidebarState } from "./sidebarStore";
 
 const baseSections = [
   {
@@ -133,22 +131,16 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
   const router = useRouter();
   const { confirmIfDirty } = useAdminDirty();
   const { isNavigating, start } = useAdminNavigationProgress();
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const storedCollapsed = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    const isSmallScreen = window.innerWidth < 640;
-    return storedCollapsed === "true" || (storedCollapsed === null && isSmallScreen);
-  });
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
-    if (typeof window === "undefined") return {};
-    const storedSections = window.localStorage.getItem(SIDEBAR_SECTIONS_KEY);
-    if (!storedSections) return {};
-    try {
-      return JSON.parse(storedSections) as Record<string, boolean>;
-    } catch {
-      return {};
-    }
-  });
+  const sidebarState = useSyncExternalStore<SidebarState>(
+    sidebarStore.subscribe,
+    sidebarStore.getSnapshot,
+    sidebarStore.getServerSnapshot,
+  );
+  useEffect(() => {
+    sidebarStore.hydrate();
+  }, []);
+  const collapsed = sidebarState.collapsed;
+  const openSections = sidebarState.sections;
 
   const hasFinanceAccess = role === "admin" || role === "accountant" || role === "board";
   const hasMembershipTariffAccess = role === "admin" || role === "board";
@@ -260,23 +252,11 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
   }
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      }
-      return next;
-    });
+    sidebarStore.setCollapsed(!collapsed);
   };
 
   const toggleSection = (title: string) => {
-    setOpenSections((prev) => {
-      const next = { ...prev, [title]: !prev[title] };
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(next));
-      }
-      return next;
-    });
+    sidebarStore.toggleSection(title);
   };
 
   return (

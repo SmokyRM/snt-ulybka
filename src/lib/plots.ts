@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
+import { getOwnershipStore } from "@/lib/ownershipStore";
 
 export type PlotRecord = {
   plotId: string;
@@ -51,6 +52,24 @@ export type UserPlotRecord = {
   role?: "OWNER" | "DELEGATE";
 };
 
+export type DocumentMeta = {
+  name: string;
+  size: number;
+  type: string;
+  lastModified: number | null;
+};
+
+export type OwnershipVerification = {
+  id: string;
+  userId: string;
+  cadastralNumber: string;
+  documentMeta: DocumentMeta;
+  status: "sent" | "approved" | "rejected";
+  createdAt: string;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+};
+
 const plotsPath = path.join(process.cwd(), "data", "plots.json");
 const userPlotsPath = path.join(process.cwd(), "data", "user-plots.json");
 
@@ -95,6 +114,20 @@ function normalizePlot(p: PlotRecord): PlotRecord {
     delegateInviteUsedAt: p.delegateInviteUsedAt ?? null,
     lastActionAt: p.lastActionAt ?? null,
     lastActionBy: p.lastActionBy ?? null,
+  };
+}
+
+const ownershipStore = getOwnershipStore();
+
+function sanitizeDocumentName(name: string) {
+  const cleaned = name.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  return cleaned.length > 120 ? cleaned.slice(0, 120) : cleaned;
+}
+
+function sanitizeDocumentMeta(meta: DocumentMeta): DocumentMeta {
+  return {
+    ...meta,
+    name: sanitizeDocumentName(meta.name),
   };
 }
 
@@ -207,6 +240,89 @@ export async function getUserPlots(userId: string): Promise<UserPlotView[]> {
 export async function getUserPlot(userId: string) {
   const plots = await getUserPlots(userId);
   return plots.find((p) => p.linkStatus === "active") || plots[0] || null;
+}
+
+export async function getOwnershipVerifications(): Promise<OwnershipVerification[]> {
+  return ownershipStore.listAll();
+}
+
+export async function getUserOwnershipVerifications(userId: string): Promise<OwnershipVerification[]> {
+  return ownershipStore.listByUser(userId);
+}
+
+export async function createOwnershipVerification(input: {
+  userId: string;
+  cadastralNumber: string;
+  documentMeta: DocumentMeta;
+}) {
+  if (!input.userId || !input.cadastralNumber) return null;
+  const existing = await ownershipStore.listByUser(input.userId);
+  const normalized = input.cadastralNumber.trim().toLowerCase();
+  const approved = existing.find(
+    (item) => item.cadastralNumber.trim().toLowerCase() === normalized && item.status === "approved",
+  );
+  if (approved) return approved;
+  const sent = existing.find(
+    (item) => item.cadastralNumber.trim().toLowerCase() === normalized && item.status === "sent",
+  );
+  if (sent) return sent;
+  return ownershipStore.create({
+    userId: input.userId,
+    cadastralNumber: input.cadastralNumber,
+    documentMeta: sanitizeDocumentMeta(input.documentMeta),
+  });
+}
+
+async function findPlotByCadastral(cadastralNumber: string) {
+  const plots = await getPlots();
+  const normalized = cadastralNumber.trim().toLowerCase();
+  return plots.find((plot) => (plot.cadastral || "").trim().toLowerCase() === normalized) ?? null;
+}
+
+export async function reviewOwnershipVerification(input: {
+  id: string;
+  status: "approved" | "rejected";
+  reviewNote?: string | null;
+  reviewerId?: string | null;
+}) {
+  const updated = await ownershipStore.update({
+    id: input.id,
+    status: input.status,
+    reviewNote: input.reviewNote,
+    reviewerId: input.reviewerId,
+  });
+  if (!updated) return null;
+
+  if (input.status === "approved") {
+    const now = new Date().toISOString();
+    const cadastralNumber = updated.cadastralNumber;
+    let plot = await findPlotByCadastral(cadastralNumber);
+    if (!plot) {
+      plot = await upsertPlot({
+        street: "—",
+        plotNumber: cadastralNumber,
+        cadastral: cadastralNumber,
+        displayName: cadastralNumber,
+      });
+    }
+    if (plot) {
+      await setUserPlot({
+        userId: updated.userId,
+        plotId: plot.plotId,
+        status: "active",
+        ownershipStatus: "verified",
+        ownershipProof: {
+          type: "other",
+          note: `Документ: ${updated.documentMeta.name}`,
+          verifiedAt: now,
+          verifiedBy: "admin",
+        },
+        role: "OWNER",
+      });
+    }
+  }
+
+  return updated;
 }
 
 export async function setUserPlot(input: {
