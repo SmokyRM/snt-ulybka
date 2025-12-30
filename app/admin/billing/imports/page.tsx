@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { listImportBatches } from "@/lib/mockDb";
 import ImportBatchesClient from "./ImportBatchesClient";
 
 export default async function ImportBatchesPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
   const batches = listImportBatches();
 
   return (

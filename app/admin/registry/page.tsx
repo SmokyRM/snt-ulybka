@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
 import RegistryTableClient from "./RegistryTableClient";
 import RegistryImportModalClient from "./RegistryImportModalClient";
@@ -12,7 +12,7 @@ export default async function RegistryPage({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 

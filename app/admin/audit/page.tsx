@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { listAuditLogs } from "@/lib/mockDb";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 
 export default async function AuditPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     return (
       <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
         <div className="mx-auto w-full max-w-4xl space-y-4">
@@ -74,4 +74,3 @@ export default async function AuditPage() {
     </main>
   );
 }
-

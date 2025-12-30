@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { findPlotById, listPersons, updatePlotStatus, linkOwnerToPlot } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 import { Plot } from "@/types/snt";
@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: ParamsPromise<{ id: str
   const { id } = await params;
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const plot = findPlotById(id);
   if (!plot) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: ParamsPromise<{ id: st
   const { id } = await params;
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const plot = findPlotById(id);
   if (!plot) return NextResponse.json({ error: "not found" }, { status: 404 });

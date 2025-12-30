@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getSetting } from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings.shared";
 
@@ -20,8 +20,11 @@ const pingDb = async () => {
 
 export async function GET() {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "unauthorized" }, { status: user ? 403 : 401 });
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!hasAdminAccess(user)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const now = new Date();

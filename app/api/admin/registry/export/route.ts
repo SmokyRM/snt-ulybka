@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters, listPersons } from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { membershipLabel } from "@/lib/membershipLabels";
@@ -18,7 +18,7 @@ const parseFilters = (request: Request) => {
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const filters = parseFilters(request);
   const membership =

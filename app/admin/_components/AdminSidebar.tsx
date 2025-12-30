@@ -61,18 +61,67 @@ const baseSections = [
 type AdminSidebarProps = {
   isDev: boolean;
   isAdmin: boolean;
+  role: "user" | "admin" | "board" | "accountant" | "operator";
 };
 
-export default function AdminSidebar({ isDev, isAdmin }: AdminSidebarProps) {
+export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { confirmIfDirty } = useAdminDirty();
   const { isNavigating, start } = useAdminNavigationProgress();
 
-  const sections = baseSections.map((section) => ({
-    ...section,
-    links: [...section.links],
-  }));
+  const hasFinanceAccess = role === "admin" || role === "accountant" || role === "board";
+  const hasImportAccess =
+    role === "admin" || role === "accountant" || role === "operator" || role === "board";
+
+  const sections = baseSections
+    .map((section) => ({
+      ...section,
+      links: [...section.links],
+    }))
+    .map((section) => {
+      if (section.title === "Управление данными") {
+        return {
+          ...section,
+          links: section.links.filter((link) => {
+            if (link.href === "/admin/plots") return isAdmin;
+            if (link.href === "/admin/imports/plots") return hasImportAccess;
+            return true;
+          }),
+        };
+      }
+      if (section.title === "Финансы") {
+        return {
+          ...section,
+          links: section.links.filter((link) => {
+            if (
+              link.href === "/admin/billing" ||
+              link.href === "/admin/billing/import" ||
+              link.href === "/admin/billing/imports" ||
+              link.href === "/admin/notifications/debtors" ||
+              link.href === "/admin/debts"
+            ) {
+              return hasFinanceAccess || (hasImportAccess && link.href.includes("import"));
+            }
+            return true;
+          }),
+        };
+      }
+      if (section.title === "Настройки сайта") {
+        return {
+          ...section,
+          links: section.links.filter(() => isAdmin),
+        };
+      }
+      if (section.title === "Расходы и цели") {
+        return {
+          ...section,
+          links: section.links.filter(() => isAdmin),
+        };
+      }
+      return section;
+    })
+    .filter((section) => section.links.length > 0);
 
   if (isDev && isAdmin) {
     sections[0].links.push({

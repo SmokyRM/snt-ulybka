@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import ImportClient from "./ImportClient";
 
 export default async function BillingImportPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasFinanceAccess(user)) {
     redirect("/login?next=/admin");
   }
 

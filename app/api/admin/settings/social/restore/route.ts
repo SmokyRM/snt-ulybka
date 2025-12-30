@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { restoreSettingVersion } from "@/lib/settings.server";
 import { logAdminAction } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "unauthorized" }, { status: user ? 403 : 401 });
-  }
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const versionId = (body.versionId as string | undefined)?.trim();
   const comment = (body.comment as string | undefined)?.trim() || undefined;

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import SeedTestDataClient from "./SeedTestDataClient";
 
 export default async function AdminSeedPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   if (process.env.NODE_ENV === "production") {
     return (

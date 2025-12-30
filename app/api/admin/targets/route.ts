@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { addTargetFund } from "@/lib/mockDb";
 import { listTargetFundsWithStats } from "@/lib/targets";
 
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   return NextResponse.json({ items: listTargetFundsWithStats(false) });
 }
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const title = (body.title as string | undefined)?.trim();

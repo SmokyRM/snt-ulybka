@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { logAdminAction } from "@/lib/audit";
 import { getDebtsData, DebtTypeFilter } from "@/lib/debts";
 
@@ -12,7 +12,7 @@ const toCsvValue = (value: string | number) => {
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasFinanceAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const url = new URL(request.url);
   const period = url.searchParams.get("period");

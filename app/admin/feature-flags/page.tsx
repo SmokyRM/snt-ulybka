@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { FeatureFlagKey, getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import { toggleFeatureFlag } from "./actions";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function FeatureFlagsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const flags = await getFeatureFlags();
 
   return (

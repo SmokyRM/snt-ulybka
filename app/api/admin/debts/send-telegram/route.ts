@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { logAdminAction } from "@/lib/audit";
 import { getDebtsData, DebtTypeFilter } from "@/lib/debts";
 import { sendTelegramMessage } from "@/lib/telegram";
@@ -8,7 +8,9 @@ export async function POST(request: Request) {
   try {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    if (user.role !== "admin") return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    if (!hasFinanceAccess(user)) {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    }
 
     const body = await request.json().catch(() => ({}));
     const period = (body.period as string | undefined) ?? null;

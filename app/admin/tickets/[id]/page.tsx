@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import TicketStatusActions from "../TicketStatusActions";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { findTicketById } from "@/lib/ticketsDb";
 import { Ticket } from "@/types/snt";
 
@@ -29,7 +29,7 @@ export default async function AdminTicketDetail({
   params: { id: string };
 }) {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
   const ticket = findTicketById(params.id);

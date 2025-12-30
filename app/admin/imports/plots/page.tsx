@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import ImportPlotsClient from "./ImportPlotsClient";
 
 export default async function PlotsImportPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasImportAccess(user)) {
     redirect("/login?next=/admin");
   }
 

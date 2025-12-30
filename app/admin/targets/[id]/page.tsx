@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getTargetFundWithStats, getTargetFundTimeline } from "@/lib/targets";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetFundDetail({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const fund = getTargetFundWithStats(params.id);
   if (!fund) {

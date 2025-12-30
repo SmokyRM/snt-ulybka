@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
 
 type PlotStatus = "DRAFT" | "INVITE_READY" | "CLAIMED" | "VERIFIED";
@@ -18,7 +18,7 @@ const buildDisplay = (plot: { street: string; plotNumber: string }) => `${plot.s
 
 export default async function RegistryAnalyticsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const { items } = listPlotsWithFilters({ page: 1, pageSize: 10000 });
 

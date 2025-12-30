@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
 
 const parseQuery = (request: Request) => {
@@ -15,11 +15,10 @@ export async function GET(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (user.role !== "admin") {
+  if (!hasAdminAccess(user)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const { query, page, limit } = parseQuery(request);
   const { items, total } = listPlotsWithFilters({ query, page, pageSize: limit });
   return NextResponse.json({ plots: items, total, page, limit });
 }
-

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
 import { RetryButton } from "./RetryButton";
@@ -43,10 +43,10 @@ const loadBlock = async <T,>(block: string, loader: () => Promise<T>): Promise<L
 
 export default async function AdminDashboard() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
-  const showTestScenarios = process.env.NODE_ENV !== "production";
+  const showTestScenarios = process.env.NODE_ENV !== "production" && hasAdminAccess(user);
 
   const dashboardBlock = await loadBlock<DashboardData>("dashboard", async () => getAdminDashboardData());
   const analyticsBlock = await loadBlock("analytics", async () => getAnalyticsPoints());

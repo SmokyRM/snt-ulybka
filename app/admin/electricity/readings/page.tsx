@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import ClientTable from "./ClientTable";
 
 export default async function AdminMeterReadingsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 

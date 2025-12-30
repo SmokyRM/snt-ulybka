@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { upsertDebtNotification } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasFinanceAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const plotId = (body.plotId as string | undefined)?.trim();

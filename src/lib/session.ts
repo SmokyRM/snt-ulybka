@@ -3,7 +3,7 @@ const SESSION_COOKIE = "snt_session";
 interface SessionPayload {
   userId?: string;
   contact?: string;
-  role?: "user" | "admin";
+  role?: "user" | "admin" | "board" | "accountant" | "operator";
   impersonateUserId?: string;
   impersonatorAdminId?: string;
 }

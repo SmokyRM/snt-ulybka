@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 
 type HealthResponse = {
   ok: boolean;
@@ -35,7 +35,7 @@ const fetchHealth = async (): Promise<HealthResponse | null> => {
 
 export default async function AdminHealthPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
   const health = await fetchHealth();
@@ -134,4 +134,3 @@ export default async function AdminHealthPage() {
     </main>
   );
 }
-

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { getDebtsData, DebtTypeFilter } from "@/lib/debts";
 import { listAccrualItems, listAccrualPeriods } from "@/lib/mockDb";
 import DebtsClient from "./DebtsClient";
@@ -25,7 +25,7 @@ export default async function DebtsPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
   const flags = await getFeatureFlags();
   const debtsV2On = isFeatureEnabled(flags, "debtsV2");
   const latestPeriod = getLatestPeriodKey();

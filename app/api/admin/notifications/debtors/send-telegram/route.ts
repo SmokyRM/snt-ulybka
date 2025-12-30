@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { getAccrualDebtors } from "../utils";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { logAdminAction } from "@/lib/audit";
@@ -17,7 +17,7 @@ const chunkMessages = (lines: string[], header: string) => {
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasFinanceAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const type = (body.type as "membership" | "electricity" | undefined) ?? "membership";

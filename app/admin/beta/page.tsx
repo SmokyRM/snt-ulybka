@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { enableBetaHome, disableBetaHome } from "./actions";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BetaHomePage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     return (
       <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
         <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">

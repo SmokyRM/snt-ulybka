@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import {
   addPayment,
   createAccrualPeriod,
@@ -35,7 +35,7 @@ const parseDate = (iso: string | undefined) => {
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasImportAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const rowsInput = Array.isArray(body.rows) ? (body.rows as RowInput[]) : [];

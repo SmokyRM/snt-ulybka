@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { addDecision, deleteDecision, getDecisions } from "@/lib/decisions";
 
 async function createDecision(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const title = (formData.get("title") as string | null) ?? "";
   const date = (formData.get("date") as string | null) ?? "";
   const docUrl = (formData.get("docUrl") as string | null) ?? "";
@@ -17,7 +17,7 @@ async function createDecision(formData: FormData) {
 async function removeDecision(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const id = formData.get("id") as string | null;
   if (id) await deleteDecision(id);
   redirect("/admin/decisions");
@@ -25,7 +25,7 @@ async function removeDecision(formData: FormData) {
 
 export default async function DecisionsPage() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const decisions = await getDecisions();
 

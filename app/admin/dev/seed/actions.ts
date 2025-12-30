@@ -1,6 +1,6 @@
 "use server";
 
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { seedTestData, SeedSummary } from "@/lib/seedTestData";
 
 export type SeedActionState =
@@ -9,7 +9,7 @@ export type SeedActionState =
 
 export const seedTestDataAction = async (): Promise<SeedActionState> => {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     return { ok: false, error: "forbidden" };
   }
   if (process.env.NODE_ENV === "production") {

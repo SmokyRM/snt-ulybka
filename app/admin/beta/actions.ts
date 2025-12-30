@@ -2,13 +2,13 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSessionUser, isAdmin } from "@/lib/session.server";
+import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 
 const MAX_AGE = 30 * 24 * 60 * 60; // 30 дней
 
 export async function enableBetaHome() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
   const store = await Promise.resolve(cookies());
@@ -23,7 +23,7 @@ export async function enableBetaHome() {
 
 export async function disableBetaHome() {
   const user = await getSessionUser();
-  if (!isAdmin(user)) {
+  if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
   const store = await Promise.resolve(cookies());

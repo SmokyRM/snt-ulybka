@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 import { findImportBatch, voidPaymentsByBatch, updateImportBatch } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 
@@ -9,7 +9,7 @@ export async function POST(request: Request, { params }: ParamsPromise<{ id: str
   const { id } = await params;
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasImportAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const batch = findImportBatch(id);
   if (!batch) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -33,4 +33,3 @@ export async function POST(request: Request, { params }: ParamsPromise<{ id: str
 
   return NextResponse.json({ ok: true, voided });
 }
-
