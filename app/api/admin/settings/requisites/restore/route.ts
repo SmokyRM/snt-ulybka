@@ -8,6 +8,9 @@ export async function POST(request: Request) {
   if (!hasAdminAccess(user)) {
     return NextResponse.json({ error: "unauthorized" }, { status: user ? 403 : 401 });
   }
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   const body = await request.json().catch(() => ({}));
   const versionId = (body.versionId as string | undefined)?.trim();
   const comment = (body.comment as string | undefined)?.trim() || undefined;

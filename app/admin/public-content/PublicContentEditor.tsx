@@ -181,7 +181,7 @@ export default function PublicContentEditor({
     return next;
   };
 
-  const buildDiffList = (current: PublicContent, baseline: PublicContent) => {
+  function buildDiffList(current: PublicContent, baseline: PublicContent) {
     const diffs: string[] = [];
     const formatValue = (value: string) => (value?.trim() ? value.trim() : "—");
     const addField = (label: string, prev: string, next: string) => {
@@ -258,7 +258,7 @@ export default function PublicContentEditor({
     });
 
     return diffs;
-  };
+  }
 
   const validationErrors = useMemo(() => {
     const contacts = {

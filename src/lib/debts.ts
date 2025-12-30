@@ -107,13 +107,14 @@ export const getDebtsData = (params: {
   const streetNumberQuery = splitStreetAndNumber(q);
 
   const items = plots.map((plot) => {
-    const membershipAcc = accrualsByType.membership.find((a) => a.plotId === plot.id);
-    const targetAcc = accrualsByType.target.find((a) => a.plotId === plot.id);
-    const elecAcc = accrualsByType.electricity.find((a) => a.plotId === plot.id);
+    const plotIds = [plot.id, plot.plotId, plot.plotNumber].filter(Boolean);
+    const membershipAcc = accrualsByType.membership.find((a) => plotIds.includes(a.plotId));
+    const targetAcc = accrualsByType.target.find((a) => plotIds.includes(a.plotId));
+    const elecAcc = accrualsByType.electricity.find((a) => plotIds.includes(a.plotId));
 
-    const membershipPaid = sumPayments(paymentsByType.membership.filter((p) => p.plotId === plot.id));
-    const targetPaid = sumPayments(paymentsByType.target.filter((p) => p.plotId === plot.id));
-    const elecPaid = sumPayments(paymentsByType.electricity.filter((p) => p.plotId === plot.id));
+    const membershipPaid = sumPayments(paymentsByType.membership.filter((p) => plotIds.includes(p.plotId)));
+    const targetPaid = sumPayments(paymentsByType.target.filter((p) => plotIds.includes(p.plotId)));
+    const elecPaid = sumPayments(paymentsByType.electricity.filter((p) => plotIds.includes(p.plotId)));
 
     const debtMembership = Math.max((membershipAcc?.amountAccrued ?? 0) - membershipPaid, 0);
     const debtTarget = Math.max((targetAcc?.amountAccrued ?? 0) - targetPaid, 0);

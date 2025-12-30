@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
+import { logAdminAction } from "@/lib/audit";
 import {
   createAccrualPeriod,
   ensureAccrualItem,
@@ -10,7 +11,9 @@ import {
   listPlots,
 } from "@/lib/mockDb";
 import { categoryForAccrualType } from "@/lib/paymentCategory";
+import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import CreatePeriodFormClient, { type PeriodActionState } from "./CreatePeriodFormClient";
+import BillingOnboardingBanner from "./BillingOnboardingBanner";
 
 type PeriodType = "membership_fee" | "target_fee" | "electricity";
 
@@ -29,29 +32,75 @@ async function createPeriodAction(
   const type = (formData.get("type") as string) as PeriodType;
   const title = (formData.get("title") as string | null) || null;
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    await logAdminAction({
+      action: "billing_period_error",
+      entity: "billing_period",
+      entityId: null,
+      after: { year, month, type, error: "invalid_period" },
+      meta: { actorUserId: user?.id ?? null, actorRole: user?.role ?? null },
+    });
     return { status: "error", message: "Некорректный период" };
   }
-  const exists = listAccrualPeriods().some((p) => p.year === year && p.month === month && p.type === type);
-  if (exists) {
+  const existingPeriod = listAccrualPeriods().find((p) => p.year === year && p.month === month && p.type === type);
+  if (existingPeriod) {
+    await logAdminAction({
+      action: "billing_period_exists",
+      entity: "billing_period",
+      entityId: existingPeriod.id,
+      after: { year, month, type },
+      meta: { actorUserId: user?.id ?? null, actorRole: user?.role ?? null },
+    });
     return {
       status: "warning",
       message: `Период ${year}-${String(month).padStart(2, "0")} уже существует`,
     };
   }
+  let createdPeriodId: string | null = null;
   try {
-    createAccrualPeriod({ year, month, type, title });
+    const created = createAccrualPeriod({ year, month, type, title });
+    createdPeriodId = created.id;
   } catch (error) {
     const err = error instanceof Error ? error : new Error("Ошибка создания периода");
+    await logAdminAction({
+      action: "billing_period_error",
+      entity: "billing_period",
+      entityId: createdPeriodId,
+      after: { year, month, type, error: err.message },
+      meta: { actorUserId: user?.id ?? null, actorRole: user?.role ?? null },
+    });
     return { status: "error", message: `Не удалось создать период: ${err.message}` };
   }
 
-  const hasPlots = listPlots().length > 0;
+  const plots = listPlots();
+  const hasPlots = plots.length > 0;
   if (!hasPlots) {
+    await logAdminAction({
+      action: "billing_period_created_no_data",
+      entity: "billing_period",
+      entityId: createdPeriodId,
+      after: { year, month, type },
+      meta: { actorUserId: user?.id ?? null, actorRole: user?.role ?? null },
+    });
     return {
       status: "warning",
       message: "Период создан, но данных для начисления нет. Проверьте реестр участков.",
     };
   }
+  if (type === "membership_fee") {
+    const membershipTariff = getMembershipTariffSetting().value;
+    plots.forEach((plot) => {
+      const item = ensureAccrualItem(createdPeriodId, plot.id);
+      item.amountAccrued = membershipTariff;
+      item.updatedAt = new Date().toISOString();
+    });
+  }
+  await logAdminAction({
+    action: "billing_period_created",
+    entity: "billing_period",
+    entityId: createdPeriodId,
+    after: { year, month, type },
+    meta: { actorUserId: user?.id ?? null, actorRole: user?.role ?? null },
+  });
   return {
     status: "success",
     message: `Период ${year}-${String(month).padStart(2, "0")} создан`,
@@ -132,6 +181,7 @@ export default async function BillingPage({
 
   return (
     <div className="space-y-6">
+      <BillingOnboardingBanner role={user?.role} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Биллинг</h1>
         <div className="flex gap-2 text-sm">

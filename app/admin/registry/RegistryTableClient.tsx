@@ -4,6 +4,7 @@ import AppLink from "@/components/AppLink";
 import { useState } from "react";
 import { formatAdminTime } from "@/lib/settings.shared";
 import EmptyState from "@/components/EmptyState";
+import { plotStatusLabel } from "@/lib/plotStatusLabels";
 
 export default function RegistryTableClient({
   plots,
@@ -147,7 +148,7 @@ export default function RegistryTableClient({
                 <td className="px-3 py-2 text-zinc-700">
                   {plot.status ? (
                     <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs uppercase text-zinc-700">
-                      {plot.status}
+                      {plotStatusLabel(plot.status)}
                     </span>
                   ) : (
                     "—"

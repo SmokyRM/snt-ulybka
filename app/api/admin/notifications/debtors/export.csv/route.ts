@@ -20,6 +20,7 @@ export async function GET(request: Request) {
 
   const { items, periodLabel, error } = getAccrualDebtors(type, period);
   if (error) return NextResponse.json({ error }, { status: 400 });
+  const totalDebt = items.reduce((sum, i) => sum + i.debt, 0);
 
   const header = ["Улица", "Участок", "ФИО", "Начислено", "Оплачено", "Долг", "Текст"];
   const rows = items.map((i) =>
@@ -36,9 +37,9 @@ export async function GET(request: Request) {
   const content = ["\uFEFF" + header.map(toCsvValue).join(";"), ...rows].join("\r\n");
 
   await logAdminAction({
-    action: "export_debt_notifications",
+    action: "export_debtors_csv",
     entity: "debt_notifications",
-    after: { type, period: periodLabel, count: items.length },
+    after: { type, period: periodLabel, count: items.length, totalDebt },
   });
 
   return new NextResponse(content, {

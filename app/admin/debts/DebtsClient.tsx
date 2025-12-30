@@ -1,9 +1,10 @@
 "use client";
 
 import { useAppRouter } from "@/hooks/useAppRouter";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppLink from "@/components/AppLink";
 import type { DebtTypeFilter } from "@/lib/debts";
+import { useSearchParams } from "next/navigation";
 
 type Item = {
   plotId: string;
@@ -26,7 +27,24 @@ interface Props {
 
 const formatCurrency = (v: number) => `${v.toFixed(2)} ₽`;
 
+const buildQuery = (next: {
+  period: string;
+  type: DebtTypeFilter;
+  minDebt?: string;
+  q?: string;
+  onlyUnnotified?: boolean;
+}) => {
+  const sp = new URLSearchParams();
+  if (next.period) sp.set("period", next.period);
+  if (next.type) sp.set("type", next.type);
+  if (next.minDebt) sp.set("minDebt", next.minDebt);
+  if (next.q) sp.set("q", next.q);
+  if (next.onlyUnnotified) sp.set("onlyUnnotified", "1");
+  return sp.toString();
+};
+
 export default function DebtsClient({ initialItems, filters }: Props) {
+  const searchParams = useSearchParams();
   const router = useAppRouter();
   const [items, setItems] = useState(initialItems);
   const [loading, setLoading] = useState(false);
@@ -36,16 +54,20 @@ export default function DebtsClient({ initialItems, filters }: Props) {
   const [minDebt, setMinDebt] = useState(filters.minDebt ? String(filters.minDebt) : "");
   const [q, setQ] = useState(filters.q ?? "");
   const [onlyUnnotified, setOnlyUnnotified] = useState(Boolean(filters.onlyUnnotified));
+  const editingRef = useRef(false);
+  const lastAppliedRef = useRef<string | null>(null);
 
-  const queryString = useMemo(() => {
-    const sp = new URLSearchParams();
-    if (period) sp.set("period", period);
-    if (type) sp.set("type", type);
-    if (minDebt) sp.set("minDebt", minDebt);
-    if (q) sp.set("q", q);
-    if (onlyUnnotified) sp.set("onlyUnnotified", "1");
-    return sp.toString();
-  }, [period, type, minDebt, q, onlyUnnotified]);
+  const queryString = useMemo(
+    () =>
+      buildQuery({
+        period,
+        type,
+        minDebt,
+        q,
+        onlyUnnotified,
+      }),
+    [period, type, minDebt, q, onlyUnnotified]
+  );
 
   const totals = useMemo(() => {
     const summary = items.reduce(
@@ -76,24 +98,72 @@ export default function DebtsClient({ initialItems, filters }: Props) {
     };
   }, [items]);
 
-  const refresh = async () => {
+  const load = useCallback(async (
+    next: {
+      period: string;
+      type: DebtTypeFilter;
+      minDebt?: string;
+      q?: string;
+      onlyUnnotified?: boolean;
+    },
+    options?: { pushUrl?: boolean }
+  ) => {
+    const query = buildQuery(next);
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/debts?${queryString}`, { cache: "no-store" });
+      const res = await fetch(`/api/admin/debts?${query}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
         setError((data as { error?: string }).error ?? "Ошибка загрузки");
         return;
       }
       setItems(data.items as Item[]);
-      router.push(`/admin/debts?${queryString}`);
+      lastAppliedRef.current = query;
+      if (options?.pushUrl) {
+        router.push(`/admin/debts?${query}`);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    const nextPeriod = searchParams.get("period") ?? filters.period;
+    const nextType =
+      (searchParams.get("type") as DebtTypeFilter | null) ?? filters.type;
+    const nextMinDebt = searchParams.get("minDebt") ?? "";
+    const nextQ = searchParams.get("q") ?? "";
+    const nextOnlyUnnotified = searchParams.get("onlyUnnotified") === "1";
+    const nextQuery = buildQuery({
+      period: nextPeriod,
+      type: nextType,
+      minDebt: nextMinDebt,
+      q: nextQ,
+      onlyUnnotified: nextOnlyUnnotified,
+    });
+
+    if (lastAppliedRef.current === nextQuery && !editingRef.current) return;
+
+    editingRef.current = false;
+    setPeriod(nextPeriod);
+    setType(nextType);
+    setMinDebt(nextMinDebt);
+    setQ(nextQ);
+    setOnlyUnnotified(nextOnlyUnnotified);
+    load(
+      {
+        period: nextPeriod,
+        type: nextType,
+        minDebt: nextMinDebt,
+        q: nextQ,
+        onlyUnnotified: nextOnlyUnnotified,
+      },
+      { pushUrl: false }
+    );
+  }, [filters.period, filters.type, load, searchParams]);
 
   const markStatus = async (item: Item, status: "notified" | "resolved") => {
     if (!item.periodId) return;
@@ -195,7 +265,10 @@ export default function DebtsClient({ initialItems, filters }: Props) {
             <input
               type="text"
               value={period}
-              onChange={(e) => setPeriod(e.target.value)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setPeriod(e.target.value);
+              }}
               placeholder="YYYY-MM"
               className="rounded border border-zinc-300 px-3 py-2"
             />
@@ -204,7 +277,10 @@ export default function DebtsClient({ initialItems, filters }: Props) {
             <span className="font-semibold text-zinc-800">Тип</span>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as DebtTypeFilter)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setType(e.target.value as DebtTypeFilter);
+              }}
               className="rounded border border-zinc-300 px-3 py-2"
             >
               <option value="all">Все</option>
@@ -219,7 +295,10 @@ export default function DebtsClient({ initialItems, filters }: Props) {
               type="number"
               min={0}
               value={minDebt}
-              onChange={(e) => setMinDebt(e.target.value)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setMinDebt(e.target.value);
+              }}
               className="rounded border border-zinc-300 px-3 py-2"
             />
           </label>
@@ -228,7 +307,10 @@ export default function DebtsClient({ initialItems, filters }: Props) {
             <input
               type="text"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setQ(e.target.value);
+              }}
               placeholder="Улица/участок/ФИО"
               className="rounded border border-zinc-300 px-3 py-2"
             />
@@ -237,7 +319,10 @@ export default function DebtsClient({ initialItems, filters }: Props) {
             <input
               type="checkbox"
               checked={onlyUnnotified}
-              onChange={(e) => setOnlyUnnotified(e.target.checked)}
+              onChange={(e) => {
+                editingRef.current = true;
+                setOnlyUnnotified(e.target.checked);
+              }}
               className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
             />
             <span className="inline-flex items-center gap-1">
@@ -253,7 +338,12 @@ export default function DebtsClient({ initialItems, filters }: Props) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={refresh}
+              onClick={() =>
+                load(
+                  { period, type, minDebt, q, onlyUnnotified },
+                  { pushUrl: true }
+                )
+              }
               className="mt-1 rounded bg-[#5E704F] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4f5f42]"
               disabled={loading}
             >

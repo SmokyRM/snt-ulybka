@@ -38,6 +38,9 @@ export default function Footer() {
               <Link href="/access" className="text-[#5E704F] hover:underline">
                 Как получить доступ
               </Link>
+              <Link href="/help" className="text-[#5E704F] hover:underline">
+                Помощь
+              </Link>
             </div>
           </div>
         </div>

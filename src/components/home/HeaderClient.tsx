@@ -17,6 +17,7 @@ const navItems = [
   { label: "Электроэнергия", href: "/electricity" },
   { label: "Взносы", href: "/fees" },
   { label: "Контакты", href: "/contacts" },
+  { label: "Помощь", href: "/help" },
 ];
 
 const isActive = (pathname: string, href: string) => {

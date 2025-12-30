@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 export type PeriodActionState = {
   status: "idle" | "success" | "warning" | "error";
@@ -33,7 +34,7 @@ export default function CreatePeriodFormClient({
   defaultYear: number;
   defaultMonth: number;
 }) {
-  const [state, formAction] = useFormState<PeriodActionState, FormData>(action, {
+  const [state, formAction] = useActionState<PeriodActionState, FormData>(action, {
     status: "idle",
     message: "",
   });

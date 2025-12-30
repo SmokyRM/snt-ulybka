@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     onlyUnnotified,
   });
   if (error) return NextResponse.json({ error }, { status: 400 });
+  const totalDebt = items.reduce((sum, i) => sum + i.debtTotal, 0);
 
   const today = new Date().toLocaleDateString("ru-RU");
   const pages = items.map((i) => [
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
   await logAdminAction({
     action: "export_debts_pdf",
     entity: "debts",
-    after: { type, period, count: items.length },
+    after: { type, period, count: items.length, totalDebt },
   });
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

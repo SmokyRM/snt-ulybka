@@ -9,6 +9,7 @@ import {
   rejectPlotProposal,
   clearInviteCode,
 } from "@/lib/plots";
+import { plotStatusLabel } from "@/lib/plotStatusLabels";
 import ConfirmActionForm from "./ConfirmActionForm";
 
 async function generate(formData: FormData) {
@@ -120,7 +121,7 @@ export default async function PlotCodesPage({ searchParams }: { searchParams?: R
                     <div className="text-xs text-zinc-600">
                       Статус:{" "}
                       <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] font-semibold">
-                        {plot.status || "DRAFT"}
+                        {plotStatusLabel(plot.status || "DRAFT")}
                       </span>
                     </div>
                     {plotParam === plot.plotId && code ? (
@@ -169,7 +170,7 @@ export default async function PlotCodesPage({ searchParams }: { searchParams?: R
                         type="submit"
                         className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300"
                       >
-                        Подтвердить (VERIFIED)
+                        Подтвердить ({plotStatusLabel("VERIFIED")})
                       </button>
                     </form>
                   </div>

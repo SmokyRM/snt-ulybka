@@ -3,7 +3,11 @@ import { cookies } from "next/headers";
 import { listAuditLogs } from "@/lib/mockDb";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 
-export default async function AuditPage() {
+export default async function AuditPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     return (
@@ -19,7 +23,8 @@ export default async function AuditPage() {
     );
   }
   await Promise.resolve(cookies());
-  const logs = listAuditLogs({ limit: 50 });
+  const actionFilter = typeof searchParams?.action === "string" ? searchParams.action.trim() : "";
+  const logs = listAuditLogs({ limit: 200, action: actionFilter || null });
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
@@ -33,6 +38,29 @@ export default async function AuditPage() {
             Назад в админку
           </Link>
         </div>
+
+        <form className="flex flex-wrap items-end gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-zinc-600" htmlFor="action">
+              Фильтр по действию
+            </label>
+            <input
+              id="action"
+              name="action"
+              placeholder="Например: import_payments_csv"
+              defaultValue={actionFilter}
+              className="w-72 rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <button className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white" type="submit">
+            Применить
+          </button>
+          {actionFilter && (
+            <Link className="text-sm text-[#5E704F] underline" href="/admin/audit">
+              Сбросить
+            </Link>
+          )}
+        </form>
 
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-zinc-200 text-sm">

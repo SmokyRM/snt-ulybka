@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
+import { plotStatusLabel } from "@/lib/plotStatusLabels";
 
 type Props = {
   initialQuery: string;
@@ -50,10 +51,10 @@ export default function RegistryFiltersClient({ initialQuery, initialStatus }: P
         className="rounded border border-zinc-300 px-3 py-2 text-sm"
       >
         <option value="">Все статусы</option>
-        <option value="DRAFT">DRAFT</option>
-        <option value="INVITE_READY">INVITE_READY</option>
-        <option value="CLAIMED">CLAIMED</option>
-        <option value="VERIFIED">VERIFIED</option>
+        <option value="DRAFT">{plotStatusLabel("DRAFT")}</option>
+        <option value="INVITE_READY">{plotStatusLabel("INVITE_READY")}</option>
+        <option value="CLAIMED">{plotStatusLabel("CLAIMED")}</option>
+        <option value="VERIFIED">{plotStatusLabel("VERIFIED")}</option>
       </select>
       <button
         type="button"

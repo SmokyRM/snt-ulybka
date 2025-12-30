@@ -139,6 +139,12 @@ const getDb = (): MockDb => {
           createdAt: now,
           updatedAt: now,
         },
+        {
+          key: "membership_monthly_amount",
+          value: 5000,
+          createdAt: now,
+          updatedAt: now,
+        },
       ],
       entityVersions: [],
       persons: [],
@@ -440,6 +446,12 @@ export const resetMockDb = () => {
         createdAt: now,
         updatedAt: now,
       },
+      {
+        key: "membership_monthly_amount",
+        value: 5000,
+        createdAt: now,
+        updatedAt: now,
+      },
     ],
     entityVersions: [],
     persons: [],
@@ -464,6 +476,7 @@ export const logAdminAction = (entry: {
   entityId?: string | null;
   before?: unknown;
   after?: unknown;
+  meta?: Record<string, unknown> | null;
   ip?: string | null;
   userAgent?: string | null;
   comment?: string | null;
@@ -478,6 +491,7 @@ export const logAdminAction = (entry: {
     entityId: entry.entityId ?? null,
     before: entry.before,
     after: entry.after,
+    meta: entry.meta ?? undefined,
     ip: entry.ip ?? null,
     userAgent: entry.userAgent ?? null,
     comment: entry.comment ?? null,

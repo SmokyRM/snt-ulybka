@@ -15,6 +15,7 @@ export async function GET(request: Request) {
 
   const { items, periodLabel, error } = getAccrualDebtors(type, period);
   if (error) return NextResponse.json({ error }, { status: 400 });
+  const totalDebt = items.reduce((sum, i) => sum + i.debt, 0);
 
   const today = new Date().toLocaleDateString("ru-RU");
   const pages = items.map((item) => {
@@ -41,9 +42,9 @@ export async function GET(request: Request) {
   const filename = `debt_notifications_${type}_${periodLabel || "period"}.pdf`;
 
   await logAdminAction({
-    action: "export_debt_notifications_pdf",
+    action: "export_debtors_pdf",
     entity: "debt_notifications",
-    after: { type, period: periodLabel, count: items.length },
+    after: { type, period: periodLabel, count: items.length, totalDebt },
   });
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

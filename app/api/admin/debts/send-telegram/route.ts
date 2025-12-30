@@ -31,14 +31,19 @@ export async function POST(request: Request) {
     await sendTelegramMessage(message);
 
     await logAdminAction({
-      action: "send_debts_telegram",
+      action: "export_debts_telegram",
       entity: "debts",
-      after: { type, period, count: items.length, totalDebt },
+      after: { type, period, count: items.length, totalDebt, sentCount: 1, skippedCount: 0, errorCount: 0 },
     });
 
-    return NextResponse.json({ ok: true, sent: 1 });
+    return NextResponse.json({ ok: true, sent: 1, skipped: 0 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
+    await logAdminAction({
+      action: "export_debts_telegram",
+      entity: "debts",
+      after: { errorMessage: message, sentCount: 0, skippedCount: 0, errorCount: 1 },
+    });
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

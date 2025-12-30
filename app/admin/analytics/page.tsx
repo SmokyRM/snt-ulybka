@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
+import { plotStatusLabel } from "@/lib/plotStatusLabels";
 
 type PlotStatus = "DRAFT" | "INVITE_READY" | "CLAIMED" | "VERIFIED";
 
@@ -63,7 +64,7 @@ export default async function RegistryAnalyticsPage() {
           </div>
           {statusOrder.map((status) => (
             <div key={status} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <div className="text-xs text-zinc-500">Статус {status}</div>
+              <div className="text-xs text-zinc-500">Статус: {plotStatusLabel(status)}</div>
               <div className="text-2xl font-semibold">{byStatus[status]}</div>
               <Link
                 href={`/admin/registry?status=${status}`}
@@ -85,7 +86,9 @@ export default async function RegistryAnalyticsPage() {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Problem plots (DRAFT / INVITE_READY)</h2>
+            <h2 className="text-lg font-semibold">
+              Проблемные участки (не оформлены / ожидают приглашения)
+            </h2>
             <Link
               href="/admin/registry?status=DRAFT"
               className="text-xs font-semibold text-[#5E704F] underline"
@@ -113,7 +116,7 @@ export default async function RegistryAnalyticsPage() {
                     </td>
                     <td className="px-3 py-2">{plot.cadastral || "—"}</td>
                     <td className="px-3 py-2">{plot.ownerFullName || "—"}</td>
-                    <td className="px-3 py-2">{normalizeStatus(plot.status)}</td>
+                    <td className="px-3 py-2">{plotStatusLabel(normalizeStatus(plot.status))}</td>
                   </tr>
                 ))}
                 {problemPlots.length === 0 && (
@@ -130,7 +133,7 @@ export default async function RegistryAnalyticsPage() {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Pending verification (CLAIMED)</h2>
+            <h2 className="text-lg font-semibold">Ожидают подтверждения</h2>
             <Link
               href="/admin/registry?status=CLAIMED"
               className="text-xs font-semibold text-[#5E704F] underline"
@@ -158,13 +161,13 @@ export default async function RegistryAnalyticsPage() {
                     </td>
                     <td className="px-3 py-2">{plot.cadastral || "—"}</td>
                     <td className="px-3 py-2">{plot.ownerFullName || "—"}</td>
-                    <td className="px-3 py-2">{normalizeStatus(plot.status)}</td>
+                    <td className="px-3 py-2">{plotStatusLabel(normalizeStatus(plot.status))}</td>
                   </tr>
                 ))}
                 {pendingVerification.length === 0 && (
                   <tr>
                     <td className="px-3 py-3 text-center text-zinc-600" colSpan={4}>
-                      Нет участков в статусе CLAIMED
+                      Нет участков в статусе {plotStatusLabel("CLAIMED")}
                     </td>
                   </tr>
                 )}

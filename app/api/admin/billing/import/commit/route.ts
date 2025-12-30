@@ -49,6 +49,15 @@ export async function POST(request: Request) {
     comment: importComment,
   });
 
+  await logAdminAction({
+    action: "import_payments_csv_start",
+    entity: "payment",
+    entityId: batch.id,
+    before: null,
+    after: { totalRows: rowsInput.length },
+    comment: importComment || null,
+  });
+
   let createdCount = 0;
   let skippedCount = 0;
   const skippedReasons: Record<string, number> = {};
@@ -165,7 +174,7 @@ export async function POST(request: Request) {
     entity: "payment",
     entityId: batch.id,
     before: null,
-    after: { createdCount, skippedCount },
+    after: { createdCount, skippedCount, warningsCount: warnings?.length ?? 0 },
     comment: importComment || null,
   });
 
