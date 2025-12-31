@@ -407,7 +407,13 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
             : { label: "Открыть кабинет", href: "/cabinet" };
   const showSentHint = verificationsSent > 0 && verificationsApproved === 0;
   const showRejectedHint = verificationsRejected > 0 && verificationsApproved === 0;
-  const isNewUser = plotsCount === 0 && verificationsApproved === 0;
+  const showRejectedBanner =
+    plotsCount === 0 && verificationsApproved === 0 && verificationsRejected > 0;
+  const isNewUser =
+    plotsCount === 0 &&
+    verificationsApproved === 0 &&
+    verificationsSent === 0 &&
+    verificationsRejected === 0;
   const showAttentionBanner =
     plotsCount === 0 || verificationsRejected > 0 || membership.status !== "member";
   const aiContext = {
@@ -430,7 +436,38 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
 
   const homeSection = (
     <div className="space-y-4">
-      {!isNewUser && showAttentionBanner && (
+      {showRejectedBanner ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm">
+          <div className="text-sm font-semibold text-rose-900">
+            Заявка отклонена — исправьте данные и отправьте снова
+          </div>
+          <p className="mt-1 text-xs text-rose-700">
+            Проверьте кадастровый номер и приложенный документ перед повторной отправкой.
+          </p>
+          <Link
+            href="/cabinet/plots/new"
+            className="mt-3 inline-flex items-center rounded-full border border-rose-300 bg-white px-4 py-2 text-xs font-semibold text-rose-800"
+          >
+            Исправить заявку
+          </Link>
+        </div>
+      ) : isNewUser ? (
+        <div className="rounded-2xl border border-[#5E704F]/20 bg-[#F8F1E9] p-4 text-sm text-zinc-800 shadow-sm">
+          <div className="text-sm font-semibold text-zinc-900">
+            Чтобы открыть кабинет, начните с регистрации
+          </div>
+          <p className="mt-1 text-xs text-zinc-600">
+            Добавьте участок и документ — правление проверит за 1–2 дня.
+          </p>
+          <Link
+            href="/register"
+            className="mt-3 inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+          >
+            Начать регистрацию
+          </Link>
+        </div>
+      ) : null}
+      {!isNewUser && !showRejectedBanner && showAttentionBanner && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
           {profileMissing
             ? "Заполните профиль (ФИО и телефон), чтобы продолжить работу кабинета."
@@ -518,8 +555,32 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
                               </form>
                             )}
                           </div>
-                          <div className="text-xs text-zinc-600">{p.ownershipStatus === "verified" ? "подтверждён" : "на проверке"}</div>
-                          {p.cadastral ? <div className="text-xs text-zinc-600">Кадастровый номер: {p.cadastral}</div> : null}
+                          <div className="text-xs text-zinc-600">
+                            {p.ownershipStatus === "verified" ? "подтверждён" : "на проверке"}
+                          </div>
+                          {p.cadastral ? (
+                            <div className="text-xs text-zinc-600">Кадастровый номер: {p.cadastral}</div>
+                          ) : null}
+                  {membership.status === "member" && p.ownershipStatus === "verified" ? (
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#5E704F]">
+                      <Link
+                        href="/cabinet?section=electricity"
+                        prefetch
+                        aria-label={`Передать показания (${p.cadastral ?? p.plotNumber ?? p.street ?? "ваш участок"})`}
+                        className="underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current hover:text-[#4d5d41] active:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5E704F]/40"
+                      >
+                        → Передать показания
+                      </Link>
+                      <Link
+                        href="/cabinet?section=charges"
+                        prefetch
+                        aria-label={`Начисления по участку (${p.cadastral ?? p.plotNumber ?? p.street ?? "ваш участок"})`}
+                        className="underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current hover:text-[#4d5d41] active:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5E704F]/40"
+                      >
+                        → Начисления по участку
+                      </Link>
+                    </div>
+                  ) : null}
                           {!isActive ? (
                             <div className="pt-1 text-[11px] text-zinc-600">
                               Чтобы изменить данные участка, создайте обращение с темой &laquo;Изменение данных участка&raquo;.
@@ -826,10 +887,20 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
             )}
             {membership.status === "member" && verificationsApproved > 0 ? (
               <div className="mt-3 flex flex-col gap-1 text-[11px] text-[#5E704F]">
-                <Link className="hover:underline" href="/cabinet?section=electricity">
+                <Link
+                  href="/cabinet?section=electricity"
+                  prefetch
+                  aria-label="Передать показания (по вашему участку)"
+                  className="underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current hover:text-[#4d5d41] active:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5E704F]/40"
+                >
                   → Передать показания
                 </Link>
-                <Link className="hover:underline" href="/cabinet?section=charges">
+                <Link
+                  href="/cabinet?section=charges"
+                  prefetch
+                  aria-label="Начисления по участку (по вашему участку)"
+                  className="underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current hover:text-[#4d5d41] active:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5E704F]/40"
+                >
                   → Начисления по участку
                 </Link>
               </div>
