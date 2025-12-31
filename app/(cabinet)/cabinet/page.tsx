@@ -380,13 +380,6 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const hasMembershipDebt = finance.membershipDebt != null && finance.membershipDebt > 0;
   const hasElectricityDebt = finance.electricityDebt != null && finance.electricityDebt > 0;
   const hasAnyFinanceData = finance.membershipDebt !== null || finance.electricityDebt !== null;
-  const needsAttention =
-    membership.status === "unknown" ||
-    userPlot?.plotNumber == null ||
-    userPlot?.street == null ||
-    finance.status === "unknown" ||
-    (electricity?.lastReading == null && electricity?.debt == null);
-  const locked = typeof searchParams?.locked === "string";
 
   const unpaidChargesSum = charges
     .filter((c) => c.status === "unpaid")
@@ -395,285 +388,342 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const verificationsApproved = ownershipVerifications.filter((v) => v.status === "approved").length;
   const verificationsSent = ownershipVerifications.filter((v) => v.status === "sent").length;
   const verificationsRejected = ownershipVerifications.filter((v) => v.status === "rejected").length;
-  const plotsCta =
+  const latestRejected = ownershipVerifications
+    .filter((v) => v.status === "rejected")
+    .sort((a, b) => {
+      const aTs = Date.parse(a.reviewedAt ?? a.createdAt);
+      const bTs = Date.parse(b.reviewedAt ?? b.createdAt);
+      return bTs - aTs;
+    })[0];
+  const mainCta =
     plotsCount === 0 && verificationsSent === 0
-      ? { label: "Подтвердить участок", href: "/cabinet/plots/new" }
+      ? { label: "Добавить свой участок", href: "/cabinet/plots/new" }
       : verificationsSent > 0
         ? { label: "Посмотреть заявку", href: "/cabinet/plots" }
-        : { label: "Открыть мои участки", href: "/cabinet/plots" };
+        : verificationsApproved > 0 && membership.status !== "member"
+          ? { label: "Стать членом СНТ", href: "/cabinet?section=home" }
+          : isMembershipApproved
+            ? { label: "Посмотреть начисления", href: "/cabinet?section=charges" }
+            : { label: "Открыть кабинет", href: "/cabinet" };
+  const showSentHint = verificationsSent > 0 && verificationsApproved === 0;
+  const showRejectedHint = verificationsRejected > 0 && verificationsApproved === 0;
+  const isNewUser = plotsCount === 0 && verificationsApproved === 0;
+  const showAttentionBanner =
+    plotsCount === 0 || verificationsRejected > 0 || membership.status !== "member";
   const aiContext = {
     membershipStatus: membership.status,
     plotsCount,
-    hasVerifiedPlot: userPlots.some((p) => p.ownershipStatus === "verified"),
     verificationsSent,
     verificationsRejected,
+    hasVerifiedPlot: userPlots.some((p) => p.ownershipStatus === "verified"),
+    hasDebt: hasMembershipDebt || hasElectricityDebt,
+    ownership: {
+      approvedCount: verificationsApproved,
+      sentCount: verificationsSent,
+      rejectedCount: verificationsRejected,
+      latestRejectedNote: latestRejected?.reviewNote ?? null,
+      latestRejectedCadastral: latestRejected?.cadastralNumber ?? null,
+    },
     membershipDebt: finance.membershipDebt,
     electricityDebt: finance.electricityDebt,
   };
 
   const homeSection = (
     <div className="space-y-4">
-      {(needsAttention || profileMissing) && (
+      {!isNewUser && showAttentionBanner && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              {profileMissing
-                ? "Заполните профиль (ФИО и телефон), чтобы продолжить работу кабинета."
-                : "Данные уточняются. Если вы недавно купили участок или сменились данные — отправьте обращение."}
-            </div>
-            <span className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800">
-              Обновление данных
-            </span>
-          </div>
-        </div>
-      )}
-      {!isMembershipApproved && isProfileComplete && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
-          Разделы кабинета откроются после подтверждения членства.
-          {locked ? " Запросите подтверждение на этой странице." : null}
+          {profileMissing
+            ? "Заполните профиль (ФИО и телефон), чтобы продолжить работу кабинета."
+            : "Данные уточняются. Если вы недавно купили участок или сменились данные — отправьте обращение."}
         </div>
       )}
 
       <div className="rounded-2xl border border-[#5E704F]/20 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-zinc-900">Мои участки</h2>
+        <h2 className="text-lg font-semibold text-zinc-900">Мой статус</h2>
         <div className="mt-3 grid gap-3 text-sm text-zinc-800 sm:grid-cols-2">
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Мои участки</div>
-            {userPlots.length === 0 ? (
-              <EmptyState
-                title="Участок не привязан"
-                description="Введите код привязки или запросите его в правлении."
-              />
-            ) : (
-              <ul className="mt-1 space-y-2">
-                {userPlots.map((p) => {
-                  const isActive = userPlot?.plotId === p.plotId;
-                  return (
-                    <li key={p.plotId} className="space-y-0.5 rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span>
-                          № {p.plotNumber}, {p.street}
-                        </span>
-                        {isActive ? (
-                          <span className="rounded-full border border-emerald-300 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-                            Активный
-                          </span>
-                        ) : (
-                          <form action={setActivePlotAction}>
-                            <input type="hidden" name="plotId" value={p.plotId} />
-                            <button
-                              type="submit"
-                              className="rounded-full border border-zinc-300 px-2 py-1 text-[11px] font-semibold text-zinc-700 hover:border-zinc-400"
-                            >
-                              Сделать активным
-                            </button>
-                          </form>
-                        )}
-                      </div>
-                      <div className="text-xs text-zinc-600">{p.ownershipStatus === "verified" ? "подтверждён" : "на проверке"}</div>
-                      {p.cadastral ? <div className="text-xs text-zinc-600">Кадастровый номер: {p.cadastral}</div> : null}
-                      {!isActive ? (
-                        <div className="pt-1 text-[11px] text-zinc-600">
-                          Чтобы изменить данные участка, создайте обращение с темой &laquo;Изменение данных участка&raquo;.
-                          <a className="ml-1 text-[#5E704F] underline" href="/cabinet?section=appeals#appeals-section">
-                            Написать обращение
-                          </a>
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-        <div className="mt-2 text-sm text-zinc-800">Статус: {membershipStatusText}</div>
-      </div>
-
-      <AIHelper context={aiContext} />
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Электроэнергия</div>
-            <div>{electricity?.lastReading != null ? "Показания переданы" : "Не переданы"}</div>
-            <div className="text-xs text-zinc-600">
-              Дата: {electricity?.lastReadingDate ? new Date(electricity.lastReadingDate).toLocaleString("ru-RU") : "—"}
-            </div>
+            <div className="text-xs text-zinc-500">Участки</div>
+            <div className="text-base font-semibold text-zinc-900">{plotsCount}</div>
           </div>
+          {verificationsApproved === 0 &&
+          verificationsSent === 0 &&
+          verificationsRejected === 0 ? null : (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+              <div className="text-xs text-zinc-500">Заявки</div>
+              <div className="mt-1 space-y-1 text-sm text-zinc-800">
+                {verificationsSent > 0 ? <div>⏳ Заявка на проверке</div> : null}
+                {verificationsRejected > 0 ? (
+                  <div>
+                    ❌ Отклонено{latestRejected?.reviewNote ? `: ${latestRejected.reviewNote}` : ""}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Долги</div>
-            <div>
-              Членские: {hasMembershipDebt ? `${finance.membershipDebt} ₽` : "Нет долга"}
-            </div>
-            <div>
-              Электро: {hasElectricityDebt ? `${finance.electricityDebt} ₽` : "Нет долга"}
-            </div>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-            <div className="font-semibold text-zinc-900">Обращения</div>
-            <div>В работе: {appealsInProgress}</div>
-            <div className="text-xs text-zinc-600">
-              Последнее: {lastAppeal ? new Date(lastAppeal.createdAt).toLocaleString("ru-RU") : "—"}
-            </div>
+            <div className="text-xs text-zinc-500">Членство</div>
+            <div className="text-base font-semibold text-zinc-900">{membershipStatusText}</div>
           </div>
         </div>
+        <Link
+          href={mainCta.href}
+          className="mt-4 inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+        >
+          {mainCta.label}
+        </Link>
+        <p className="mt-2 text-xs text-zinc-500">
+          {membership.status === "member" && verificationsApproved > 0
+            ? "Взносы и электричество за текущий месяц."
+            : "Укажите адрес участка — правление проверит данные за 1–2 дня."}
+        </p>
+      </div>
 
-        <ProfileCard profile={profile} action={updateProfile} autoEdit={profileMissing} />
+      {isNewUser ? (
+        <AIHelper context={aiContext} />
+      ) : (
+        <>
+          <div className="rounded-2xl border border-[#5E704F]/20 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-zinc-900">Мои участки</h2>
+            <div className="mt-3 grid gap-3 text-sm text-zinc-800 sm:grid-cols-2">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <div className="font-semibold text-zinc-900">Мои участки</div>
+                {userPlots.length === 0 ? (
+                  <EmptyState
+                    title="Участок не привязан"
+                    description="Введите код привязки или запросите его в правлении."
+                  />
+                ) : (
+                  <ul className="mt-1 space-y-2">
+                    {userPlots.map((p) => {
+                      const isActive = userPlot?.plotId === p.plotId;
+                      return (
+                        <li key={p.plotId} className="space-y-0.5 rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>
+                              № {p.plotNumber}, {p.street}
+                            </span>
+                            {isActive ? (
+                              <span className="rounded-full border border-emerald-300 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                                Активный
+                              </span>
+                            ) : (
+                              <form action={setActivePlotAction}>
+                                <input type="hidden" name="plotId" value={p.plotId} />
+                                <button
+                                  type="submit"
+                                  className="rounded-full border border-zinc-300 px-2 py-1 text-[11px] font-semibold text-zinc-700 hover:border-zinc-400"
+                                >
+                                  Сделать активным
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                          <div className="text-xs text-zinc-600">{p.ownershipStatus === "verified" ? "подтверждён" : "на проверке"}</div>
+                          {p.cadastral ? <div className="text-xs text-zinc-600">Кадастровый номер: {p.cadastral}</div> : null}
+                          {!isActive ? (
+                            <div className="pt-1 text-[11px] text-zinc-600">
+                              Чтобы изменить данные участка, создайте обращение с темой &laquo;Изменение данных участка&raquo;.
+                              <a className="ml-1 text-[#5E704F] underline" href="/cabinet?section=appeals#appeals-section">
+                                Написать обращение
+                              </a>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+            <div className="mt-2 text-sm text-zinc-800">Статус: {membershipStatusText}</div>
+          </div>
 
-        {userPlot && userPlot.ownerUserId === user.id ? (
-          <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Представитель (только один)</div>
-                <p className="text-xs text-zinc-600">Код действует 7 дней. Сменить представителя можно в любой момент.</p>
+          <AIHelper context={aiContext} />
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <div className="font-semibold text-zinc-900">Электроэнергия</div>
+                <div>{electricity?.lastReading != null ? "Показания переданы" : "Не переданы"}</div>
+                <div className="text-xs text-zinc-600">
+                  Дата: {electricity?.lastReadingDate ? new Date(electricity.lastReadingDate).toLocaleString("ru-RU") : "—"}
+                </div>
               </div>
-              {delegateCode ? (
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-                  Код приглашения: {delegateCode}
-                </span>
-              ) : null}
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <div className="font-semibold text-zinc-900">Долги</div>
+                <div>
+                  Членские: {hasMembershipDebt ? `${finance.membershipDebt} ₽` : "Нет долга"}
+                </div>
+                <div>
+                  Электро: {hasElectricityDebt ? `${finance.electricityDebt} ₽` : "Нет долга"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <div className="font-semibold text-zinc-900">Обращения</div>
+                <div>В работе: {appealsInProgress}</div>
+                <div className="text-xs text-zinc-600">
+                  Последнее: {lastAppeal ? new Date(lastAppeal.createdAt).toLocaleString("ru-RU") : "—"}
+                </div>
+              </div>
             </div>
-            {delegateError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                Ошибка: {delegateError}
+
+            <ProfileCard profile={profile} action={updateProfile} autoEdit={profileMissing} />
+
+            {userPlot && userPlot.ownerUserId === user.id ? (
+              <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-900">Представитель (только один)</div>
+                    <p className="text-xs text-zinc-600">Код действует 7 дней. Сменить представителя можно в любой момент.</p>
+                  </div>
+                  {delegateCode ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                      Код приглашения: {delegateCode}
+                    </span>
+                  ) : null}
+                </div>
+                {delegateError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    Ошибка: {delegateError}
+                  </div>
+                ) : null}
+                {userPlot.delegateUserId ? (
+                  <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                    <div className="text-sm text-zinc-800">
+                      Представитель: {userPlot.delegateUserId}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <form action={clearDelegateAction}>
+                        <input type="hidden" name="plotId" value={userPlot.plotId} />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-red-200 px-3 py-1 text-[11px] font-semibold text-red-700 hover:border-red-300"
+                        >
+                          Удалить представителя
+                        </button>
+                      </form>
+                      <form action={createDelegateInviteAction}>
+                        <input type="hidden" name="plotId" value={userPlot.plotId} />
+                        <input type="hidden" name="allowReplace" value="1" />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-[#5E704F] px-3 py-1 text-[11px] font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
+                        >
+                          Сменить представителя (новый код)
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                ) : (
+                  <form action={createDelegateInviteAction} className="flex flex-col gap-2 sm:flex-row">
+                    <input type="hidden" name="plotId" value={userPlot.plotId} />
+                    <input
+                      name="invitePhone"
+                      placeholder="Телефон представителя"
+                      className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
+                    >
+                      Пригласить
+                    </button>
+                  </form>
+                )}
+                <p className="text-xs text-zinc-600">
+                  Код показывается один раз. В проде передайте его представителю лично.
+                </p>
               </div>
             ) : null}
-            {userPlot.delegateUserId ? (
-              <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <div className="text-sm text-zinc-800">
-                  Представитель: {userPlot.delegateUserId}
+
+            <PlotAccessBlock
+              hasPlots={userPlots.length > 0}
+              codeRequestSent={codeRequestSent}
+              onSubmitCode={acceptDelegateInviteAction}
+              onRequestCode={submitCodeRequest}
+            />
+
+            {userPlot ? (
+              <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-900">Сверка данных участка</div>
+                    <p className="text-xs text-zinc-600">Проверьте информацию реестра и при необходимости предложите исправления.</p>
+                  </div>
+                  {userPlot.proposedChanges ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-800">
+                      Изменения отправлены в правление
+                    </span>
+                  ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <form action={clearDelegateAction}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                    <div className="text-xs font-semibold text-zinc-700">В реестре</div>
+                    <div className="mt-1 text-sm text-zinc-800">Улица: {userPlot.street}</div>
+                    <div className="text-sm text-zinc-800">Участок: {userPlot.plotNumber}</div>
+                    <div className="text-sm text-zinc-800">Кадастровый: {userPlot.cadastral || "—"}</div>
+                    <div className="text-xs text-zinc-600">Статус: {userPlot.status || "DRAFT"}</div>
+                  </div>
+                  <form action={submitPlotProposalAction} className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                     <input type="hidden" name="plotId" value={userPlot.plotId} />
+                    <div className="text-xs font-semibold text-zinc-700">Ваши данные</div>
+                    <input
+                      name="proposalStreet"
+                      defaultValue={userPlot.proposedChanges?.street ?? userPlot.street}
+                      className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                      placeholder="Улица"
+                    />
+                    <input
+                      name="proposalPlotNumber"
+                      defaultValue={userPlot.proposedChanges?.plotNumber ?? userPlot.plotNumber}
+                      className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                      placeholder="Участок"
+                    />
+                    <input
+                      name="proposalCadastral"
+                      defaultValue={userPlot.proposedChanges?.cadastral ?? userPlot.cadastral ?? ""}
+                      className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                      placeholder="Кадастровый номер"
+                    />
                     <button
                       type="submit"
-                      className="rounded-full border border-red-200 px-3 py-1 text-[11px] font-semibold text-red-700 hover:border-red-300"
+                      className="inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
                     >
-                      Удалить представителя
-                    </button>
-                  </form>
-                  <form action={createDelegateInviteAction}>
-                    <input type="hidden" name="plotId" value={userPlot.plotId} />
-                    <input type="hidden" name="allowReplace" value="1" />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-[#5E704F] px-3 py-1 text-[11px] font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
-                    >
-                      Сменить представителя (новый код)
+                      Отправить изменения
                     </button>
                   </form>
                 </div>
               </div>
-            ) : (
-              <form action={createDelegateInviteAction} className="flex flex-col gap-2 sm:flex-row">
-                <input type="hidden" name="plotId" value={userPlot.plotId} />
-                <input
-                  name="invitePhone"
-                  placeholder="Телефон представителя"
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                />
-                <button
-                  type="submit"
-                  className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
-                >
-                  Пригласить
-                </button>
-              </form>
+            ) : null}
+
+            {profileMissing ? null : (
+              <MembershipBlock
+                latestRequest={latestRequest ? { ...latestRequest, plotId: userPlot?.plotId } : null}
+                onSubmit={submitMembership}
+                onProposal={submitPlotProposalAction}
+              />
             )}
-            <p className="text-xs text-zinc-600">
-              Код показывается один раз. В проде передайте его представителю лично.
-            </p>
           </div>
-        ) : null}
 
-        <PlotAccessBlock
-          hasPlots={userPlots.length > 0}
-          codeRequestSent={codeRequestSent}
-          onSubmitCode={acceptDelegateInviteAction}
-          onRequestCode={submitCodeRequest}
-        />
-
-        {userPlot ? (
-          <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-800 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Сверка данных участка</div>
-                <p className="text-xs text-zinc-600">Проверьте информацию реестра и при необходимости предложите исправления.</p>
+          {membership.status === "member" ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-zinc-900">Статистика СНТ</h3>
+              <div className="mt-2 grid gap-2 text-sm text-zinc-700 sm:grid-cols-2">
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  Показания электро: {electricity?.lastReading != null ? "переданы" : "нет данных"}
+                </div>
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  Обращений в работе: {appealsInProgress}
+                </div>
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  Неоплаченных начислений: {charges.filter((c) => c.status === "unpaid").length}
+                </div>
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  Сумма неоплаченных: {unpaidChargesSum || "нет данных"}
+                </div>
               </div>
-              {userPlot.proposedChanges ? (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-800">
-                  Изменения отправлены в правление
-                </span>
-              ) : null}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <div className="text-xs font-semibold text-zinc-700">В реестре</div>
-                <div className="mt-1 text-sm text-zinc-800">Улица: {userPlot.street}</div>
-                <div className="text-sm text-zinc-800">Участок: {userPlot.plotNumber}</div>
-                <div className="text-sm text-zinc-800">Кадастровый: {userPlot.cadastral || "—"}</div>
-                <div className="text-xs text-zinc-600">Статус: {userPlot.status || "DRAFT"}</div>
-              </div>
-              <form action={submitPlotProposalAction} className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <input type="hidden" name="plotId" value={userPlot.plotId} />
-                <div className="text-xs font-semibold text-zinc-700">Ваши данные</div>
-                <input
-                  name="proposalStreet"
-                  defaultValue={userPlot.proposedChanges?.street ?? userPlot.street}
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Улица"
-                />
-                <input
-                  name="proposalPlotNumber"
-                  defaultValue={userPlot.proposedChanges?.plotNumber ?? userPlot.plotNumber}
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Участок"
-                />
-                <input
-                  name="proposalCadastral"
-                  defaultValue={userPlot.proposedChanges?.cadastral ?? userPlot.cadastral ?? ""}
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Кадастровый номер"
-                />
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
-                >
-                  Отправить изменения
-                </button>
-              </form>
+          ) : (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+              Статистика СНТ доступна после подтверждения членства.
             </div>
-          </div>
-        ) : null}
-
-        {profileMissing ? null : (
-          <MembershipBlock
-            latestRequest={latestRequest ? { ...latestRequest, plotId: userPlot?.plotId } : null}
-            onSubmit={submitMembership}
-            onProposal={submitPlotProposalAction}
-          />
-        )}
-      </div>
-
-      {membership.status === "member" ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-zinc-900">Статистика СНТ</h3>
-          <div className="mt-2 grid gap-2 text-sm text-zinc-700 sm:grid-cols-2">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              Показания электро: {electricity?.lastReading != null ? "переданы" : "нет данных"}
-            </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              Обращений в работе: {appealsInProgress}
-            </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              Неоплаченных начислений: {charges.filter((c) => c.status === "unpaid").length}
-            </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              Сумма неоплаченных: {unpaidChargesSum || "нет данных"}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
-          Статистика СНТ доступна после подтверждения членства.
-        </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -770,11 +820,21 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
                       <span>Разница: {diff} ₽</span>
                     </div>
                   </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                  );
+                })}
+              </ul>
+            )}
+            {membership.status === "member" && verificationsApproved > 0 ? (
+              <div className="mt-3 flex flex-col gap-1 text-[11px] text-[#5E704F]">
+                <Link className="hover:underline" href="/cabinet?section=electricity">
+                  → Передать показания
+                </Link>
+                <Link className="hover:underline" href="/cabinet?section=charges">
+                  → Начисления по участку
+                </Link>
+              </div>
+            ) : null}
+          </div>
       </div>
     </div>
   );
@@ -1059,21 +1119,15 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           </div>
           <div className="text-sm text-zinc-800">На проверке: {verificationsSent}</div>
           <div className="text-sm text-zinc-800">Отклонено: {verificationsRejected}</div>
-          {verificationsSent > 0 && (
+          {showSentHint && (
             <div className="mt-1 text-xs text-zinc-500">На проверке — обычно 1–3 дня.</div>
           )}
-          {verificationsSent === 0 && verificationsRejected > 0 && (
+          {showRejectedHint && (
             <div className="mt-1 text-xs text-zinc-500">Отклонено — проверь причину.</div>
           )}
         </div>
+        </div>
       </div>
-      <Link
-        href={plotsCta.href}
-        className="inline-flex items-center rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
-      >
-        {plotsCta.label}
-      </Link>
-    </div>
   );
 
   const sections: { key: SectionKey; title: string; content: React.ReactNode }[] = [
