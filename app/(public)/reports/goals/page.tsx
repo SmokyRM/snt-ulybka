@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { listTargetFundsWithStats } from "@/lib/targets";
 
+export const metadata = {
+  alternates: {
+    canonical: "/reports/goals",
+  },
+};
+
 const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default function PublicGoalsPage() {

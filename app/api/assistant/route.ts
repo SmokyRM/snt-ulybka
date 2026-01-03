@@ -12,6 +12,7 @@ import {
 import { categoryForAccrualType } from "@/lib/paymentCategory";
 import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import { getPublicContent } from "@/lib/publicContentStore";
+import { OpenAIKeyMissingError } from "@/lib/openai.server";
 
 type AssistantBody = {
   message: string;
@@ -440,6 +441,9 @@ export async function POST(request: Request) {
       drafts,
     });
   } catch (error) {
+    if (error instanceof OpenAIKeyMissingError) {
+      return NextResponse.json({ error: "OPENAI_API_KEY missing" }, { status: 500 });
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

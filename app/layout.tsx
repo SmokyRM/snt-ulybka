@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { RouteLoaderProvider } from "@/components/RouteLoaderProvider";
 import { ensureMockDbFromFile } from "@/lib/mockDbFile";
+import { getSiteUrl } from "@/lib/siteUrl";
 import { siteCity, siteName } from "@/config/site";
 import "./globals.css";
 
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
   title: `${siteName} — официальный сайт | ${siteCity}`,
   description:
     "Официальный сайт СНТ «Улыбка» (г. Снежинск). Сайт в стадии разработки, поэтапно запускаются разделы документов, оплат и личного кабинета.",
+  metadataBase: getSiteUrl(),
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },

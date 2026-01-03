@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAdminDirty } from "../AdminDirtyProvider";
 import { useAdminNavigationProgress } from "../AdminNavigationProgress";
@@ -210,19 +210,6 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
     });
   }
 
-  const activeSectionTitle = useMemo(() => {
-    const matched = sections.find((section) =>
-      section.links.some((link) => pathname === link.href),
-    );
-    return matched?.title ?? null;
-  }, [pathname, sections]);
-
-  const visibleSections = useMemo(() => {
-    if (!activeSectionTitle) return openSections;
-    if (openSections[activeSectionTitle] !== false) return openSections;
-    return { ...openSections, [activeSectionTitle]: true };
-  }, [activeSectionTitle, openSections]);
-
   useEffect(() => {
     const prefetchTargets = [
       "/admin",
@@ -293,13 +280,13 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
               <span>{section.title}</span>
               <span
                 className={`text-xs transition-transform ${
-                  visibleSections[section.title] === false ? "rotate-0" : "rotate-90"
+                  openSections[section.title] === false ? "rotate-0" : "rotate-90"
                 }`}
               >
                 ▶
               </span>
             </button>
-            {(collapsed || visibleSections[section.title] !== false) &&
+            {(collapsed || openSections[section.title] !== false) &&
               section.links.map((link) => {
               const rawHref = link.label === "Дашборд" ? "/admin" : link.href;
               const href = rawHref.startsWith("/") ? rawHref : `/${rawHref}`;

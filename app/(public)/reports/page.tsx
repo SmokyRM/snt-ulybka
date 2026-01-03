@@ -1,5 +1,11 @@
 import { getCollectionsAnalytics, withTotals } from "@/lib/analytics";
 
+export const metadata = {
+  alternates: {
+    canonical: "/reports",
+  },
+};
+
 const today = new Date();
 const defaultTo = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}`;
 const defaultFrom = `${today.getUTCFullYear() - 1}-${String(today.getUTCMonth() + 1).padStart(2, "0")}`;
