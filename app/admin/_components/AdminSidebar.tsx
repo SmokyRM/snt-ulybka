@@ -139,8 +139,10 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
   useEffect(() => {
     sidebarStore.hydrate();
   }, []);
-  const collapsed = sidebarState.collapsed;
-  const openSections = sidebarState.sections;
+  const ssrSnapshot = sidebarStore.getServerSnapshot();
+  const effectiveState = sidebarState ?? ssrSnapshot;
+  const collapsed = effectiveState.collapsed;
+  const openSections = effectiveState.sections;
 
   const hasFinanceAccess = role === "admin" || role === "accountant" || role === "board";
   const hasMembershipTariffAccess = role === "admin" || role === "board";
