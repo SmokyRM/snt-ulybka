@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type HomeViewKey = "homeOld" | "homeNew";
 
@@ -17,6 +18,10 @@ async function readViews(): Promise<Views> {
       homeNew: typeof parsed.homeNew === "number" ? parsed.homeNew : 0,
     };
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("home-views:read-fallback");
+      return defaultViews;
+    }
     const dir = path.dirname(viewsPath);
     await fs.mkdir(dir, { recursive: true });
     await writeViews(defaultViews);
@@ -25,6 +30,10 @@ async function readViews(): Promise<Views> {
 }
 
 async function writeViews(views: Views) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("home-views:write");
+    return;
+  }
   const tmp = `${viewsPath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(views, null, 2), "utf-8");
   await fs.rename(tmp, viewsPath);

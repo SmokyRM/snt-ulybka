@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type UserProfile = {
   userId: string;
@@ -14,6 +15,10 @@ export type UserProfile = {
 const profilesPath = path.join(process.cwd(), "data", "user-profiles.json");
 
 async function writeJson<T>(file: string, data: T) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("user-profiles:write");
+    return;
+  }
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
   await fs.rename(tmp, file);
@@ -24,6 +29,10 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
     const raw = await fs.readFile(file, "utf-8");
     return JSON.parse(raw) as T;
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("user-profiles:read-fallback");
+      return fallback;
+    }
     const dir = path.dirname(file);
     await fs.mkdir(dir, { recursive: true });
     await writeJson(file, fallback);

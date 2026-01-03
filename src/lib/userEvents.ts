@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type UserEventType =
   | "appeal_answered"
@@ -26,6 +27,10 @@ async function readEvents(): Promise<UserEvent[]> {
     const parsed = JSON.parse(raw) as UserEvent[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("user-events:read-fallback");
+      return [];
+    }
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
     await writeEvents([]);
@@ -34,6 +39,10 @@ async function readEvents(): Promise<UserEvent[]> {
 }
 
 async function writeEvents(items: UserEvent[]) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("user-events:write");
+    return;
+  }
   const tmp = `${filePath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
   await fs.rename(tmp, filePath);

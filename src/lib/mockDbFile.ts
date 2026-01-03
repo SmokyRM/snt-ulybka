@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { MockDbSnapshot, setMockDbSnapshot } from "@/lib/mockDb";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 const getMockDbPath = () => path.join(process.cwd(), "data", "mockdb.json");
 
@@ -26,6 +27,9 @@ export const loadMockDbFromFile = async (): Promise<MockDbSnapshot | null> => {
     if (!isValidSnapshot(parsed)) return null;
     return parsed;
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("mockdb:read-fallback");
+    }
     return null;
   }
 };
@@ -43,6 +47,10 @@ export const ensureMockDbFromFile = async () => {
 
 export const saveMockDbToFile = async (snapshot: MockDbSnapshot) => {
   if (!isDevRuntime()) return;
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("mockdb:write");
+    return;
+  }
   const filePath = getMockDbPath();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), "utf-8");

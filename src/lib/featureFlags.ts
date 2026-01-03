@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type FeatureFlagKey = "newPublicHome" | "debtsV2" | "cabinetMvp" | "forceNewHome";
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
@@ -19,6 +20,10 @@ async function ensureFile(): Promise<FeatureFlags> {
     const parsed = JSON.parse(raw) as Partial<FeatureFlags>;
     return { ...defaultFlags, ...parsed };
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("feature-flags:read-fallback");
+      return defaultFlags;
+    }
     const dir = path.dirname(flagsPath);
     await fs.mkdir(dir, { recursive: true });
     await writeFlags(defaultFlags);
@@ -27,6 +32,10 @@ async function ensureFile(): Promise<FeatureFlags> {
 }
 
 async function writeFlags(flags: FeatureFlags) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("feature-flags:write");
+    return;
+  }
   const tmpPath = `${flagsPath}.tmp`;
   await fs.writeFile(tmpPath, JSON.stringify(flags, null, 2), "utf-8");
   await fs.rename(tmpPath, flagsPath);

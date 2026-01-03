@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { getOwnershipStore } from "@/lib/ownershipStore";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type PlotRecord = {
   plotId: string;
@@ -76,6 +77,10 @@ const userPlotsPath = path.join(process.cwd(), "data", "user-plots.json");
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 async function writeJson<T>(file: string, data: T) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("plots:write");
+    return;
+  }
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
   await fs.rename(tmp, file);
@@ -86,6 +91,10 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
     const raw = await fs.readFile(file, "utf-8");
     return JSON.parse(raw) as T;
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("plots:read-fallback");
+      return fallback;
+    }
     const dir = path.dirname(file);
     await fs.mkdir(dir, { recursive: true });
     await writeJson(file, fallback);

@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type FinanceHistoryEntry = {
   userId: string;
@@ -16,6 +17,10 @@ async function readFinance(): Promise<FinanceHistoryEntry[]> {
     const parsed = JSON.parse(raw) as FinanceHistoryEntry[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("finance-history:read-fallback");
+      return [];
+    }
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
     await writeFinance([]);
@@ -24,6 +29,10 @@ async function readFinance(): Promise<FinanceHistoryEntry[]> {
 }
 
 async function writeFinance(items: FinanceHistoryEntry[]) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("finance-history:write");
+    return;
+  }
   const tmp = `${filePath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
   await fs.rename(tmp, filePath);

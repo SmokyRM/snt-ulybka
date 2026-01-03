@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type ElectricityEntry = {
   userId: string;
@@ -32,6 +33,10 @@ async function readAll(): Promise<ElectricityEntry[]> {
       history: Array.isArray(item.history) ? item.history : [],
     }));
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("electricity:read-fallback");
+      return [];
+    }
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
     await writeAll([]);
@@ -40,6 +45,10 @@ async function readAll(): Promise<ElectricityEntry[]> {
 }
 
 async function writeAll(items: ElectricityEntry[]) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("electricity:write");
+    return;
+  }
   const tmp = `${filePath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
   await fs.rename(tmp, filePath);

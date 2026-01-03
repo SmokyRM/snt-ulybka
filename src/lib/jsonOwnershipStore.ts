@@ -2,13 +2,19 @@ import fs from "fs/promises";
 import path from "path";
 import type { OwnershipVerification } from "@/lib/plots";
 import type { OwnershipVerificationStore } from "@/lib/ownershipStore";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 const ownershipVerificationsPath = path.join(process.cwd(), "data", "ownership-verifications.json");
 const isProd = process.env.NODE_ENV === "production";
+const isReadonlyFs = isProd || isServerlessReadonlyFs();
 
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 async function writeJson<T>(file: string, data: T) {
+  if (isReadonlyFs) {
+    warnReadonlyFs("ownership-store:write");
+    return;
+  }
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
   await fs.rename(tmp, file);
@@ -19,7 +25,10 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
     const raw = await fs.readFile(file, "utf-8");
     return JSON.parse(raw) as T;
   } catch {
-    if (isProd) return fallback;
+    if (isReadonlyFs) {
+      warnReadonlyFs("ownership-store:read-fallback");
+      return fallback;
+    }
     const dir = path.dirname(file);
     await fs.mkdir(dir, { recursive: true });
     await writeJson(file, fallback);
@@ -63,8 +72,9 @@ export function createJsonOwnershipStore(): OwnershipVerificationStore {
       );
     },
     async create(input) {
-      if (isProd) {
-        throw new Error("OWNERSHIP_STORE_READONLY");
+      if (isReadonlyFs) {
+        warnReadonlyFs("ownership-store:create");
+        throw new Error("READONLY_FS");
       }
       const items = await getAll();
       const now = new Date().toISOString();
@@ -83,8 +93,9 @@ export function createJsonOwnershipStore(): OwnershipVerificationStore {
       return record;
     },
     async update(input) {
-      if (isProd) {
-        throw new Error("OWNERSHIP_STORE_READONLY");
+      if (isReadonlyFs) {
+        warnReadonlyFs("ownership-store:update");
+        return null;
       }
       const items = await getAll();
       const idx = items.findIndex((item) => item.id === input.id);

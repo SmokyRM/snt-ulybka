@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import path from "path";
 import { promises as fs } from "fs";
 import { getSessionUser } from "@/lib/session.server";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 type LogPayload = {
   questionType: string;
@@ -19,11 +20,19 @@ const readLog = async (): Promise<LogPayload[]> => {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as LogPayload[]) : [];
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("ai-helper-log:read-fallback");
+      return [];
+    }
     return [];
   }
 };
 
 const writeLog = async (items: LogPayload[]) => {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("ai-helper-log:write");
+    return;
+  }
   await fs.mkdir(path.dirname(LOG_PATH), { recursive: true });
   const tmp = `${LOG_PATH}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
