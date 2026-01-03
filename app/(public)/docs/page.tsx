@@ -2,6 +2,11 @@ import DocumentsClient from "./DocumentsClient";
 import { getPublicContent } from "@/lib/publicContentStore";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  alternates: {
+    canonical: "/docs",
+  },
+};
 
 export default async function DocsPage() {
   const content = await getPublicContent();

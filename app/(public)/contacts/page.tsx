@@ -1,5 +1,11 @@
 import Contacts from "@/components/home/Contacts";
 
+export const metadata = {
+  alternates: {
+    canonical: "/contacts",
+  },
+};
+
 export default function ContactsPage() {
   return (
     <main className="bg-[#F8F1E9]">
@@ -15,4 +21,3 @@ export default function ContactsPage() {
     </main>
   );
 }
-

@@ -3,6 +3,12 @@ import { PAYMENT_DETAILS } from "@/config/paymentDetails";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { siteName } from "@/config/site";
 
+export const metadata = {
+  alternates: {
+    canonical: "/about",
+  },
+};
+
 const formatUrlLabel = (url: string) => {
   try {
     const parsed = new URL(url);

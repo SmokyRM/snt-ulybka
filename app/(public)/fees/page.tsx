@@ -10,6 +10,9 @@ export const metadata = {
   title: "Взносы и долги — СНТ «Улыбка»",
   description:
     "Порядок оплаты, формула расчёта, сроки и ответы на частые вопросы.",
+  alternates: {
+    canonical: "/fees",
+  },
 };
 
 export default function FeesPage() {

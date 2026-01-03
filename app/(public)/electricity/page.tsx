@@ -5,6 +5,9 @@ import { getSntSettings } from "@/lib/sntSettings";
 export const metadata = {
   title: "Электроэнергия — СНТ «Улыбка»",
   description: "Информация об оплате электроэнергии и переходе на прямой договор.",
+  alternates: {
+    canonical: "/electricity",
+  },
 };
 
 export default function ElectricityPage() {

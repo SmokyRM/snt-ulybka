@@ -1,5 +1,11 @@
 import AppLink from "@/components/AppLink";
 
+export const metadata = {
+  alternates: {
+    canonical: "/access",
+  },
+};
+
 const steps = [
   {
     title: "Заполните профиль",

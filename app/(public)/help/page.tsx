@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { getPublicContent } from "@/lib/publicContentStore";
 
+export const metadata = {
+  alternates: {
+    canonical: "/help",
+  },
+};
+
 export default async function HelpPage() {
   const content = await getPublicContent();
   const contacts = content.contacts;
@@ -91,4 +97,3 @@ export default async function HelpPage() {
     </div>
   );
 }
-
