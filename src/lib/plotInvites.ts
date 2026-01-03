@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 import crypto from "crypto";
 import { setUserPlot } from "@/lib/plots";
 
@@ -17,6 +18,10 @@ export type PlotInvite = {
 const invitesPath = path.join(process.cwd(), "data", "plot-invites.json");
 
 async function writeJson<T>(file: string, data: T) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("plot-invites:write");
+    return;
+  }
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
   await fs.rename(tmp, file);
@@ -27,6 +32,10 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
     const raw = await fs.readFile(file, "utf-8");
     return JSON.parse(raw) as T;
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("plot-invites:read-fallback");
+      return fallback;
+    }
     const dir = path.dirname(file);
     await fs.mkdir(dir, { recursive: true });
     await writeJson(file, fallback);

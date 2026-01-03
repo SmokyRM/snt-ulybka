@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { getSessionUser } from "@/lib/session.server";
 import { logAdminAction } from "@/lib/audit";
 import {
@@ -12,7 +13,8 @@ import {
 import { categoryForAccrualType } from "@/lib/paymentCategory";
 import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import { getPublicContent } from "@/lib/publicContentStore";
-import { OpenAIKeyMissingError } from "@/lib/openai.server";
+import { createOpenAIClient, OpenAIKeyMissingError } from "@/lib/openai.server";
+import { enforceAiRateLimit, logAiUsage } from "@/lib/aiUsageStore";
 
 type AssistantBody = {
   message: string;
@@ -28,6 +30,7 @@ type Topic =
   | "staff-debtors";
 
 const staffRoles = new Set(["admin", "board", "accountant", "operator"]);
+const aiAllowedRoles = new Set(["admin", "board", "accountant"]);
 type ContextCardStatus = "success" | "warning" | "error" | "info";
 type ContextCard = {
   title: string;
@@ -45,6 +48,22 @@ type AssistantDraft = {
   id: string;
   title: string;
   text: string;
+};
+
+const CACHE_TTL_SECONDS = 60 * 20;
+const CONTEXT_VERSION = "v1";
+const MAX_OUTPUT_TOKENS = 600;
+const MAX_ANSWER_CHARS = MAX_OUTPUT_TOKENS * 4;
+const KV_URL = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+
+type AssistantPayload = {
+  topic: Topic;
+  answer: string;
+  links: { label: string; href: string }[];
+  contextCards: ContextCard[];
+  actions: AssistantAction[];
+  drafts: AssistantDraft[];
 };
 
 const topicFiles: Record<Topic, string> = {
@@ -88,6 +107,95 @@ const inferTopic = (text: string, pathHint: string | null): Topic => {
   if (/(debtors?|должник|уведом)/i.test(source)) return "staff-debtors";
   if (/(debt|долг|задолж)/i.test(source)) return "staff-debts";
   return "public-help";
+};
+
+const kvFetch = async (path: string, init?: RequestInit) => {
+  if (!KV_URL || !KV_TOKEN) {
+    return null;
+  }
+  const res = await fetch(`${KV_URL}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${KV_TOKEN}`,
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    return null;
+  }
+  return res.json() as Promise<{ result?: unknown }>;
+};
+
+const cacheGet = async (key: string): Promise<AssistantPayload | null> => {
+  const data = await kvFetch(`/get/${encodeURIComponent(key)}`);
+  const raw = data?.result;
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as AssistantPayload;
+    } catch {
+      return null;
+    }
+  }
+  return raw as AssistantPayload;
+};
+
+const cacheSet = async (key: string, payload: AssistantPayload) => {
+  if (!KV_URL || !KV_TOKEN) return;
+  await kvFetch(`/set/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  await kvFetch(`/expire/${encodeURIComponent(key)}/${CACHE_TTL_SECONDS}`, { method: "POST" });
+};
+
+const trimAnswer = (text: string) => {
+  if (text.length <= MAX_ANSWER_CHARS) return text;
+  return `${text.slice(0, MAX_ANSWER_CHARS).trim()}…`;
+};
+
+const matchFaq = (message: string) => {
+  const text = message.toLowerCase();
+  if (/(доступ|вход|логин|кабинет|код)/i.test(text)) {
+    return {
+      answer:
+        "Доступ в личный кабинет выдаёт правление. Получите код участка и войдите через страницу доступа. Если кода нет, запросите его у правления.",
+      links: [
+        { label: "Как получить доступ", href: "/access" },
+        { label: "Вход в кабинет", href: "/login" },
+      ],
+    };
+  }
+  if (/(взнос|оплат|платеж|реквиз|долг)/i.test(text)) {
+    return {
+      answer:
+        "Информация о взносах, сроках оплаты и реквизитах доступна на странице «Взносы и долги».",
+      links: [{ label: "Взносы и долги", href: "/fees" }],
+    };
+  }
+  if (/(электр|свет|показан|счётчик|энерг)/i.test(text)) {
+    return {
+      answer:
+        "Передача показаний и информация по электроэнергии описаны в разделе «Электроэнергия».",
+      links: [{ label: "Электроэнергия", href: "/electricity" }],
+    };
+  }
+  if (/(документ|устав|протокол|решен)/i.test(text)) {
+    return {
+      answer:
+        "Официальные документы СНТ доступны в разделе «Документы». Там размещены устав, протоколы и шаблоны.",
+      links: [{ label: "Документы", href: "/docs" }],
+    };
+  }
+  if (/(обращен|связ|правлен|контакт|телефон|почт)/i.test(text)) {
+    return {
+      answer:
+        "Контакты правления и способы связи размещены на странице «Контакты».",
+      links: [{ label: "Контакты", href: "/contacts" }],
+    };
+  }
+  return null;
 };
 
 const loadTopicContent = async (topic: Topic): Promise<string> => {
@@ -356,12 +464,91 @@ const buildDebtDrafts = ({
 };
 
 export async function POST(request: Request) {
+  let success = false;
+  let errorMessage: string | null = null;
+  let body: AssistantBody;
   try {
-    const body = (await request.json()) as AssistantBody;
-    const message = typeof body.message === "string" ? body.message : "";
-    const pathHint = body.pageContext?.path ?? null;
-    const sessionUser = await getSessionUser();
-    const role = sessionUser?.role ?? "member";
+    body = (await request.json()) as AssistantBody;
+  } catch {
+    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+  }
+  const message = typeof body.message === "string" ? body.message : "";
+  const pathHint = body.pageContext?.path ?? null;
+  const faqMatch = matchFaq(message);
+  if (faqMatch) {
+    success = true;
+    const answer = trimAnswer(faqMatch.answer);
+    return NextResponse.json({
+      ok: true,
+      topic: "public-help",
+      answer,
+      links: faqMatch.links,
+      contextCards: [],
+      actions: faqMatch.links.map((link) => ({ type: "link", label: link.label, href: link.href })),
+      drafts: [],
+      source: "faq",
+      cached: false,
+    });
+  }
+
+  const sessionUser = await getSessionUser();
+  const userId = sessionUser?.id ?? null;
+  const role = sessionUser?.role ?? "member";
+  const aiFeatureEnabled = process.env.AI_ASSISTANT_ENABLED === "1";
+
+  if (!userId || (!aiFeatureEnabled && !aiAllowedRoles.has(role))) {
+    return NextResponse.json(
+      {
+        error: "AI not enabled",
+        message: "Доступен только режим справки. Для расширенного помощника нужен доступ правления.",
+      },
+      { status: 403 },
+    );
+  }
+
+  const startedAt = new Date();
+  try {
+    const rate = await enforceAiRateLimit(userId, startedAt);
+    if (!rate.allowed) {
+      await logAiUsage({
+        userId,
+        ts: startedAt.toISOString(),
+        success: false,
+        tokens: null,
+        error: "Rate limit exceeded",
+      });
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[assistant] rate limit failed", error);
+    }
+    await logAiUsage({
+      userId,
+      ts: startedAt.toISOString(),
+      success: false,
+      tokens: null,
+      error: msg,
+    });
+    return NextResponse.json({ error: "AI rate limiter unavailable" }, { status: 500 });
+  }
+
+  try {
+    const prompt = `${message}|${pathHint ?? ""}|${CONTEXT_VERSION}`;
+    const cacheKey = `ai:cache:${userId}:${createHash("sha256").update(prompt).digest("hex")}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      success = true;
+      return NextResponse.json({
+        ok: true,
+        ...cached,
+        cached: true,
+        source: "cache",
+      });
+    }
+
+    createOpenAIClient((apiKey) => apiKey);
     const isStaff = staffRoles.has(role);
     const rawTopic = inferTopic(message, pathHint);
     const topic: Topic = isStaff ? rawTopic : "public-help";
@@ -431,20 +618,37 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      ok: true,
+    success = true;
+    const payload: AssistantPayload = {
       topic,
-      answer,
+      answer: trimAnswer(answer),
       links,
       contextCards,
       actions,
       drafts,
+    };
+    await cacheSet(cacheKey, payload);
+    return NextResponse.json({
+      ok: true,
+      ...payload,
+      cached: false,
+      source: "assistant",
     });
   } catch (error) {
     if (error instanceof OpenAIKeyMissingError) {
+      errorMessage = "OPENAI_API_KEY missing";
       return NextResponse.json({ error: "OPENAI_API_KEY missing" }, { status: 500 });
     }
     const message = error instanceof Error ? error.message : "Unknown error";
+    errorMessage = message;
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  } finally {
+    await logAiUsage({
+      userId,
+      ts: startedAt.toISOString(),
+      success,
+      tokens: null,
+      error: success ? null : errorMessage ?? "Unknown error",
+    });
   }
 }

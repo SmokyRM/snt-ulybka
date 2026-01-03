@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type Decision = {
   id: string;
@@ -12,6 +13,10 @@ export type Decision = {
 const filePath = path.join(process.cwd(), "data", "decisions.json");
 
 async function writeDecisions(items: Decision[]) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("decisions:write");
+    return;
+  }
   const tmp = `${filePath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
   await fs.rename(tmp, filePath);
@@ -23,6 +28,10 @@ async function readDecisions(): Promise<Decision[]> {
     const parsed = JSON.parse(raw) as Decision[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("decisions:read-fallback");
+      return [];
+    }
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
     await writeDecisions([]);

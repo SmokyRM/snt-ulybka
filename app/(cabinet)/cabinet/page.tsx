@@ -32,6 +32,26 @@ import { AIHelper } from "./AIHelper";
 import PlotAccessBlock from "./PlotAccessBlock";
 import EmptyState from "@/components/EmptyState";
 
+const logCabinetError = (label: string, error: unknown) => {
+  const message = error instanceof Error ? error.message : "Unknown error";
+  console.error(`[cabinet] ${label} failed`, message);
+};
+
+async function safeFetch<T>(
+  label: string,
+  fallback: T,
+  fn: () => Promise<T>,
+  errors: string[],
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    logCabinetError(label, error);
+    errors.push(label);
+    return fallback;
+  }
+}
+
 async function submitAppeal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
@@ -319,24 +339,70 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     if (view !== "user") redirect("/admin");
   }
 
-  const userPlots = await getUserPlots(user.id ?? "");
-  const ownershipVerifications = await getUserOwnershipVerifications(user.id ?? "");
-  const prefs = await getUserPreferences(user.id ?? "");
+  const nowIso = new Date().toISOString();
+  const dataErrors: string[] = [];
+  const userId = user.id ?? "";
+  const userPlots = await safeFetch("userPlots", [], () => getUserPlots(userId), dataErrors);
+  const ownershipVerifications = await safeFetch(
+    "ownershipVerifications",
+    [],
+    () => getUserOwnershipVerifications(userId),
+    dataErrors,
+  );
+  const prefs = await safeFetch(
+    "userPreferences",
+    { userId, activePlotId: null, updatedAt: nowIso },
+    () => getUserPreferences(userId),
+    dataErrors,
+  );
   const userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.linkStatus === "active") || userPlots[0] || null;
-  const membership = await getMembershipStatus(user.id ?? "");
-  let profile = await getUserProfile(user.id ?? "");
-  const latestRequest = await getLatestMembershipRequestForUser(user.id ?? "");
+  const membership = await safeFetch(
+    "membershipStatus",
+    { userId, status: "unknown", updatedAt: nowIso, updatedBy: "system", notes: null },
+    () => getMembershipStatus(userId),
+    dataErrors,
+  );
+  let profile = await safeFetch(
+    "userProfile",
+    {
+      userId,
+      fullName: null,
+      phone: null,
+      email: null,
+      cadastralNumbers: [],
+      updatedAt: nowIso,
+      updatedBy: "system",
+    },
+    () => getUserProfile(userId),
+    dataErrors,
+  );
+  const latestRequest = await safeFetch(
+    "latestMembershipRequest",
+    null,
+    () => getLatestMembershipRequestForUser(userId),
+    dataErrors,
+  );
   const activeRequestHasContacts =
     latestRequest?.status === "new" && !!latestRequest.fullName && !!latestRequest.phone;
   if (
     (!profile.fullName || !profile.phone) &&
     activeRequestHasContacts
   ) {
-    await upsertUserProfileByUser(user.id ?? "", { fullName: latestRequest.fullName, phone: latestRequest.phone });
-    profile = await getUserProfile(user.id ?? "");
+    try {
+      await upsertUserProfileByUser(userId, { fullName: latestRequest.fullName, phone: latestRequest.phone });
+      profile = await safeFetch(
+        "userProfileRefresh",
+        profile,
+        () => getUserProfile(userId),
+        dataErrors,
+      );
+    } catch (error) {
+      logCabinetError("userProfileUpdate", error);
+      dataErrors.push("userProfileUpdate");
+    }
   }
   const profileMissing = !profile.fullName || !profile.phone;
-  if (profileMissing && user.role !== "admin") {
+  if (profileMissing && user.role !== "admin" && !dataErrors.includes("userProfile")) {
     redirect("/onboarding");
   }
   const membershipStatusText =
@@ -350,27 +416,69 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const isProfileComplete = !profileMissing;
   const isMembershipApproved = membership.status === "member";
 
-  const appeals = await getUserAppeals(user.id ?? "");
-  const finance = await getUserFinanceInfo(user.id ?? "");
-  const electricity = await getUserElectricity(user.id ?? "", userPlot?.plotId ?? null);
-  const paymentDetails = await getPaymentDetails();
-  const events = await getUserEvents(user.id ?? "", 10);
-  const unreadCount = await getUnreadCount(user.id ?? "");
-  const electricityHistory = await getUserElectricityHistory(user.id ?? "", 6, userPlot?.plotId ?? null);
-  const financeHistory = await getUserFinanceHistory(user.id ?? "", 6);
-  const requiredDocs = await getRequiredDocsForUser({
-    userId: user.id ?? "",
-    membershipStatus:
-      membership.status === "member"
-        ? "member"
-        : membership.status === "non-member"
-          ? "non-member"
-          : "unknown",
-  });
-  const charges = await getUserCharges(user.id ?? "");
-  const decisions = await getDecisions();
+  const appeals = await safeFetch("appeals", [], () => getUserAppeals(userId), dataErrors);
+  const finance = await safeFetch(
+    "financeInfo",
+    { membershipDebt: null, electricityDebt: null, status: "unknown" },
+    () => getUserFinanceInfo(userId),
+    dataErrors,
+  );
+  const electricity = await safeFetch(
+    "electricity",
+    null,
+    () => getUserElectricity(userId, userPlot?.plotId ?? null),
+    dataErrors,
+  );
+  const paymentDetails = await safeFetch(
+    "paymentDetails",
+    {
+      recipientName: "—",
+      inn: "—",
+      kpp: "—",
+      account: "—",
+      bank: "—",
+      bik: "—",
+      corrAccount: "—",
+    },
+    () => getPaymentDetails(),
+    dataErrors,
+  );
+  const events = await safeFetch("userEvents", [], () => getUserEvents(userId, 10), dataErrors);
+  const unreadCount = await safeFetch("unreadCount", 0, () => getUnreadCount(userId), dataErrors);
+  const electricityHistory = await safeFetch(
+    "electricityHistory",
+    [],
+    () => getUserElectricityHistory(userId, 6, userPlot?.plotId ?? null),
+    dataErrors,
+  );
+  const financeHistory = await safeFetch(
+    "financeHistory",
+    [],
+    () => getUserFinanceHistory(userId, 6),
+    dataErrors,
+  );
+  const requiredDocs = await safeFetch(
+    "requiredDocs",
+    [],
+    () =>
+      getRequiredDocsForUser({
+        userId,
+        membershipStatus:
+          membership.status === "member"
+            ? "member"
+            : membership.status === "non-member"
+              ? "non-member"
+              : "unknown",
+      }),
+    dataErrors,
+  );
+  const charges = await safeFetch("charges", [], () => getUserCharges(userId), dataErrors);
+  const decisions = await safeFetch("decisions", [], () => getDecisions(), dataErrors);
   const decisionMap = new Map(decisions.map((d) => [d.id, d]));
   const userPlotMap = new Map(userPlots.map((p) => [p.plotId, p]));
+  if (dataErrors.length > 0) {
+    console.error("[cabinet] data fetch errors", dataErrors);
+  }
 
   const appealsInProgress = appeals.filter((a) => a.status === "in_progress").length;
   const lastAppeal = appeals[0];
@@ -436,6 +544,11 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
 
   const homeSection = (
     <div className="space-y-4">
+      {dataErrors.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
+          Данные временно недоступны. Попробуйте обновить страницу позже.
+        </div>
+      ) : null}
       {showRejectedBanner ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm">
           <div className="text-sm font-semibold text-rose-900">

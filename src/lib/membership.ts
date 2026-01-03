@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { setUserPlot, upsertPlot } from "@/lib/plots";
 import { upsertUserProfileByUser } from "@/lib/userProfiles";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type MembershipStatus = "member" | "non-member" | "pending" | "unknown";
 export type MembershipRecord = {
@@ -34,6 +35,10 @@ const requestsPath = path.join(process.cwd(), "data", "membership-requests.json"
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 async function writeJson<T>(file: string, data: T) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("membership:write");
+    return;
+  }
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
   await fs.rename(tmp, file);
@@ -44,6 +49,10 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
     const raw = await fs.readFile(file, "utf-8");
     return JSON.parse(raw) as T;
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("membership:read-fallback");
+      return fallback;
+    }
     const dir = path.dirname(file);
     await fs.mkdir(dir, { recursive: true });
     await writeJson(file, fallback);

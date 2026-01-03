@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type ChargeType = "membership" | "target" | "electricity";
 export type ChargeStatus = "unpaid" | "paid";
@@ -19,6 +20,10 @@ export type Charge = {
 const filePath = path.join(process.cwd(), "data", "charges.json");
 
 async function writeCharges(items: Charge[]) {
+  if (isServerlessReadonlyFs()) {
+    warnReadonlyFs("charges:write");
+    return;
+  }
   const tmp = `${filePath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
   await fs.rename(tmp, filePath);
@@ -30,6 +35,10 @@ async function readCharges(): Promise<Charge[]> {
     const parsed = JSON.parse(raw) as Charge[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
+    if (isServerlessReadonlyFs()) {
+      warnReadonlyFs("charges:read-fallback");
+      return [];
+    }
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
     await writeCharges([]);
