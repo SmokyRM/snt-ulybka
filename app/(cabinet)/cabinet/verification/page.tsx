@@ -162,12 +162,10 @@ export default async function VerificationPage() {
           )}
         </div>
 
-        <Link
-          href="/cabinet"
-          className="text-xs font-semibold text-[#5E704F] underline"
-        >
-          ← Вернуться в кабинет
-        </Link>
+        <div className="flex flex-wrap gap-4 text-xs font-semibold text-[#5E704F] underline">
+          <Link href="/cabinet">← Вернуться в кабинет</Link>
+          <Link href="/">← На главную</Link>
+        </div>
       </div>
     </main>
   );

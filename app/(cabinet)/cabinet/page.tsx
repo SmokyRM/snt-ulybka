@@ -28,8 +28,7 @@ import { submitPlotProposal } from "@/lib/plots";
 import { createCodeRequest } from "@/lib/codeRequests";
 import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
-import OnboardingBlock from "@/components/OnboardingBlock";
-import { getOnboardingStatus } from "@/lib/onboardingStatus";
+import { getVerificationStatus } from "@/lib/verificationStatus";
 
 const logCabinetError = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown error";
@@ -400,15 +399,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
       dataErrors.push("userProfileUpdate");
     }
   }
-  const profileMissing = !profile.fullName || !profile.phone;
-  if (profileMissing && user.role !== "admin" && !dataErrors.includes("userProfile")) {
-    return <OnboardingBlock />;
-  }
-  const onboardingStatus = await getOnboardingStatus(userId);
-  if (onboardingStatus !== "complete" && user.role !== "admin") {
-    return <OnboardingBlock />;
-  }
-  const isProfileComplete = !profileMissing;
+  const profileComplete = Boolean(profile.fullName && profile.phone);
 
   const appeals = await safeFetch("appeals", [], () => getUserAppeals(userId), dataErrors);
   const finance = await safeFetch(
@@ -479,23 +470,11 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const verificationsApproved = ownershipVerifications.filter((v) => v.status === "approved").length;
   const verificationsSent = ownershipVerifications.filter((v) => v.status === "sent").length;
   const verificationsRejected = ownershipVerifications.filter((v) => v.status === "rejected").length;
-  const showSentHint = verificationsSent > 0 && verificationsApproved === 0;
-  const showRejectedHint = verificationsRejected > 0 && verificationsApproved === 0;
-  const hasVerifiedPlot = userPlots.some((plot) => plot.ownershipStatus === "verified");
-  const latestVerification = [...ownershipVerifications].sort((a, b) => {
-    const aTs = Date.parse(a.reviewedAt ?? a.createdAt);
-    const bTs = Date.parse(b.reviewedAt ?? b.createdAt);
-    return bTs - aTs;
-  })[0];
-  const statusType = (() => {
-    if (verificationsApproved > 0 || hasVerifiedPlot) return "verified";
-    if (latestVerification?.status === "rejected") return "rejected";
-    if (verificationsSent > 0) return "pending";
-    return "draft";
-  })();
-  const isConfirmed = statusType === "verified";
-  const isBlocked = membership.status === "non-member" && verificationsRejected > 0;
-  const rejectedNote = latestVerification?.status === "rejected" ? latestVerification.reviewNote : null;
+  const { status, latest } = getVerificationStatus(userPlots, ownershipVerifications);
+  const latestRejectedNote = latest?.status === "rejected" ? latest.reviewNote : null;
+  const hasPlots = userPlots.length > 0;
+  const isConfirmed = status === "verified";
+  const isBlocked = membership.status === "non-member" && status === "rejected";
   const contactEmail = PUBLIC_CONTENT_DEFAULTS.contacts.email;
   const contactLinks = [
     OFFICIAL_CHANNELS.telegram ? { label: "Telegram", href: OFFICIAL_CHANNELS.telegram } : null,
@@ -545,29 +524,67 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
         </div>
       ) : (
         <>
-          <div
-            className={`rounded-2xl border p-4 text-sm ${
-              isConfirmed
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : statusType === "rejected"
-                  ? "border-amber-200 bg-amber-50 text-amber-900"
-                  : statusType === "pending"
-                    ? "border-sky-200 bg-sky-50 text-sky-900"
-                    : "border-zinc-200 bg-zinc-50 text-zinc-800"
-            }`}
-          >
-            {isConfirmed ? (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-800 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Доступ</div>
+            {!profileComplete ? (
               <>
-                <div className="font-semibold">✅ Доступ открыт</div>
-                <p className="mt-1 text-sm text-emerald-800">
-                  Вам открыт полный доступ к информации по участку.
+                <div className="mt-2 font-semibold text-zinc-900">🟡 Заполните профиль</div>
+                <p className="mt-1 text-sm text-zinc-700">
+                  Нужны ФИО и телефон, чтобы начать проверку участка.
                 </p>
+                <Link
+                  href="/onboarding?next=/cabinet"
+                  className="mt-3 inline-flex rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Заполнить профиль
+                </Link>
               </>
-            ) : statusType === "rejected" ? (
+            ) : !hasPlots ? (
               <>
-                <div className="font-semibold">❌ Нужны уточнения</div>
-                {rejectedNote ? (
-                  <p className="mt-1 text-sm text-amber-800">{rejectedNote}</p>
+                <div className="mt-2 font-semibold text-zinc-900">🟡 Добавьте участок</div>
+                <p className="mt-1 text-sm text-zinc-700">
+                  Укажите кадастровый номер, чтобы начать проверку.
+                </p>
+                <Link
+                  href="/cabinet/plots/new"
+                  className="mt-3 inline-flex rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Добавить участок
+                </Link>
+              </>
+            ) : status === "draft" ? (
+              <>
+                <div className="mt-2 font-semibold text-zinc-900">🟡 Проверка не отправлена</div>
+                <p className="mt-1 text-sm text-zinc-700">
+                  Участок сохранён. Отправьте заявку на проверку.
+                </p>
+                <Link
+                  href="/cabinet/plots/new"
+                  className="mt-3 inline-flex rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Отправить на проверку
+                </Link>
+              </>
+            ) : status === "pending" ? (
+              <>
+                <div className="mt-2 font-semibold text-sky-700">⏳ На проверке (1–2 рабочих дня)</div>
+                <p className="mt-1 text-sm text-sky-800">
+                  Мы проверяем информацию по участку. Обычно это занимает 1–2 рабочих дня.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-zinc-500">
+                  <Link href="/help#verification" className="hover:text-[#5E704F] hover:underline">
+                    Как проходит проверка
+                  </Link>
+                  <Link href="/help" className="hover:text-[#5E704F] hover:underline">
+                    Справка
+                  </Link>
+                </div>
+              </>
+            ) : status === "rejected" ? (
+              <>
+                <div className="mt-2 font-semibold text-amber-700">❌ Нужны уточнения</div>
+                {latestRejectedNote ? (
+                  <p className="mt-1 text-sm text-amber-800">{latestRejectedNote}</p>
                 ) : (
                   <p className="mt-1 text-sm text-amber-800">
                     Проверьте данные и отправьте заявку повторно.
@@ -575,36 +592,23 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
                 )}
                 <Link
                   href="/cabinet/plots/new"
-                  className="mt-2 inline-flex rounded-full bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
+                  className="mt-3 inline-flex rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
                 >
-                  Исправить и отправить снова
+                  Исправить и отправить
                 </Link>
-              </>
-            ) : statusType === "pending" ? (
-              <>
-                <div className="font-semibold">⏳ На проверке (1–2 дня)</div>
-                <p className="mt-1 text-sm text-sky-800">
-                  Мы проверяем информацию по участку. Обычно это занимает 1–2 рабочих дня.
-                </p>
                 <Link
-                  href="/help#verification"
-                  className="mt-2 inline-flex text-xs font-semibold text-[#5E704F] underline"
+                  href="/help"
+                  className="mt-2 inline-flex text-xs text-zinc-500 hover:text-[#5E704F] hover:underline"
                 >
-                  Как проходит проверка
+                  Справка
                 </Link>
               </>
             ) : (
               <>
-                <div className="font-semibold">🟡 Профиль не завершён</div>
-                <p className="mt-1 text-sm text-zinc-700">
-                  Подтвердите участок, чтобы открыть доступ к кабинету.
+                <div className="mt-2 font-semibold text-emerald-700">✅ Доступ открыт</div>
+                <p className="mt-1 text-sm text-emerald-800">
+                  Все разделы кабинета доступны.
                 </p>
-                <Link
-                  href="/cabinet/plots/new"
-                  className="mt-2 inline-flex rounded-full bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
-                >
-                  Подтвердить участок
-                </Link>
               </>
             )}
           </div>
@@ -1033,15 +1037,9 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           </div>
           <div className="text-sm text-zinc-800">На проверке: {verificationsSent}</div>
           <div className="text-sm text-zinc-800">Отклонено: {verificationsRejected}</div>
-          {showSentHint && (
-            <div className="mt-1 text-xs text-zinc-500">На проверке — обычно 1–3 дня.</div>
-          )}
-          {showRejectedHint && (
-            <div className="mt-1 text-xs text-zinc-500">Отклонено — проверь причину.</div>
-          )}
-        </div>
         </div>
       </div>
+    </div>
   );
 
   const sections: { key: SectionKey; title: string; content: React.ReactNode }[] = [
@@ -1050,7 +1048,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   if (!isBlocked) {
     sections.push({ key: "plots", title: "Мои участки", content: plotsSection });
   }
-  if (isProfileComplete && isConfirmed) {
+  if (profileComplete && isConfirmed) {
     sections.push(
       { key: "electricity", title: "Электроэнергия", content: electricitySection },
       { key: "finance", title: "Финансы", content: financeSection },
@@ -1062,7 +1060,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   }
 
   const quickActions =
-    isProfileComplete && isConfirmed
+    profileComplete && isConfirmed
       ? [
           { key: "electricity" as SectionKey, title: "Передать показания", desc: "Электроэнергия", targetId: "electricity-section" },
           { key: "charges" as SectionKey, title: "Начисления", desc: "Основания и суммы", targetId: "charges-section" },
