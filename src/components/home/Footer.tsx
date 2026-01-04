@@ -6,13 +6,11 @@ export default function Footer() {
   const updatedSource = buildTime ? new Date(buildTime) : null;
   const updatedLabel =
     updatedSource && !Number.isNaN(updatedSource.getTime())
-      ? updatedSource.toLocaleString("ru-RU", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
+      ? `${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(
+          updatedSource,
+        )}, ${new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(
+          updatedSource,
+        )}`
       : "—";
   return (
     <footer className="border-t border-[#5E704F]/15 py-8">
@@ -25,7 +23,12 @@ export default function Footer() {
             <div className="text-xs text-zinc-600">
               © {year} Официальный сайт СНТ «Улыбка», г. Снежинск
             </div>
-            <div className="text-xs text-zinc-600">Обновлено: {updatedLabel}</div>
+            <Link
+              href="/updates"
+              className="text-xs text-zinc-500 transition hover:text-zinc-600 hover:underline"
+            >
+              Обновлено: {updatedLabel}
+            </Link>
           </div>
           <div className="space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -40,6 +43,9 @@ export default function Footer() {
               </Link>
               <Link href="/help" className="text-[#5E704F] hover:underline">
                 Помощь
+              </Link>
+              <Link href="/updates" className="text-[#5E704F] hover:underline">
+                Что нового
               </Link>
             </div>
           </div>

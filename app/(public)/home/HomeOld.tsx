@@ -1,4 +1,5 @@
 import Link from "next/link";
+import FaqAccordion from "@/components/home/FaqAccordion";
 import type { PublicContent } from "@/lib/publicContentDefaults";
 import { siteCity, siteName } from "@/config/site";
 
@@ -15,6 +16,7 @@ export default function HomeOld({ content }: HomeOldProps) {
   const vk = content.contacts.vk;
   const phoneHref = phone !== "—" ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
   const emailHref = email !== "—" ? `mailto:${email}` : "";
+  const contactHref = telegram || emailHref || "";
   const faqItems = content.faq.length > 0 ? content.faq.slice(0, 5) : [];
   return (
     <main className="bg-[#F8F1E9] pb-16 pt-10 sm:pt-14">
@@ -28,7 +30,7 @@ export default function HomeOld({ content }: HomeOldProps) {
             электроэнергии открывается после подтверждения членства.
           </p>
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-            🚀 Сайт обновляется — скоро добавим новые разделы и функции.
+            ✨ Сайт улучшается — делаем его проще и понятнее для жителей СНТ.
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
@@ -37,13 +39,13 @@ export default function HomeOld({ content }: HomeOldProps) {
             >
               Войти в личный кабинет
             </Link>
-            <Link
-              href="#get-access"
-              className="rounded-full border border-[#5E704F] px-6 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F] hover:text-white"
-            >
-              Как получить доступ
-            </Link>
           </div>
+          <Link
+            href="#get-access"
+            className="mt-3 inline-block text-sm font-semibold text-[#5E704F] underline"
+          >
+            Впервые? → Как получить доступ
+          </Link>
           <p className="mt-3 text-sm text-zinc-600">
             Если у вас нет кода участка, запросите его у правления {siteCity}.
           </p>
@@ -64,11 +66,26 @@ export default function HomeOld({ content }: HomeOldProps) {
           >
             <h2 className="text-lg font-semibold text-zinc-900">Как получить доступ</h2>
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-zinc-700">
-              <li>Войдите в кабинет и заполните профиль.</li>
-              <li>Введите код участка, если он уже у вас есть.</li>
-              <li>Если кода нет — запросите его у правления.</li>
-              <li>После подтверждения членства откроется полный доступ.</li>
+              <li>Нажмите «Войти» и укажите email или телефон.</li>
+              <li>Укажите участок (пример: «Берёзовая, 12» или кадастровый номер).</li>
+              <li>Прикрепите документ, если попросим (выписка/договор).</li>
+              <li>Правление проверит заявку за 1–2 дня — после этого откроется доступ.</li>
             </ol>
+            <p className="mt-3 text-xs text-zinc-600">
+              Нет кода или не знаете номер участка?{" "}
+              {contactHref ? (
+                <a
+                  href={contactHref}
+                  className="text-[#5E704F] underline"
+                  target={telegram ? "_blank" : undefined}
+                  rel={telegram ? "noreferrer" : undefined}
+                >
+                  Напишите в правление
+                </a>
+              ) : (
+                "Напишите в правление."
+              )}
+            </p>
             <Link
               href="/access"
               className="mt-3 inline-block text-xs font-semibold text-[#5E704F] underline"
@@ -138,35 +155,7 @@ export default function HomeOld({ content }: HomeOldProps) {
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-zinc-900">Частые вопросы</h2>
-          <div className="mt-4 grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
-            {faqItems.length > 0 ? (
-              faqItems.map((item, index) => (
-                <div key={`${item.question}-${index}`}>
-                  <div className="font-semibold text-zinc-900">{item.question}</div>
-                  <p>{item.answer}</p>
-                </div>
-              ))
-            ) : (
-              <>
-                <div>
-                  <div className="font-semibold text-zinc-900">Зачем нужна регистрация?</div>
-                  <p>Чтобы привязать участок и открыть доступ к данным СНТ.</p>
-                </div>
-                <div>
-                  <div className="font-semibold text-zinc-900">Где взять код участка?</div>
-                  <p>Код выдаёт правление. Если кода нет — запросите его в кабинете.</p>
-                </div>
-                <div>
-                  <div className="font-semibold text-zinc-900">Когда откроется доступ?</div>
-                  <p>После подтверждения членства и данных по участку.</p>
-                </div>
-                <div>
-                  <div className="font-semibold text-zinc-900">Как связаться с правлением?</div>
-                  <p>Контакты указаны на странице «Контакты» и в этом разделе.</p>
-                </div>
-              </>
-            )}
-          </div>
+          <FaqAccordion items={faqItems} />
         </section>
       </section>
     </main>

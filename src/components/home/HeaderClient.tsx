@@ -28,8 +28,8 @@ const isActive = (pathname: string, href: string) => {
 
 export function HeaderClient({ role }: HeaderClientProps) {
   const pathname = usePathname();
-  const isAdmin = role === "admin" || role === "board" || role === "accountant" || role === "operator";
-  const isUser = role === "user";
+  const isAdmin = role === "admin";
+  const isAuthenticated = Boolean(role);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const action = () => {
@@ -50,21 +50,13 @@ export function HeaderClient({ role }: HeaderClientProps) {
         </div>
       );
     }
-    if (isUser) {
+    if (isAuthenticated) {
       return (
-        <div className="flex items-center gap-2">
-          <AppLink
-            href="/cabinet"
-            className="rounded-full border border-white/30 bg-white px-4 py-2 text-xs font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
-          >
-            Кабинет
-          </AppLink>
-          <LogoutButton
-            redirectTo="/"
-            className="rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white transition-colors hover:border-white disabled:cursor-not-allowed disabled:opacity-70"
-            busyLabel="Выходим..."
-          />
-        </div>
+        <LogoutButton
+          redirectTo="/"
+          className="rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white transition-colors hover:border-white disabled:cursor-not-allowed disabled:opacity-70"
+          busyLabel="Выходим..."
+        />
       );
     }
     return (

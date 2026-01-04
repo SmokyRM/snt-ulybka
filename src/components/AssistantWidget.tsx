@@ -49,6 +49,7 @@ const publicChips = {
   home: [
     "Как получить доступ в кабинет?",
     "Где посмотреть документы СНТ?",
+    "Где найти реквизиты?",
     "Как оплатить взносы?",
     "Как передать показания?",
     "Куда обратиться в правление?",
@@ -120,6 +121,7 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
   const [aiLocked, setAiLocked] = useState(false);
   const [aiLockedMessage, setAiLockedMessage] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [guestBlocked, setGuestBlocked] = useState(false);
   const [activeTab, setActiveTab] = useState<"help" | "ai">("help");
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -194,6 +196,9 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
       .then((res) => {
         if (cancelled) return;
         setIsAuthenticated(res.ok);
+        if (res.ok) {
+          setGuestBlocked(false);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -228,9 +233,23 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    if (activeTab !== "ai" && guestBlocked) {
+      setGuestBlocked(false);
+    }
+  }, [activeTab, guestBlocked]);
+
+  const requireAuth = () => {
+    if (activeTab !== "ai") return true;
+    if (isAuthenticated === true) return true;
+    setGuestBlocked(true);
+    return false;
+  };
+
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (!requireAuth()) return;
     const now = Date.now();
     if (now - lastSendRef.current < 400) return;
     lastSendRef.current = now;
@@ -339,6 +358,7 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!requireAuth()) return;
     await sendMessage(message);
     setMessage("");
   };
@@ -352,9 +372,10 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    void sendMessage(message);
-    setMessage("");
+      event.preventDefault();
+      if (!requireAuth()) return;
+      void sendMessage(message);
+      setMessage("");
     }
   };
 
@@ -399,11 +420,15 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
     }
   };
 
-  const inputPlaceholder = "Например: Как получить код участка?";
-  const canInsertDraft =
-    variant === "admin" && pathname.startsWith("/admin/notifications/debtors");
   const isAiTab = activeTab === "ai";
   const isHelpTab = activeTab === "help";
+  const isGuest = isAuthenticated !== true;
+  const inputPlaceholder =
+    isAiTab && isGuest
+      ? "🔒 Войдите, чтобы использовать ИИ-помощник"
+      : "Спросите про оплату, доступ, документы…";
+  const canInsertDraft =
+    variant === "admin" && pathname.startsWith("/admin/notifications/debtors");
 
   const badgeLabel = (item: AssistantMessage) => {
     if (item.source === "faq") return "FAQ";
@@ -432,7 +457,10 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  setGuestBlocked(false);
+                }}
                 className="text-xs text-zinc-400 hover:text-zinc-600"
               >
                 Закрыть
@@ -451,17 +479,25 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
               <button
                 type="button"
                 onClick={() => {
+                  if (isGuest) {
+                    setGuestBlocked(true);
+                    setActiveTab("help");
+                    return;
+                  }
                   if (aiLocked) return;
                   setActiveTab("ai");
                 }}
-                title={aiLocked ? "Доступно после входа" : "ИИ-режим"}
+                title={isGuest ? "Доступно после входа" : aiLocked ? "Доступно после входа" : "ИИ-режим"}
                 className={`rounded-full px-3 py-1 font-semibold transition ${
                   isAiTab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-                } ${aiLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                } ${isGuest || aiLocked ? "cursor-not-allowed opacity-60" : ""}`}
               >
-                {aiLocked ? "ИИ 🔒" : "ИИ"}
+                {isGuest ? "ИИ 🔒" : aiLocked ? "ИИ 🔒" : "ИИ"}
               </button>
             </div>
+            {isGuest ? (
+              <div className="mt-2 text-[11px] text-zinc-500">Доступен после входа</div>
+            ) : null}
 
             {banner ? (
               <div
@@ -515,6 +551,28 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
                     </div>
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+
+            {guestBlocked ? (
+              <div className="mt-3 rounded-xl border border-[#5E704F]/20 bg-[#5E704F]/5 px-3 py-2 text-xs text-zinc-700">
+                <div className="font-semibold">
+                  ❌ Доступ ограничен. ИИ доступен только после входа.
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a
+                    href="/login"
+                    className="rounded-full bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    Войти
+                  </a>
+                  <a
+                    href="/help"
+                    className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F]"
+                  >
+                    Справка
+                  </a>
+                </div>
               </div>
             ) : null}
 
@@ -588,9 +646,9 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
                         <button
                           type="button"
                           onClick={() => handleCopy(item.id, item.text)}
-                          className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600 hover:border-zinc-300"
+                          className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100"
                         >
-                          {copiedId === item.id ? "Скопировано" : "Копировать"}
+                          {copiedId === item.id ? "Скопировано" : "📋 Копировать ответ"}
                         </button>
                         {item.links && item.links.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
@@ -598,9 +656,13 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
                               <a
                                 key={`${item.id}-${link.href}`}
                                 href={link.href}
-                                className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                                className={`rounded-full border px-3 py-1 text-xs transition ${
+                                  link.label === "Взносы и долги"
+                                    ? "border-[#5E704F] text-[#5E704F] hover:bg-[#5E704F] hover:text-white"
+                                    : "border-zinc-200 text-[#5E704F] hover:border-[#5E704F]"
+                                }`}
                               >
-                                {link.label}
+                                {link.label === "Взносы и долги" ? `→ ${link.label}` : link.label}
                               </a>
                             ))}
                           </div>
@@ -614,9 +676,15 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
                                   <a
                                     key={key}
                                     href={action.href}
-                                    className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                                    className={`rounded-full border px-3 py-1 text-xs transition ${
+                                      action.label === "Взносы и долги"
+                                        ? "border-[#5E704F] text-[#5E704F] hover:bg-[#5E704F] hover:text-white"
+                                        : "border-zinc-200 text-[#5E704F] hover:border-[#5E704F]"
+                                    }`}
                                   >
-                                    {action.label}
+                                    {action.label === "Взносы и долги"
+                                      ? `→ ${action.label}`
+                                      : action.label}
                                   </a>
                                 );
                               }
@@ -712,24 +780,47 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
                 ))
                 : null}
             </div>
-            <form onSubmit={handleSubmit} className="mt-3 space-y-3">
-              <textarea
-                ref={inputRef}
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={3}
-                className="w-full resize-none rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-[#5E704F]"
-                placeholder={inputPlaceholder}
-              />
-              <button
-                type="submit"
-                disabled={loading || !message.trim()}
-                className="w-full rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Отправляем..." : isAiTab ? "Спросить ИИ" : "Спросить"}
-              </button>
-            </form>
+            {!isGuest || !isAiTab ? (
+              <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+                <textarea
+                  ref={inputRef}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-[#5E704F]"
+                  placeholder={inputPlaceholder}
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !message.trim()}
+                  className="w-full rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? "Отправляем..." : isAiTab ? "Спросить ИИ" : "Спросить"}
+                </button>
+              </form>
+            ) : (
+              <div className="mt-3 rounded-xl border border-[#5E704F]/20 bg-[#5E704F]/5 px-3 py-2 text-xs text-zinc-700">
+                <div className="font-semibold">
+                  ❌ Доступ ограничен. ИИ доступен только после входа.
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a
+                    href="/login"
+                    className="rounded-full bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    Войти
+                  </a>
+                  <a
+                    href="/help"
+                    className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F]"
+                  >
+                    Справка
+                  </a>
+                </div>
+              </div>
+            )}
 
             {isHelpTab ? (
               <div className="mt-3 space-y-2 text-xs text-zinc-500">
@@ -772,7 +863,15 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
         ) : null}
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => {
+            setOpen((value) => {
+              const next = !value;
+              if (!next) {
+                setGuestBlocked(false);
+              }
+              return next;
+            });
+          }}
           className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-[#4b5b40]"
         >
           Помощник
