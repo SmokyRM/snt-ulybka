@@ -175,7 +175,8 @@ const applyAiSettings = (payload: AssistantPayload, settings: typeof DEFAULT_AI_
     next.answer = `${next.answer.trim()}\n\nЕсли нужна детализация, уточните контекст — подскажу шаги.`;
   }
   if (tone === "simple") {
-    next.answer = `Просто: ${next.answer.trim()}`;
+    const trimmedAnswer = next.answer.trim();
+    next.answer = trimmedAnswer.startsWith("Просто:") ? trimmedAnswer : `Просто: ${trimmedAnswer}`;
   }
   if (!settings.citations || settings.ai_show_sources === false) {
     next.links = [];

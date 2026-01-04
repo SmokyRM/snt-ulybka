@@ -66,7 +66,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </div>
         {hasAccess && showAssistant ? (
-          <AssistantWidget variant="admin" initialAuth={Boolean(user)} />
+          <AssistantWidget
+            variant="admin"
+            initialAuth={Boolean(user)}
+            initialRole={
+              user?.role === "admin" || user?.role === "board" || user?.role === "user"
+                ? user.role
+                : null
+            }
+            aiPersonalEnabled={flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false}
+          />
         ) : null}
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>

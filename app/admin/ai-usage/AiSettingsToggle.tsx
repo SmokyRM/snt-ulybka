@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { FeatureFlags } from "@/lib/featureFlags";
 import type { AiSettings } from "@/lib/aiSettings";
 
@@ -22,12 +23,13 @@ type UpdatePayload = {
 };
 
 export default function AiSettingsToggle({ flags, settings }: Props) {
-  // Manual test note: after changing settings, do a hard refresh if SSR cache shows stale values.
+  const router = useRouter();
   const [widgetEnabled, setWidgetEnabled] = useState(flags.ai_widget_enabled);
   const [personalEnabled, setPersonalEnabled] = useState(flags.ai_personal_enabled);
   const [localSettings, setLocalSettings] = useState(settings);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<"saving" | "saved" | null>(null);
 
   const applyUpdate = async (patch: UpdatePayload, endpoint = "/api/admin/ai-settings") => {
     if (pending) return;
@@ -48,6 +50,7 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
       setLocalSettings((current) => ({ ...current, ...patch }));
     }
     setError(null);
+    setStatus("saving");
     setPending(true);
     try {
       const res = await fetch(endpoint, {
@@ -70,11 +73,15 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
       if (data.settings) {
         setLocalSettings(data.settings);
       }
+      setStatus("saved");
+      router.refresh();
+      window.setTimeout(() => setStatus(null), 2000);
     } catch {
       setWidgetEnabled(prevFlags.widgetEnabled);
       setPersonalEnabled(prevFlags.personalEnabled);
       setLocalSettings(prevSettings);
       setError("Не удалось сохранить настройку.");
+      setStatus(null);
     } finally {
       setPending(false);
     }
@@ -99,10 +106,12 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-          <p className="text-sm font-semibold text-zinc-900">Помощник (виджет на сайте)</p>
-          <p className="text-xs text-zinc-500">
-            Показывает/скрывает кнопку помощника на публичных страницах.
-          </p>
+            <p className="text-sm font-semibold text-zinc-900">
+              Показывать виджет «Помощник» на публичных страницах
+            </p>
+            <p className="text-xs text-zinc-500">
+              Показывает/скрывает кнопку помощника на публичных страницах.
+            </p>
           </div>
           <button
             type="button"
@@ -126,9 +135,10 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
             <p className="text-sm font-semibold text-zinc-900">
               Расширенный ИИ (личные данные жителей)
             </p>
-          <p className="text-xs text-zinc-500">
-            По умолчанию выключен. Публичные ответы работают всегда.
-          </p>
+            <p className="text-xs text-zinc-500">
+              Доступ к личным данным — только при включенном режиме и для пользователей со статусом
+              verified.
+            </p>
           </div>
           <button
             type="button"
@@ -270,7 +280,13 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
         </div>
       </div>
 
-      {error ? <p className="text-xs text-zinc-500">{error}</p> : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+        <span>{status === "saving" ? "Сохранение..." : status === "saved" ? "Сохранено" : ""}</span>
+        {error ? <span>{error}</span> : null}
+      </div>
+      <p className="text-xs text-zinc-400">
+        Если значения не обновились сразу, сделайте жесткое обновление страницы.
+      </p>
     </div>
   );
 }

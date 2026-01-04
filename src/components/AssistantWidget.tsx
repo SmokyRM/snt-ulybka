@@ -33,11 +33,15 @@ type AssistantMessage = {
   drafts?: AssistantDraft[];
   source?: "faq" | "assistant" | "cache";
   cached?: boolean;
+  outOfScope?: boolean;
+  meta?: boolean;
 };
 
 type AssistantWidgetProps = {
   variant?: "public" | "admin";
   initialAuth?: boolean;
+  initialRole?: "guest" | "user" | "board" | "admin" | null;
+  aiPersonalEnabled?: boolean;
 };
 
 const quickPrompts = [
@@ -62,9 +66,30 @@ const safeJson = async <T,>(response: Response): Promise<T> => {
   }
 };
 
+const isMetaPrompt = (text: string): boolean => {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  const match =
+    normalized.includes("что ты умеешь") ||
+    normalized.includes("что ты можешь") ||
+    normalized.includes("помоги") ||
+    normalized.includes("как пользоваться") ||
+    normalized.includes("привет") ||
+    normalized.includes("здравств") ||
+    normalized.includes("hello");
+  if (match) return true;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length <= 3 && (normalized.includes("помощник") || normalized.includes("ии"))) {
+    return true;
+  }
+  return false;
+};
+
 export default function AssistantWidget({
   variant = "public",
   initialAuth,
+  initialRole = null,
+  aiPersonalEnabled = false,
 }: AssistantWidgetProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -91,23 +116,35 @@ export default function AssistantWidget({
   const [isVerified, setIsVerified] = useState<boolean | null>(
     typeof initialAuth === "boolean" && initialAuth && variant === "admin" ? true : null,
   );
+  const [userRole, setUserRole] = useState<"guest" | "user" | "board" | "admin">(
+    initialRole ?? "guest",
+  );
   const [activeTab, setActiveTab] = useState<"help" | "ai" | "contacts">("help");
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [insertedId, setInsertedId] = useState<string | null>(null);
   const [chipsExpanded, setChipsExpanded] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiStyle, setAiStyle] = useState<"short" | "normal" | "detailed">("normal");
+  const [aiShowSources, setAiShowSources] = useState(false);
+  const aiSettingsLoadedRef = useRef(false);
   const historyLoadedRef = useRef(false);
   const scrollTimeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
   const lastSendRef = useRef(0);
+  const lastUserPromptRef = useRef<string | null>(null);
+  const lastHintModeRef = useRef<"guest" | "resident" | "staff">("guest");
   const promptButtons = useMemo(
     () => (variant === "admin" ? quickPrompts : quickPrompts.slice(0, 2)),
     [variant],
   );
   const historyKey =
     variant === "admin" ? "assistant.history.admin" : "assistant.history.public";
+  const aiEnabledKey = "assistant_ai_enabled";
+  const aiStyleKey = "assistant_ai_style";
+  const aiSourcesKey = "assistant_ai_sources";
 
   const contextualChips = useMemo(() => {
     if (variant === "admin") return promptButtons;
@@ -138,6 +175,16 @@ export default function AssistantWidget({
   const primaryChips = uniqueChips.slice(0, 4);
   const visibleChips = chipsExpanded ? uniqueChips : primaryChips;
   const hasMoreChips = uniqueChips.length > primaryChips.length;
+  const fallbackChips = useMemo(
+    () => [
+      "Как получить доступ?",
+      "Где реквизиты?",
+      "Как передать показания?",
+      "Контакты правления",
+    ],
+    [],
+  );
+  const outOfScopeChips = primaryChips.length > 0 ? primaryChips : fallbackChips;
 
   useEffect(() => {
     if (!open || historyLoadedRef.current) return;
@@ -167,6 +214,37 @@ export default function AssistantWidget({
       // ignore storage errors
     }
   }, [historyKey, messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (aiSettingsLoadedRef.current) return;
+    const rawEnabled = window.localStorage.getItem(aiEnabledKey);
+    const rawStyle = window.localStorage.getItem(aiStyleKey);
+    const rawSources = window.localStorage.getItem(aiSourcesKey);
+    const nextEnabled =
+      rawEnabled === "true" ? true : rawEnabled === "false" ? false : true;
+    const nextStyle =
+      rawStyle === "short" || rawStyle === "normal" || rawStyle === "detailed"
+        ? rawStyle
+        : "normal";
+    const nextSources =
+      rawSources === "true" ? true : rawSources === "false" ? false : false;
+    setAiEnabled(nextEnabled);
+    setAiStyle(nextStyle);
+    setAiShowSources(nextSources);
+    window.localStorage.setItem(aiEnabledKey, String(nextEnabled));
+    window.localStorage.setItem(aiStyleKey, nextStyle);
+    window.localStorage.setItem(aiSourcesKey, String(nextSources));
+    aiSettingsLoadedRef.current = true;
+  }, [aiEnabledKey, aiSourcesKey, aiStyleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!aiSettingsLoadedRef.current) return;
+    window.localStorage.setItem(aiEnabledKey, String(aiEnabled));
+    window.localStorage.setItem(aiStyleKey, aiStyle);
+    window.localStorage.setItem(aiSourcesKey, String(aiShowSources));
+  }, [aiEnabled, aiEnabledKey, aiShowSources, aiSourcesKey, aiStyle, aiStyleKey]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -201,7 +279,12 @@ export default function AssistantWidget({
           const data = await res.json().catch(() => null);
           const status =
             typeof data?.user?.status === "string" ? data.user.status : null;
+          const role =
+            typeof data?.user?.role === "string" ? data.user.role : null;
           setIsVerified(status ? status === "verified" : null);
+          if (role === "admin" || role === "board" || role === "user" || role === "guest") {
+            setUserRole(role);
+          }
         } else {
           setIsVerified(null);
         }
@@ -274,36 +357,29 @@ export default function AssistantWidget({
 
   const requireAuth = () => true;
 
-  const sendMessage = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    if (!requireAuth()) return;
-    const now = Date.now();
-    if (now - lastSendRef.current < 400) return;
-    lastSendRef.current = now;
-    setLastPrompt(trimmed);
-    const userMessage: AssistantMessage = {
-      id: `${Date.now()}-user`,
-      role: "user",
-      text: trimmed,
-    };
-    setMessages((prev) => [...prev, userMessage]);
+  const retryLastPrompt = async () => {
+    const prompt = lastUserPromptRef.current;
+    if (!prompt) return;
+    const hintMode = lastHintModeRef.current;
+    const hintVerbosity =
+      hintMode === "staff" ? "long" : hintMode === "resident" ? "normal" : "short";
+    const aiPayload =
+      isAiTab && aiEnabled
+        ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources }
+        : {};
     setLoading(true);
     setError(null);
     setBanner(null);
     setLastStatus(null);
     try {
-      const hintMode =
-        variant === "admin" ? "staff" : isVerified ? "resident" : "guest";
-      const hintVerbosity =
-        variant === "admin" ? "long" : isVerified ? "normal" : "short";
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: trimmed,
+          message: prompt,
           pageContext: { path: pathname },
           hint: { mode: hintMode, verbosity: hintVerbosity },
+          ...aiPayload,
         }),
       });
       const data = await safeJson<{
@@ -318,6 +394,151 @@ export default function AssistantWidget({
         message?: string;
         source?: "faq" | "assistant" | "cache";
         cached?: boolean;
+        outOfScope?: boolean;
+      }>(response);
+      if (!response.ok || !data.ok) {
+        if (response.status === 403) {
+          const lockedText =
+            isAuthenticated === true
+              ? "Личные данные доступны после проверки участка."
+              : "Личные данные доступны после входа.";
+          setActiveTab("help");
+          setLastStatus(403);
+          setBanner({
+            tone: "neutral",
+            title: "Справка доступна",
+            message: lockedText,
+            actionLabel: isAuthenticated === true ? undefined : "Войти",
+            onAction: isAuthenticated === true ? undefined : () => {
+              router.push("/login");
+            },
+            secondaryActionLabel: isAuthenticated === true ? undefined : "Как получить доступ",
+            onSecondaryAction: isAuthenticated === true ? undefined : () => router.push("/access"),
+          });
+        } else if (response.status === 429) {
+          setLastStatus(429);
+          setBanner({
+            tone: "neutral",
+            title: "Лимит исчерпан",
+            message: "Лимит исчерпан. Справка доступна.",
+          });
+        } else if (response.status >= 500) {
+          setLastStatus(500);
+          setBanner({
+            tone: "neutral",
+            title: "Временно недоступно",
+            message: "Сервис ответа занят. Попробуйте повторить запрос.",
+            actionLabel: "Повторить",
+            onAction: () => {
+              void retryLastPrompt();
+            },
+          });
+        } else {
+          setBanner({
+            tone: "neutral",
+            title: "Не удалось получить ответ",
+            message: data.error ?? "Попробуйте другой вопрос.",
+          });
+        }
+        return;
+      }
+      const assistantMessage: AssistantMessage = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        text: data.answer ?? "",
+        links: data.links,
+        contextCards: data.contextCards,
+        actions: data.actions,
+        drafts: data.drafts,
+        source: data.source,
+        cached: data.cached,
+        outOfScope: data.outOfScope,
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Ошибка запроса. Попробуйте позже.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (!requireAuth()) return;
+    const now = Date.now();
+    if (now - lastSendRef.current < 400) return;
+    lastSendRef.current = now;
+    setLastPrompt(trimmed);
+    const userMessage: AssistantMessage = {
+      id: `${Date.now()}-user`,
+      role: "user",
+      text: trimmed,
+    };
+    const hintMode =
+      variant === "admin" ? "staff" : isVerified ? "resident" : "guest";
+    const hintVerbosity =
+      variant === "admin" ? "long" : isVerified ? "normal" : "short";
+    const aiPayload =
+      isAiTab && aiEnabled
+        ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources }
+        : {};
+    lastUserPromptRef.current = trimmed;
+    lastHintModeRef.current = hintMode;
+    setLoading(true);
+    setError(null);
+    setBanner(null);
+    setLastStatus(null);
+    if (isMetaPrompt(trimmed)) {
+      const suggestions =
+        primaryChips.length > 0
+          ? primaryChips
+          : ["Как получить доступ?", "Где реквизиты?", "Как передать показания?", "Контакты правления"];
+      const assistantMessage: AssistantMessage = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        text: [
+          "Официальный помощник СНТ «Улыбка».",
+          "Помогу с вопросами про взносы, электроэнергию, документы, доступ и контакты/обращения.",
+          "",
+          "Попробуйте спросить:",
+          ...suggestions.slice(0, 4).map((item) => `- ${item}`),
+        ].join("\n"),
+        source: "assistant",
+        outOfScope: false,
+        meta: true,
+      };
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      setLoading(false);
+      return;
+    }
+    setMessages((prev) => [...prev, userMessage]);
+    try {
+      const response = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: trimmed,
+          pageContext: { path: pathname },
+          hint: { mode: hintMode, verbosity: hintVerbosity },
+          ...aiPayload,
+        }),
+      });
+      const data = await safeJson<{
+        ok: boolean;
+        topic?: string;
+        answer?: string;
+        links?: AssistantLink[];
+        contextCards?: ContextCard[];
+        actions?: AssistantAction[];
+        drafts?: AssistantDraft[];
+        error?: string;
+        message?: string;
+        source?: "faq" | "assistant" | "cache";
+        cached?: boolean;
+        outOfScope?: boolean;
       }>(response);
       if (!response.ok || !data.ok) {
         if (response.status === 403) {
@@ -375,6 +596,7 @@ export default function AssistantWidget({
         drafts: data.drafts,
         source: data.source,
         cached: data.cached,
+        outOfScope: data.outOfScope,
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
@@ -454,6 +676,22 @@ export default function AssistantWidget({
   const isHelpTab = activeTab === "help";
   const isContactsTab = activeTab === "contacts";
   const isGuest = isAuthenticated !== true;
+  const roleLabel =
+    userRole === "admin"
+      ? "Админ"
+      : userRole === "board"
+        ? "Правление"
+        : userRole === "user"
+          ? "Житель"
+          : "Гость";
+  const personalStatus = !aiPersonalEnabled
+    ? "Персонально: выкл"
+    : userRole === "guest"
+      ? "Персонально: после входа"
+      : isVerified === true
+        ? "Персонально: вкл"
+        : "Персонально: после подтверждения";
+  const statusLine = `Режим: ${roleLabel} · ${personalStatus}`;
   const inputPlaceholder = "Спросите про оплату, доступ, документы…";
   const canInsertDraft =
     variant === "admin" && pathname.startsWith("/admin/notifications/debtors");
@@ -523,6 +761,7 @@ export default function AssistantWidget({
             <p className="text-xs text-zinc-500">
               Взносы · Участки · Электроэнергия · Документы · 217-ФЗ
             </p>
+            <p className="mt-1 text-[11px] text-zinc-500">{statusLine}</p>
             <p className="mt-1 text-xs text-zinc-500">{aiNoticeText}</p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -580,6 +819,50 @@ export default function AssistantWidget({
               Контакты
             </button>
           </div>
+          {isAiTab ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
+              <button
+                type="button"
+                onClick={() => setAiEnabled((prev) => !prev)}
+                className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+              >
+                <span>ИИ: {aiEnabled ? "Вкл" : "Выкл"}</span>
+                <span className="inline-flex h-3 w-6 items-center rounded-full bg-zinc-100 p-0.5">
+                  <span
+                    className={`h-2 w-2 rounded-full transition ${
+                      aiEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
+                    }`}
+                  />
+                </span>
+              </button>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-zinc-500">Стиль:</span>
+                {(["short", "normal", "detailed"] as const).map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    onClick={() => setAiStyle(style)}
+                    className={`rounded-full border px-2 py-1 font-semibold transition ${
+                      aiStyle === style
+                        ? "border-[#5E704F] bg-[#5E704F] text-white"
+                        : "border-zinc-200 bg-white text-zinc-600 hover:border-[#5E704F] hover:text-[#5E704F]"
+                    }`}
+                  >
+                    {style === "short" ? "Short" : style === "normal" ? "Normal" : "Detailed"}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={aiShowSources}
+                  onChange={(event) => setAiShowSources(event.target.checked)}
+                  className="h-3 w-3 rounded border-zinc-300 text-[#5E704F]"
+                />
+                Источники
+              </label>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -714,7 +997,20 @@ export default function AssistantWidget({
           </div>
         ) : (
           <>
-            {isAiTab && isGuest ? (
+            {!aiEnabled ? (
+              <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                <p>ИИ выключен. Включите, чтобы задавать вопросы.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAiEnabled(true)}
+                    className="rounded-full bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    Включить ИИ
+                  </button>
+                </div>
+              </div>
+            ) : isAiTab && isGuest ? (
               <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                 <p>
                   ИИ отвечает на общие вопросы по СНТ и сайту. Персональные ответы по участку — после
@@ -761,9 +1057,65 @@ export default function AssistantWidget({
                     </p>
                     {item.role === "assistant" &&
                     item.id === lastAssistantId &&
+                    item.outOfScope &&
+                    !item.meta ? (
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                        <p className="font-semibold">
+                          Я отвечаю по вопросам СНТ «Улыбка» и сайта.
+                        </p>
+                        <p className="mt-1 text-zinc-600">
+                          Попробуйте сформулировать вопрос конкретнее или выберите тему ниже.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {outOfScopeChips.map((prompt) => (
+                            <button
+                              key={`out-scope-${prompt}`}
+                              type="button"
+                              onClick={() => handleQuickSend(prompt)}
+                              disabled={loading}
+                              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                            >
+                              {prompt}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("contacts")}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          >
+                            Контакты
+                          </button>
+                        </div>
+                      </div>
+                    ) : item.role === "assistant" &&
+                    item.id === lastAssistantId &&
+                    ((lastStatus ?? 0) >= 500 || Boolean(error)) &&
+                    !item.meta ? (
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                        <p className="font-semibold">Техническая ошибка.</p>
+                        <p className="mt-1 text-zinc-600">Попробуйте ещё раз.</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void retryLastPrompt()}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          >
+                            Повторить
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("contacts")}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          >
+                            Контакты
+                          </button>
+                        </div>
+                      </div>
+                    ) : item.role === "assistant" &&
+                    item.id === lastAssistantId &&
                     (!item.text.trim() ||
-                      item.text.toLowerCase().includes("не удалось") ||
-                      item.text.toLowerCase().includes("могу отвечать только")) ? (
+                      item.text.toLowerCase().includes("не удалось найти точный ответ")) &&
+                    !item.meta ? (
                       <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                         <p className="font-semibold">Не удалось найти точный ответ</p>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -924,7 +1276,7 @@ export default function AssistantWidget({
         )}
       </div>
 
-      {!isContactsTab && !(isAiTab && isGuest) ? (
+      {!isContactsTab && !(isAiTab && isGuest) && !(isAiTab && !aiEnabled) ? (
         <div className="sticky bottom-0 bg-white px-4 pb-4 pt-3">
           <div className={`flex flex-wrap gap-2 ${chipsExpanded ? "" : "max-h-14 overflow-hidden"}`}>
             {visibleChips.map((prompt) => (

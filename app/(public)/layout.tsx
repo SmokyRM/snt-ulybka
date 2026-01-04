@@ -11,7 +11,13 @@ export default async function PublicLayout({ children }: { children: React.React
       <Header />
       <main className="pt-24">{children}</main>
       <Footer />
-      {showWidget ? <AssistantWidget variant="public" /> : null}
+      {showWidget ? (
+        <AssistantWidget
+          variant="public"
+          initialRole={null}
+          aiPersonalEnabled={flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false}
+        />
+      ) : null}
     </div>
   );
 }
