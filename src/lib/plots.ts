@@ -279,7 +279,17 @@ export async function createOwnershipVerification(input: {
   const draft = existing.find(
     (item) => item.cadastralNumber.trim().toLowerCase() === normalized && item.status === "draft",
   );
-  if (draft) return draft;
+  if (draft) {
+    if (input.status === "sent") {
+      return ownershipStore.update(draft.id, {
+        status: "sent",
+        documentMeta: sanitizeDocumentMeta(input.documentMeta),
+        reviewedAt: null,
+        reviewNote: null,
+      });
+    }
+    return draft;
+  }
   return ownershipStore.create({
     userId: input.userId,
     cadastralNumber: input.cadastralNumber,
@@ -298,15 +308,17 @@ export async function reviewOwnershipVerification(input: {
   id: string;
   status: "approved" | "rejected";
   reviewNote?: string | null;
-  reviewerId?: string | null;
 }) {
-  const updated = await ownershipStore.update({
-    id: input.id,
-    status: input.status,
-    reviewNote: input.reviewNote,
-    reviewerId: input.reviewerId,
-  });
-  if (!updated) return null;
+  let updated: OwnershipVerification | null = null;
+  try {
+    updated = await ownershipStore.update(input.id, {
+      status: input.status,
+      reviewNote: input.reviewNote ?? null,
+      reviewedAt: new Date().toISOString(),
+    });
+  } catch {
+    return null;
+  }
 
   if (input.status === "approved") {
     const now = new Date().toISOString();
@@ -367,16 +379,15 @@ export async function getOwnershipVerificationById(
 
 export async function setOwnershipVerificationStatus(input: {
   id: string;
-  status: OwnershipVerification["status"];
+  status: "approved" | "rejected";
   reviewNote?: string | null;
-  reviewedByUserId?: string | null;
 }): Promise<OwnershipVerification | null> {
   if (!input.id) return null;
+  if (input.status !== "approved" && input.status !== "rejected") return null;
   return reviewOwnershipVerification({
     id: input.id,
-    status: input.status === "approved" ? "approved" : "rejected",
+    status: input.status,
     reviewNote: input.reviewNote ?? null,
-    reviewerId: input.reviewedByUserId ?? null,
   });
 }
 

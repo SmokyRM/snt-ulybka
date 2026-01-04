@@ -14,6 +14,13 @@ export type AiUsageLogEntry = {
   ts: string;
   success: boolean;
   tokens: number | null;
+  pathHint?: string | null;
+  topic?: string;
+  mode?: "guest_short" | "verified_clarify" | "staff_checklist";
+  outOfScope?: boolean;
+  latencyMs?: number | null;
+  messageLen?: number;
+  thumb?: "up" | "down" | null;
   error?: string | null;
 };
 
@@ -27,10 +34,10 @@ const DEFAULT_ROLE_LIMITS: RoleLimitsMap = {
   admin: { day: 200, minute: 20 },
   board: { day: 100, minute: 10 },
   accountant: { day: 60, minute: 6 },
-  user: { day: 0, minute: 0 },
-  member: { day: 0, minute: 0 },
-  operator: { day: 0, minute: 0 },
-  guest: { day: 0, minute: 0 },
+  operator: { day: 60, minute: 6 },
+  user: { day: 30, minute: 5 },
+  member: { day: 30, minute: 5 },
+  guest: { day: 15, minute: 3 },
 };
 
 const DAY_TTL_SECONDS = 60 * 60 * 24;
@@ -158,18 +165,44 @@ const incrementAggregates = async (entry: AiUsageLogEntry) => {
   const ts = new Date(entry.ts);
   const date = Number.isNaN(ts.getTime()) ? new Date() : ts;
   const dayKey = toUtcDayDash(date);
+  const totalKey = `ai:agg:day:${dayKey}:total`;
+  const outScopeKey = `ai:agg:day:${dayKey}:out_scope`;
+  const latencySumKey = `ai:agg:day:${dayKey}:latency_sum`;
+  const latencyCountKey = `ai:agg:day:${dayKey}:latency_count`;
   const userCountKey = `ai:agg:day:${dayKey}:user:${entry.userId}:count`;
   const roleCountKey = `ai:agg:day:${dayKey}:role:${entry.role}:count`;
+  const pathHint = entry.pathHint?.trim() || "unknown";
+  const topic = entry.topic?.trim() || "unknown";
+  const pathCountKey = `ai:agg:day:${dayKey}:path:${pathHint}:count`;
+  const topicCountKey = `ai:agg:day:${dayKey}:topic:${topic}:count`;
   const userTokensKey = `ai:agg:day:${dayKey}:user:${entry.userId}:tokens`;
+  await kvIncr(totalKey);
+  await kvExpire(totalKey, AGG_TTL_SECONDS);
+  if (entry.outOfScope) {
+    await kvIncr(outScopeKey);
+    await kvExpire(outScopeKey, AGG_TTL_SECONDS);
+  }
+  if (typeof entry.latencyMs === "number" && entry.latencyMs > 0) {
+    await kvIncrBy(latencySumKey, Math.round(entry.latencyMs));
+    await kvExpire(latencySumKey, AGG_TTL_SECONDS);
+    await kvIncr(latencyCountKey);
+    await kvExpire(latencyCountKey, AGG_TTL_SECONDS);
+  }
   await kvIncr(userCountKey);
   await kvExpire(userCountKey, AGG_TTL_SECONDS);
   await kvIncr(roleCountKey);
   await kvExpire(roleCountKey, AGG_TTL_SECONDS);
+  await kvIncr(pathCountKey);
+  await kvExpire(pathCountKey, AGG_TTL_SECONDS);
+  await kvIncr(topicCountKey);
+  await kvExpire(topicCountKey, AGG_TTL_SECONDS);
   if (typeof entry.tokens === "number" && entry.tokens > 0) {
     await kvIncrBy(userTokensKey, entry.tokens);
     await kvExpire(userTokensKey, AGG_TTL_SECONDS);
   }
   await addToList(`ai:agg:day:${dayKey}:users`, entry.userId);
+  await addToList(`ai:agg:day:${dayKey}:paths`, pathHint);
+  await addToList(`ai:agg:day:${dayKey}:topics`, topic);
 };
 
 export async function enforceAiRateLimit(
@@ -213,42 +246,214 @@ export async function logAiUsage(entry: AiUsageLogEntry): Promise<void> {
 
 export type AiUsageDashboard = {
   hasData: boolean;
+  totalRequests: number;
+  outOfScopeRate: number;
+  avgLatencyMs: number | null;
+  topPaths: Array<{ pathHint: string; count: number }>;
+  topTopics: Array<{ topic: string; count: number }>;
   topUsers: Array<{ userId: string; count: number; tokens: number }>;
   roleCounts: Array<{ role: string; count: number }>;
   recentEvents: AiUsageLogEntry[];
 };
 
-export async function getAiUsageDashboard(date = new Date()): Promise<AiUsageDashboard | null> {
+type AiUsageDashboardOptions = {
+  days?: 7 | 30;
+  role?: string | null;
+  outOfScopeOnly?: boolean;
+};
+
+const listDays = (days: number) => {
+  const now = new Date();
+  return Array.from({ length: days }, (_, index) => {
+    const d = new Date(now);
+    d.setUTCDate(now.getUTCDate() - index);
+    return toUtcDayDash(d);
+  });
+};
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+export async function getAiUsageDashboard(
+  options: AiUsageDashboardOptions = {},
+): Promise<AiUsageDashboard | null> {
   if (!KV_URL || !KV_TOKEN) return null;
   try {
-    const dayKey = toUtcDayDash(date);
-    const users = (await kvGet<string[]>(`ai:agg:day:${dayKey}:users`)) ?? [];
+    const days = options.days ?? 7;
+    const dayKeys = listDays(days);
+    const users = (
+      await Promise.all(dayKeys.map((dayKey) => kvGet<string[]>(`ai:agg:day:${dayKey}:users`)))
+    )
+      .flat()
+      .filter(isNonEmptyString);
+    const paths = (
+      await Promise.all(dayKeys.map((dayKey) => kvGet<string[]>(`ai:agg:day:${dayKey}:paths`)))
+    )
+      .flat()
+      .filter(isNonEmptyString);
+    const topics = (
+      await Promise.all(dayKeys.map((dayKey) => kvGet<string[]>(`ai:agg:day:${dayKey}:topics`)))
+    )
+      .flat()
+      .filter(isNonEmptyString);
+    const uniqueUsers = Array.from(new Set(users));
+    const uniquePaths = Array.from(new Set(paths));
+    const uniqueTopics = Array.from(new Set(topics));
     const roleKeys = Object.keys(DEFAULT_ROLE_LIMITS);
     const userCounts = await Promise.all(
-      users.map(async (userId) => {
-        const count =
-          Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:user:${userId}:count`)) ?? 0) || 0;
-        const tokens =
-          Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:user:${userId}:tokens`)) ?? 0) || 0;
-        return { userId, count, tokens };
+      uniqueUsers.map(async (userId) => {
+        const totals = await Promise.all(
+          dayKeys.map(async (dayKey) => {
+            const count =
+              Number(
+                (await kvGet<number | string>(`ai:agg:day:${dayKey}:user:${userId}:count`)) ?? 0,
+              ) || 0;
+            const tokens =
+              Number(
+                (await kvGet<number | string>(`ai:agg:day:${dayKey}:user:${userId}:tokens`)) ?? 0,
+              ) || 0;
+            return { count, tokens };
+          }),
+        );
+        return totals.reduce(
+          (acc, item) => ({ userId, count: acc.count + item.count, tokens: acc.tokens + item.tokens }),
+          { userId, count: 0, tokens: 0 },
+        );
       }),
     );
     const roleCounts = await Promise.all(
       roleKeys.map(async (role) => {
-        const count =
-          Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:role:${role}:count`)) ?? 0) || 0;
-        return { role, count };
+        const counts = await Promise.all(
+          dayKeys.map(async (dayKey) => {
+            const count =
+              Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:role:${role}:count`)) ?? 0) || 0;
+            return count;
+          }),
+        );
+        return { role, count: counts.reduce((sum, item) => sum + item, 0) };
       }),
     );
-    const recentEvents = (await kvGet<AiUsageLogEntry[]>(RECENT_KEY)) ?? [];
+    const pathCounts = await Promise.all(
+      uniquePaths.map(async (pathHint) => {
+        const counts = await Promise.all(
+          dayKeys.map(async (dayKey) => {
+            const count =
+              Number(
+                (await kvGet<number | string>(`ai:agg:day:${dayKey}:path:${pathHint}:count`)) ?? 0,
+              ) || 0;
+            return count;
+          }),
+        );
+        return { pathHint, count: counts.reduce((sum, item) => sum + item, 0) };
+      }),
+    );
+    const topicCounts = await Promise.all(
+      uniqueTopics.map(async (topic) => {
+        const counts = await Promise.all(
+          dayKeys.map(async (dayKey) => {
+            const count =
+              Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:topic:${topic}:count`)) ?? 0) ||
+              0;
+            return count;
+          }),
+        );
+        return { topic, count: counts.reduce((sum, item) => sum + item, 0) };
+      }),
+    );
+    const totals = (
+      await Promise.all(
+        dayKeys.map(async (dayKey) => {
+          const total =
+            Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:total`)) ?? 0) || 0;
+          const outScope =
+            Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:out_scope`)) ?? 0) || 0;
+          const sum =
+            Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:latency_sum`)) ?? 0) || 0;
+          const count =
+            Number((await kvGet<number | string>(`ai:agg:day:${dayKey}:latency_count`)) ?? 0) || 0;
+          return { total, outScope, sum, count };
+        }),
+      )
+    ).reduce(
+      (acc, item) => ({
+        total: acc.total + item.total,
+        outScope: acc.outScope + item.outScope,
+        sum: acc.sum + item.sum,
+        count: acc.count + item.count,
+      }),
+      { total: 0, outScope: 0, sum: 0, count: 0 },
+    );
+    const totalRequests = totals.total;
+    const outOfScopeCount = totals.outScope;
+    const latencySum = totals.sum;
+    const latencyCount = totals.count;
+    const recentEventsAll = (await kvGet<AiUsageLogEntry[]>(RECENT_KEY)) ?? [];
+    const recentEvents = recentEventsAll
+      .filter((entry) => (options.role ? entry.role === options.role : true))
+      .filter((entry) => (options.outOfScopeOnly ? entry.outOfScope : true))
+      .slice(0, 50);
+    const shouldRecalcFromRecent = Boolean(options.role || options.outOfScopeOnly);
+    const recentTotals = shouldRecalcFromRecent
+      ? recentEvents.reduce(
+          (acc, entry) => {
+            acc.total += 1;
+            if (entry.outOfScope) acc.outScope += 1;
+            if (typeof entry.latencyMs === "number" && entry.latencyMs > 0) {
+              acc.latencySum += entry.latencyMs;
+              acc.latencyCount += 1;
+            }
+            const pathKey = entry.pathHint?.trim() || "unknown";
+            const topicKey = entry.topic?.trim() || "unknown";
+            acc.paths[pathKey] = (acc.paths[pathKey] ?? 0) + 1;
+            acc.topics[topicKey] = (acc.topics[topicKey] ?? 0) + 1;
+            return acc;
+          },
+          {
+            total: 0,
+            outScope: 0,
+            latencySum: 0,
+            latencyCount: 0,
+            paths: {} as Record<string, number>,
+            topics: {} as Record<string, number>,
+          },
+        )
+      : null;
     const topUsers = userCounts
       .filter((item) => item.count > 0)
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
+    const topPaths = shouldRecalcFromRecent
+      ? Object.entries(recentTotals?.paths ?? {})
+          .map(([pathHint, count]) => ({ pathHint, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5)
+      : pathCounts
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    const topTopics = shouldRecalcFromRecent
+      ? Object.entries(recentTotals?.topics ?? {})
+          .map(([topic, count]) => ({ topic, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5)
+      : topicCounts
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
     const roleFiltered = roleCounts.filter((item) => item.count > 0);
-    const hasData = topUsers.length > 0 || roleFiltered.length > 0 || recentEvents.length > 0;
+    const summaryTotal = shouldRecalcFromRecent ? recentTotals?.total ?? 0 : totalRequests;
+    const summaryOutScope = shouldRecalcFromRecent ? recentTotals?.outScope ?? 0 : outOfScopeCount;
+    const summaryLatencySum = shouldRecalcFromRecent ? recentTotals?.latencySum ?? 0 : latencySum;
+    const summaryLatencyCount = shouldRecalcFromRecent ? recentTotals?.latencyCount ?? 0 : latencyCount;
+    const hasData =
+      summaryTotal > 0 || topUsers.length > 0 || roleFiltered.length > 0 || recentEvents.length > 0;
     return {
       hasData,
+      totalRequests: summaryTotal,
+      outOfScopeRate: summaryTotal > 0 ? summaryOutScope / summaryTotal : 0,
+      avgLatencyMs: summaryLatencyCount > 0 ? Math.round(summaryLatencySum / summaryLatencyCount) : null,
+      topPaths,
+      topTopics,
       topUsers,
       roleCounts: roleFiltered,
       recentEvents,

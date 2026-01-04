@@ -1,5 +1,6 @@
 import type { OwnershipVerification } from "@/lib/plots";
 import type { OwnershipVerificationStore } from "@/lib/ownershipStore";
+import { normalizeOwnershipVerification } from "@/lib/normalizeOwnershipVerification";
 
 const KV_URL = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -88,19 +89,16 @@ export function createKvOwnershipStore(): OwnershipVerificationStore {
       await writeAll(items);
       return record;
     },
-    async update(input) {
+    async update(id, patch) {
       const items = await readAll();
-      const idx = items.findIndex((item) => item.id === input.id);
-      if (idx === -1) return null;
-      const now = new Date().toISOString();
-      items[idx] = {
-        ...items[idx],
-        status: input.status,
-        reviewedAt: now,
-        reviewNote: input.reviewNote ?? items[idx].reviewNote ?? null,
-      };
+      const idx = items.findIndex((item) => item.id === id);
+      if (idx === -1) {
+        throw new Error("OWNERSHIP_VERIFICATION_NOT_FOUND");
+      }
+      const next = normalizeOwnershipVerification({ ...items[idx], ...patch });
+      items[idx] = next;
       await writeAll(items);
-      return items[idx];
+      return next;
     },
   };
 }

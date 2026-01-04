@@ -7,7 +7,8 @@ export type FeatureFlagKey =
   | "debtsV2"
   | "cabinetMvp"
   | "forceNewHome"
-  | "ai_assistant_enabled";
+  | "ai_widget_enabled"
+  | "ai_personal_enabled";
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
 
 const defaultFlags: FeatureFlags = {
@@ -15,7 +16,8 @@ const defaultFlags: FeatureFlags = {
   debtsV2: false,
   cabinetMvp: false,
   forceNewHome: false,
-  ai_assistant_enabled: false,
+  ai_widget_enabled: false,
+  ai_personal_enabled: false,
 };
 
 const flagsPath = path.join(process.cwd(), "data", "feature-flags.json");
@@ -126,4 +128,4 @@ export function isFeatureEnabled(flags: FeatureFlags, key: FeatureFlagKey): bool
   return Boolean(flags[key]);
 }
 
-export const isFeatureFlagsWritable = (): boolean => isKvConfigured();
+export const isFeatureFlagsWritable = (): boolean => true;

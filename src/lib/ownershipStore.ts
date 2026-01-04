@@ -2,6 +2,10 @@ import type { OwnershipVerification } from "@/lib/plots";
 import { createJsonOwnershipStore } from "@/lib/jsonOwnershipStore";
 import { createKvOwnershipStore } from "@/lib/kvOwnershipStore";
 
+export type OwnershipVerificationPatch = Partial<
+  Pick<OwnershipVerification, "status" | "documentMeta" | "reviewedAt" | "reviewNote">
+>;
+
 export type OwnershipVerificationStore = {
   listAll: () => Promise<OwnershipVerification[]>;
   listByUser: (userId: string) => Promise<OwnershipVerification[]>;
@@ -15,12 +19,7 @@ export type OwnershipVerificationStore = {
     documentMeta: OwnershipVerification["documentMeta"];
     status?: OwnershipVerification["status"];
   }) => Promise<OwnershipVerification>;
-  update: (input: {
-    id: string;
-    status: OwnershipVerification["status"];
-    reviewNote?: string | null;
-    reviewerId?: string | null;
-  }) => Promise<OwnershipVerification | null>;
+  update: (id: string, patch: OwnershipVerificationPatch) => Promise<OwnershipVerification>;
 };
 
 let store: OwnershipVerificationStore | null = null;

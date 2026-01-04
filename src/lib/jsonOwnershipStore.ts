@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import type { OwnershipVerification } from "@/lib/plots";
 import type { OwnershipVerificationStore } from "@/lib/ownershipStore";
+import { normalizeOwnershipVerification } from "@/lib/normalizeOwnershipVerification";
 import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 const ownershipVerificationsPath = path.join(process.cwd(), "data", "ownership-verifications.json");
@@ -36,18 +37,9 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
   }
 }
 
-function normalizeVerification(v: OwnershipVerification): OwnershipVerification {
-  return {
-    ...v,
-    status: v.status ?? "sent",
-    reviewedAt: v.reviewedAt ?? null,
-    reviewNote: v.reviewNote ?? null,
-  };
-}
-
 async function getAll(): Promise<OwnershipVerification[]> {
   const items = await readJson<OwnershipVerification[]>(ownershipVerificationsPath, []);
-  return items.map(normalizeVerification);
+  return items.map(normalizeOwnershipVerification);
 }
 
 export function createJsonOwnershipStore(): OwnershipVerificationStore {
@@ -92,23 +84,20 @@ export function createJsonOwnershipStore(): OwnershipVerificationStore {
       await writeJson(ownershipVerificationsPath, items);
       return record;
     },
-    async update(input) {
+    async update(id, patch) {
       if (isReadonlyFs) {
         warnReadonlyFs("ownership-store:update");
-        return null;
+        throw new Error("READONLY_FS");
       }
       const items = await getAll();
-      const idx = items.findIndex((item) => item.id === input.id);
-      if (idx === -1) return null;
-      const now = new Date().toISOString();
-      items[idx] = {
-        ...items[idx],
-        status: input.status,
-        reviewedAt: now,
-        reviewNote: input.reviewNote ?? items[idx].reviewNote ?? null,
-      };
+      const idx = items.findIndex((item) => item.id === id);
+      if (idx === -1) {
+        throw new Error("OWNERSHIP_VERIFICATION_NOT_FOUND");
+      }
+      const next = normalizeOwnershipVerification({ ...items[idx], ...patch });
+      items[idx] = next;
       await writeJson(ownershipVerificationsPath, items);
-      return items[idx];
+      return next;
     },
   };
 }

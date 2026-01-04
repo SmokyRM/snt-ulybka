@@ -9,7 +9,8 @@ const labels: Record<FeatureFlagKey, string> = {
   debtsV2: "Долги v2",
   cabinetMvp: "Кабинет MVP",
   forceNewHome: "Сделать новую главную основной",
-  ai_assistant_enabled: "Расширенный ИИ",
+  ai_widget_enabled: "Помощник (виджет на сайте)",
+  ai_personal_enabled: "ИИ: доступ к личным данным",
 };
 
 export const dynamic = "force-dynamic";

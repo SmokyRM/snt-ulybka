@@ -21,7 +21,6 @@ async function approveVerification(formData: FormData) {
   await setOwnershipVerificationStatus({
     id,
     status: "approved",
-    reviewedByUserId: user?.id ?? null,
   });
   redirect("/admin/verifications?status=sent&updated=1");
 }
@@ -41,7 +40,6 @@ async function rejectVerification(formData: FormData) {
     id,
     status: "rejected",
     reviewNote: note,
-    reviewedByUserId: user?.id ?? null,
   });
   redirect("/admin/verifications?status=sent&updated=1");
 }

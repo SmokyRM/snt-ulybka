@@ -13,7 +13,18 @@ export async function toggleFeatureFlag(formData: FormData) {
   const value = formData.get("value");
   if (typeof key !== "string" || typeof value !== "string") return;
   const enabled = value === "on";
-  if (!["newPublicHome", "debtsV2", "cabinetMvp"].includes(key)) return;
+  if (
+    ![
+      "newPublicHome",
+      "debtsV2",
+      "cabinetMvp",
+      "forceNewHome",
+      "ai_widget_enabled",
+      "ai_personal_enabled",
+    ].includes(key)
+  ) {
+    return;
+  }
   await setFeatureFlag(key as FeatureFlagKey, enabled);
   revalidatePath("/admin/feature-flags");
   revalidatePath("/admin/debts");

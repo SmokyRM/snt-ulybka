@@ -13,14 +13,18 @@ import {
 import { categoryForAccrualType } from "@/lib/paymentCategory";
 import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import { getPublicContent } from "@/lib/publicContentStore";
-import { createOpenAIClient, OpenAIKeyMissingError } from "@/lib/openai.server";
-import { enforceAiRateLimit, logAiUsage, type AiUsageSource } from "@/lib/aiUsageStore";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
+import { DEFAULT_AI_SETTINGS, getAiSettings } from "@/lib/aiSettings";
+import { enforceAiRateLimit, logAiUsage, type AiUsageSource } from "@/lib/aiUsageStore";
 
 type AssistantBody = {
   message: string;
   pageContext?: { path?: string };
   role?: string;
+  hint?: {
+    mode?: "guest" | "resident" | "staff";
+    verbosity?: "short" | "normal" | "long";
+  };
 };
 
 type Topic =
@@ -31,7 +35,6 @@ type Topic =
   | "staff-debtors";
 
 const staffRoles = new Set(["admin", "board", "accountant", "operator"]);
-const aiAllowedRoles = new Set(["admin", "board", "accountant"]);
 type ContextCardStatus = "success" | "warning" | "error" | "info";
 type ContextCard = {
   title: string;
@@ -49,6 +52,11 @@ type AssistantDraft = {
   id: string;
   title: string;
   text: string;
+};
+
+type AssistantHint = {
+  mode: "guest" | "resident" | "staff";
+  verbosity: "short" | "normal" | "long";
 };
 
 const CACHE_TTL_SECONDS = 60 * 20;
@@ -108,6 +116,132 @@ const inferTopic = (text: string, pathHint: string | null): Topic => {
   if (/(debtors?|должник|уведом)/i.test(source)) return "staff-debtors";
   if (/(debt|долг|задолж)/i.test(source)) return "staff-debts";
   return "public-help";
+};
+
+const ALLOWED_PATH_PREFIXES = [
+  "/documents",
+  "/docs",
+  "/fees",
+  "/electricity",
+  "/contacts",
+  "/help",
+  "/access",
+  "/login",
+  "/cabinet/verification",
+  "/cabinet",
+  "/news",
+  "/about",
+  "/updates",
+];
+
+const ALLOWED_TOPIC_REGEX =
+  /(снт|улыбк|участок|кадастр|правлен|взнос|оплат|реквизит|платеж|показан|электро|документ|устав|протокол|контакт|доступ|провер|регистрац|кабинет|сайт|портал|логин|вход|фз-?217|217[-\s]?фз|импорт|реестр|csv|начисл|долг|должник|уведом|тариф|обращен|правила)/i;
+
+const isAllowedTopic = (text: string, pathHint: string | null, strictMode: boolean) => {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  const source = `${trimmed} ${pathHint ?? ""}`;
+  if (ALLOWED_TOPIC_REGEX.test(source)) return true;
+  if (!strictMode && pathHint) {
+    return ALLOWED_PATH_PREFIXES.some((prefix) => pathHint.startsWith(prefix));
+  }
+  return false;
+};
+
+const shortenAnswer = (text: string) => {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^[^.!?]+[.!?]/);
+  if (match) return match[0].trim();
+  if (trimmed.length <= 220) return trimmed;
+  return `${trimmed.slice(0, 220).trim()}…`;
+};
+
+const applyAiSettings = (payload: AssistantPayload, settings: typeof DEFAULT_AI_SETTINGS) => {
+  const answerStyle =
+    settings.ai_answer_style === "short" ||
+    settings.ai_answer_style === "normal" ||
+    settings.ai_answer_style === "detailed"
+      ? settings.ai_answer_style
+      : DEFAULT_AI_SETTINGS.ai_answer_style;
+  const tone =
+    settings.ai_tone === "official" || settings.ai_tone === "simple"
+      ? settings.ai_tone
+      : DEFAULT_AI_SETTINGS.ai_tone;
+  const next: AssistantPayload = { ...payload };
+  if (settings.verbosity === "short" || answerStyle === "short") {
+    next.answer = shortenAnswer(next.answer);
+  }
+  if (answerStyle === "detailed") {
+    next.answer = `${next.answer.trim()}\n\nЕсли нужна детализация, уточните контекст — подскажу шаги.`;
+  }
+  if (tone === "simple") {
+    next.answer = `Просто: ${next.answer.trim()}`;
+  }
+  if (!settings.citations || settings.ai_show_sources === false) {
+    next.links = [];
+    next.actions = [];
+  }
+  if (settings.temperature === "medium") {
+    const tail = "\n\nЕсли нужно, расскажу подробнее.";
+    if (!next.answer.includes("подробнее")) {
+      next.answer = `${next.answer.trim()}${tail}`;
+    }
+  }
+  if (settings.ai_show_sources) {
+    const linkSources = Array.isArray(next.links) ? next.links.map((link) => link.href) : [];
+    const sources =
+      linkSources.length > 0 ? linkSources : ["/help", "/docs", "/fees", "/electricity"];
+    if (sources.length > 0 && !next.answer.includes("Источник:")) {
+      next.answer = `${next.answer.trim()}\n\nИсточник: ${sources.join(", ")}`;
+    }
+  }
+  return next;
+};
+
+const applyResponseHints = (payload: AssistantPayload, hint: AssistantHint): AssistantPayload => {
+  const next: AssistantPayload = { ...payload };
+  if (hint.verbosity === "short") {
+    next.answer = shortenAnswer(next.answer);
+  }
+  if (hint.mode === "guest") {
+    const contactLink = { label: "Контакты", href: "/contacts" };
+    if (!next.links.some((link) => link.href === contactLink.href)) {
+      next.links = [...next.links, contactLink];
+      next.actions = [...next.actions, { type: "link", label: "Контакты", href: "/contacts" }];
+    }
+  }
+  if (hint.mode === "resident") {
+    const trimmed = next.answer.trim();
+    if (!trimmed.endsWith("?")) {
+      next.answer = `${trimmed}\n\nЕсли нужно уточнение, подскажите участок или период.`;
+    }
+  }
+  if (hint.mode === "staff") {
+    next.answer = [
+      next.answer.trim(),
+      "",
+      "Чек-лист:",
+      "- Проверьте последние данные в кабинете или разделе админки.",
+      "- Сверьте период и тип начислений.",
+      "- При необходимости уточните информацию у правления.",
+    ].join("\n");
+  }
+  return next;
+};
+
+const getUsageMode = ({
+  role,
+  isStaff,
+  allowPersonal,
+}: {
+  role: string;
+  isStaff: boolean;
+  allowPersonal: boolean;
+}): "guest_short" | "verified_clarify" | "staff_checklist" => {
+  if (role === "guest") return "guest_short";
+  if (isStaff) return "staff_checklist";
+  if (allowPersonal) return "verified_clarify";
+  return "guest_short";
 };
 
 const kvFetch = async (path: string, init?: RequestInit) => {
@@ -365,6 +499,23 @@ const buildPublicCards = (): ContextCard[] => [
   },
 ];
 
+const buildOutOfScopeResponse = () => {
+  const answer = [
+    "Я могу отвечать только по вопросам СНТ «Улыбка» и сайта.",
+    "Примеры: доступ и проверка, документы, взносы, электроэнергия, контакты правления.",
+    "Можно спросить: «Где найти реквизиты?», «Как передать показания?», «Что говорит 217‑ФЗ?».",
+  ].join(" ");
+  const links = topicLinks["public-help"];
+  return {
+    topic: "public-help" as const,
+    answer,
+    links,
+    contextCards: buildPublicCards(),
+    actions: links.map((link) => ({ type: "link" as const, label: link.label, href: link.href })),
+    drafts: [] as AssistantDraft[],
+  };
+};
+
 const buildActions = (topic: Topic, options: { lastPeriod: string | null; hasData: boolean }): AssistantAction[] => {
   if (topic === "staff-billing") {
     if (!options.hasData || !options.lastPeriod) {
@@ -465,6 +616,7 @@ const buildDebtDrafts = ({
 };
 
 export async function POST(request: Request) {
+  const requestStart = Date.now();
   let success = false;
   let errorMessage: string | null = null;
   let source: AiUsageSource = "assistant";
@@ -477,15 +629,69 @@ export async function POST(request: Request) {
   }
   const message = typeof body.message === "string" ? body.message : "";
   const pathHint = body.pageContext?.path ?? null;
+  const messageLen = message.trim().length;
+  const aiSettings = await getAiSettings().catch(() => DEFAULT_AI_SETTINGS);
+  const flags = await getFeatureFlags().catch(() => null);
+  const rawTopic = inferTopic(message, pathHint);
+  let logTopic: string = rawTopic;
+  const logOutOfScope = false;
+  let logMode: "guest_short" | "verified_clarify" | "staff_checklist" = "guest_short";
   const faqMatch = matchFaq(message);
   if (faqMatch) {
     const faqUser = await getSessionUser();
     const faqUserId = faqUser?.id ?? "guest";
     const faqRole = faqUser?.role ?? "guest";
+    const aiSettings = await getAiSettings().catch(() => DEFAULT_AI_SETTINGS);
+    const rawHintMode =
+      body.hint?.mode === "guest" || body.hint?.mode === "resident" || body.hint?.mode === "staff"
+        ? body.hint.mode
+        : null;
+    const hintMode = staffRoles.has(faqRole)
+      ? rawHintMode ?? "staff"
+      : faqUser?.status === "verified"
+        ? rawHintMode === "resident"
+          ? "resident"
+          : "guest"
+        : "guest";
+    const hintVerbosity =
+      body.hint?.verbosity === "short" ||
+      body.hint?.verbosity === "normal" ||
+      body.hint?.verbosity === "long"
+        ? body.hint.verbosity
+        : hintMode === "staff"
+          ? "long"
+          : hintMode === "resident"
+            ? "normal"
+            : "short";
+    const hint: AssistantHint = {
+      mode: hintMode,
+      verbosity: hintVerbosity,
+    };
+    const allowPersonal = Boolean(
+      flags &&
+        isFeatureEnabled(flags, "ai_personal_enabled") &&
+        faqUser?.status === "verified",
+    );
+    const usageMode = getUsageMode({
+      role: faqRole,
+      isStaff: staffRoles.has(faqRole),
+      allowPersonal,
+    });
     source = "faq";
     cachedFlag = false;
     success = true;
     const answer = trimAnswer(faqMatch.answer);
+    const hinted = applyResponseHints(
+      {
+        topic: "public-help",
+        answer,
+        links: faqMatch.links,
+        contextCards: [],
+        actions: faqMatch.links.map((link) => ({ type: "link", label: link.label, href: link.href })),
+        drafts: [],
+      },
+      hint,
+    );
     await logAiUsage({
       userId: faqUserId,
       role: faqRole,
@@ -494,43 +700,122 @@ export async function POST(request: Request) {
       ts: new Date().toISOString(),
       success: true,
       tokens: null,
+      pathHint,
+      topic: "public-help",
+      mode: usageMode,
+      outOfScope: false,
+      latencyMs: Date.now() - requestStart,
+      messageLen,
+      thumb: null,
       error: null,
     });
     return NextResponse.json({
       ok: true,
-      topic: "public-help",
-      answer,
-      links: faqMatch.links,
-      contextCards: [],
-      actions: faqMatch.links.map((link) => ({ type: "link", label: link.label, href: link.href })),
-      drafts: [],
+      ...applyAiSettings(hinted, aiSettings),
       source,
       cached: cachedFlag,
     });
   }
 
   const sessionUser = await getSessionUser();
-  const userId = sessionUser?.id ?? null;
-  const role = sessionUser?.role ?? "member";
-  const envEnabled = process.env.AI_ASSISTANT_ENABLED === "1";
-  let flagEnabled = false;
-  try {
-    const flags = await getFeatureFlags();
-    flagEnabled = isFeatureEnabled(flags, "ai_assistant_enabled");
-  } catch {
-    flagEnabled = false;
-  }
-  const aiRuntimeEnabled = envEnabled || flagEnabled;
+  const userId = sessionUser?.id ?? "guest";
+  const role = sessionUser?.role ?? "guest";
+  const assistantEnabled = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
+  const rawHintMode =
+    body.hint?.mode === "guest" || body.hint?.mode === "resident" || body.hint?.mode === "staff"
+      ? body.hint.mode
+      : null;
+  const hintMode = staffRoles.has(role)
+    ? rawHintMode ?? "staff"
+    : sessionUser?.status === "verified"
+      ? rawHintMode === "resident"
+        ? "resident"
+        : "guest"
+      : "guest";
+  const hintVerbosity =
+    body.hint?.verbosity === "short" || body.hint?.verbosity === "normal" || body.hint?.verbosity === "long"
+      ? body.hint.verbosity
+      : hintMode === "staff"
+        ? "long"
+        : hintMode === "resident"
+          ? "normal"
+          : "short";
+  const hint: AssistantHint = { mode: hintMode, verbosity: hintVerbosity };
 
-  if (!userId || !aiAllowedRoles.has(role) || !aiRuntimeEnabled) {
+  if (!assistantEnabled) {
+    const usageMode = getUsageMode({ role, isStaff: staffRoles.has(role), allowPersonal: false });
+    await logAiUsage({
+      userId,
+      role,
+      source,
+      cached: false,
+      ts: new Date().toISOString(),
+      success: false,
+      tokens: null,
+      pathHint,
+      topic: rawTopic,
+      mode: usageMode,
+      outOfScope: false,
+      latencyMs: Date.now() - requestStart,
+      messageLen,
+      thumb: null,
+      error: "AI disabled",
+    });
     return NextResponse.json(
       {
         error: "AI not enabled",
-        message: "Доступен только режим справки. Для расширенного помощника нужен доступ правления.",
+        message: "ИИ-помощник временно отключён. Справка доступна.",
       },
       { status: 403 },
     );
   }
+
+  if (!isAllowedTopic(message, pathHint, aiSettings.strictMode)) {
+    const allowPersonal = Boolean(
+      flags &&
+        isFeatureEnabled(flags, "ai_personal_enabled") &&
+        sessionUser?.status === "verified",
+    );
+    const usageMode = getUsageMode({
+      role,
+      isStaff: staffRoles.has(role),
+      allowPersonal,
+    });
+    const refusal = applyAiSettings(applyResponseHints(buildOutOfScopeResponse(), hint), aiSettings);
+    source = "assistant";
+    cachedFlag = false;
+    success = true;
+    await logAiUsage({
+      userId,
+      role,
+      source,
+      cached: cachedFlag,
+      ts: new Date().toISOString(),
+      success: true,
+      tokens: null,
+      pathHint,
+      topic: "public-help",
+      mode: usageMode,
+      outOfScope: true,
+      latencyMs: Date.now() - requestStart,
+      messageLen,
+      thumb: null,
+      error: null,
+    });
+    return NextResponse.json({
+      ok: true,
+      ...refusal,
+      cached: cachedFlag,
+      source,
+    });
+  }
+
+  const personalEnabled = flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false;
+  const isVerifiedUser = sessionUser?.status === "verified";
+  const allowPersonal = personalEnabled && isVerifiedUser;
+  const isStaff = staffRoles.has(role) && allowPersonal;
+  const usageMode = getUsageMode({ role, isStaff, allowPersonal });
+  logMode = usageMode;
 
   const startedAt = new Date();
   try {
@@ -544,6 +829,13 @@ export async function POST(request: Request) {
         ts: startedAt.toISOString(),
         success: false,
         tokens: null,
+        pathHint,
+        topic: rawTopic,
+        mode: usageMode,
+        outOfScope: false,
+        latencyMs: Date.now() - requestStart,
+        messageLen,
+        thumb: null,
         error: "Rate limit exceeded",
       });
       return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
@@ -561,6 +853,13 @@ export async function POST(request: Request) {
       ts: startedAt.toISOString(),
       success: false,
       tokens: null,
+      pathHint,
+      topic: rawTopic,
+      mode: usageMode,
+      outOfScope: false,
+      latencyMs: Date.now() - requestStart,
+      messageLen,
+      thumb: null,
       error: msg,
     });
     return NextResponse.json({ error: "AI rate limiter unavailable" }, { status: 500 });
@@ -574,18 +873,19 @@ export async function POST(request: Request) {
       source = "cache";
       cachedFlag = true;
       success = true;
+      logTopic = cached.topic;
       return NextResponse.json({
         ok: true,
-        ...cached,
+        ...applyAiSettings(applyResponseHints(cached, hint), aiSettings),
         cached: cachedFlag,
         source,
       });
     }
 
-    createOpenAIClient((apiKey) => apiKey);
-    const isStaff = staffRoles.has(role);
+    const isStaff = staffRoles.has(role) && allowPersonal;
     const rawTopic = inferTopic(message, pathHint);
     const topic: Topic = isStaff ? rawTopic : "public-help";
+    logTopic = topic;
     const answerFromFile = await loadTopicContent(topic);
     const links = topicLinks[topic];
     let contextCards: ContextCard[] = [];
@@ -653,14 +953,20 @@ export async function POST(request: Request) {
     });
 
     success = true;
-    const payload: AssistantPayload = {
-      topic,
-      answer: trimAnswer(answer),
-      links,
-      contextCards,
-      actions,
-      drafts,
-    };
+    const payload: AssistantPayload = applyAiSettings(
+      applyResponseHints(
+        {
+          topic,
+          answer: trimAnswer(answer),
+          links,
+          contextCards,
+          actions,
+          drafts,
+        },
+        hint,
+      ),
+      aiSettings,
+    );
     await cacheSet(cacheKey, payload);
     source = "assistant";
     cachedFlag = false;
@@ -671,10 +977,6 @@ export async function POST(request: Request) {
       source,
     });
   } catch (error) {
-    if (error instanceof OpenAIKeyMissingError) {
-      errorMessage = "OPENAI_API_KEY missing";
-      return NextResponse.json({ error: "OPENAI_API_KEY missing" }, { status: 500 });
-    }
     const message = error instanceof Error ? error.message : "Unknown error";
     errorMessage = message;
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
@@ -687,7 +989,19 @@ export async function POST(request: Request) {
       ts: startedAt.toISOString(),
       success,
       tokens: null,
+      pathHint,
+      topic: logTopic,
+      mode: logMode,
+      outOfScope: logOutOfScope,
+      latencyMs: Date.now() - requestStart,
+      messageLen,
+      thumb: null,
       error: success ? null : errorMessage ?? "Unknown error",
     });
   }
 }
+
+// Manual tests:
+// - Toggle ai_widget_enabled -> widget hidden/visible on public pages.
+// - ai_personal_enabled ON + verified -> personal answers; OFF or not verified -> public only.
+// - Format settings (style/tone/sources) change response formatting.

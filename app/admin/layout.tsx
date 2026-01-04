@@ -8,6 +8,7 @@ import AdminDirtyProvider from "./AdminDirtyProvider";
 import AdminNavigationProgressProvider from "./AdminNavigationProgress";
 import AdminViewAsUserButton from "./AdminViewAsUserButton";
 import AssistantWidget from "@/components/AssistantWidget";
+import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -17,6 +18,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/login?next=/admin");
   }
   const isDev = process.env.NODE_ENV !== "production";
+  const flags = await getFeatureFlags().catch(() => null);
+  const widgetEnabled = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
+  const allowPreview = user?.role === "admin" || user?.role === "board";
+  const showAssistant = widgetEnabled || allowPreview;
 
   let buildInfo: { sha: string; builtAt: string } | null = null;
   try {
@@ -60,7 +65,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <main className="px-6 py-6">{children}</main>
           </div>
         </div>
-        {hasAccess ? <AssistantWidget variant="admin" initialAuth={Boolean(user)} /> : null}
+        {hasAccess && showAssistant ? (
+          <AssistantWidget variant="admin" initialAuth={Boolean(user)} />
+        ) : null}
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>
   );
