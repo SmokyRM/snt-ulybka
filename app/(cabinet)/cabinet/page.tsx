@@ -5,27 +5,21 @@ import { getSessionUser } from "@/lib/session.server";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
 import {
-  acceptDelegateInvite,
-  clearDelegate,
-  generateDelegateInvite,
-  getPlots,
   getUserOwnershipVerifications,
   getUserPlots,
 } from "@/lib/plots";
 import { createAppeal, getUserAppeals } from "@/lib/appeals";
 import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 import { getUserElectricity, getUserElectricityHistory, submitReading } from "@/lib/electricity";
-import { getUnreadCount, getUserEvents, markAllRead, markEventRead } from "@/lib/userEvents";
+import { getUserEvents, markAllRead, markEventRead } from "@/lib/userEvents";
 import { getPaymentDetails } from "@/lib/paymentDetails";
 import { getUserFinanceHistory } from "@/lib/financeHistory";
 import { getUserCharges } from "@/lib/charges";
 import { acknowledgeDoc, getRequiredDocsForUser } from "@/lib/requiredDocs";
 import { getDecisions } from "@/lib/decisions";
-import { getLatestMembershipRequestForUser, getMembershipStatus, submitMembershipRequest } from "@/lib/membership";
+import { getLatestMembershipRequestForUser, getMembershipStatus } from "@/lib/membership";
 import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
-import { getUserPreferences, setActivePlot } from "@/lib/userPreferences";
-import { submitPlotProposal } from "@/lib/plots";
-import { createCodeRequest } from "@/lib/codeRequests";
+import { getUserPreferences } from "@/lib/userPreferences";
 import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { getVerificationStatus } from "@/lib/verificationStatus";
@@ -154,178 +148,6 @@ async function ackDoc(formData: FormData) {
   redirect("/cabinet?section=docs");
 }
 
-async function submitMembership(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  const basis = ((formData.get("ownershipBasis") as string | null) ?? "OWNER").toUpperCase();
-  const cadastralNumbers = formData
-    .getAll("cadastralNumbers")
-    .map((v) => (typeof v === "string" ? v.trim() : ""))
-    .filter((v) => v);
-  if (cadastralNumbers.length === 0) {
-    redirect("/cabinet?section=home");
-  }
-  const plots = cadastralNumbers.map((cad) => ({
-    plotNumber: cad,
-    street: null as string | null,
-    cadastral: cad,
-  }));
-  const profile = await getUserProfile(user.id ?? "");
-  if (!profile.fullName || !profile.phone) {
-    redirect("/cabinet#profile");
-  }
-  await submitMembershipRequest({
-    userId: user.id ?? "",
-    fullName: profile.fullName ?? "",
-    phone: profile.phone ?? "",
-    plots,
-    comment: `Основание: ${basis}`,
-    proofType: "other",
-  });
-  redirect("/cabinet?section=home");
-}
-
-async function submitPlotProposalAction(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  const plotId = (formData.get("plotId") as string | null) ?? "";
-  const street = (formData.get("proposalStreet") as string | null) ?? "";
-  const plotNumber = (formData.get("proposalPlotNumber") as string | null) ?? "";
-  const cadastral = (formData.get("proposalCadastral") as string | null) ?? "";
-  if (!plotId) redirect("/cabinet");
-  await submitPlotProposal({
-    userId: user.id ?? "",
-    plotId,
-    street: street || undefined,
-    plotNumber: plotNumber || undefined,
-    cadastral: cadastral || undefined,
-  });
-  redirect("/cabinet?section=home");
-}
-
-async function updateProfile(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
-  }
-  const fullName = (formData.get("fullName") as string | null) ?? "";
-  const phone = (formData.get("phone") as string | null) ?? "";
-  await upsertUserProfileByUser(user.id ?? "", { fullName, phone });
-  redirect("/cabinet?section=home");
-}
-
-async function setActivePlotAction(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
-  }
-  const plotId = (formData.get("plotId") as string | null) ?? "";
-  if (plotId) {
-    await setActivePlot(user.id ?? "", plotId);
-  }
-  redirect("/cabinet?section=home");
-}
-
-async function createDelegateInviteAction(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  const plotId = (formData.get("plotId") as string | null) ?? "";
-  const allowReplace = (formData.get("allowReplace") as string | null) === "1";
-  if (!plotId) redirect("/cabinet?section=home");
-  const plots = await getPlots();
-  const plot = plots.find((p) => p.plotId === plotId);
-  const isAdmin = user.role === "admin" || user.role === "board";
-  if (!plot || (!isAdmin && plot.ownerUserId !== user.id)) {
-    redirect("/cabinet?section=home");
-  }
-  const result = await generateDelegateInvite({
-    plotId,
-    createdByUserId: user.id ?? "",
-    isAdmin,
-    allowReplace,
-  });
-  if (!result.ok) {
-    const reason = result.reason ?? "error";
-    redirect(`/cabinet?section=home&delegateError=${encodeURIComponent(reason)}`);
-  }
-  redirect(`/cabinet?section=home&delegateCode=${encodeURIComponent(result.token)}`);
-}
-
-async function acceptDelegateInviteAction(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  const token = (formData.get("inviteToken") as string | null) ?? "";
-  if (!token) redirect("/cabinet?section=home");
-  const result = await acceptDelegateInvite({ token, userId: user.id ?? "" });
-  if (!result.ok) {
-    redirect(`/cabinet?section=home&delegateError=${encodeURIComponent(result.reason)}`);
-  }
-  redirect("/cabinet?section=home");
-}
-
-async function clearDelegateAction(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  const plotId = (formData.get("plotId") as string | null) ?? "";
-  if (!plotId) redirect("/cabinet?section=home");
-  const plots = await getPlots();
-  const plot = plots.find((p) => p.plotId === plotId);
-  const isAdmin = user.role === "admin" || user.role === "board";
-  if (!plot || (!isAdmin && plot.ownerUserId !== user.id)) {
-    redirect("/cabinet?section=home");
-  }
-  await clearDelegate(plotId);
-  redirect("/cabinet?section=home");
-}
-
-async function submitCodeRequest(formData: FormData) {
-  "use server";
-  const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
-  }
-  const display = (formData.get("plot_display") as string | null)?.trim() || "";
-  const cadastral = (formData.get("cadastral_number") as string | null)?.trim() || "";
-  const comment = (formData.get("comment") as string | null)?.trim() || "";
-  if (!display) {
-    redirect("/cabinet?section=home");
-  }
-  await createCodeRequest({
-    userId: user.id ?? "",
-    plotDisplay: display,
-    cadastralNumber: cadastral || null,
-    comment: comment || null,
-  });
-  redirect("/cabinet?section=home&codeRequest=sent");
-}
-
 export default async function CabinetPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
@@ -429,7 +251,6 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     dataErrors,
   );
   const events = await safeFetch("userEvents", [], () => getUserEvents(userId, 10), dataErrors);
-  const unreadCount = await safeFetch("unreadCount", 0, () => getUnreadCount(userId), dataErrors);
   const electricityHistory = await safeFetch(
     "electricityHistory",
     [],
@@ -554,10 +375,23 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
               </>
             ) : status === "draft" ? (
               <>
-                <div className="mt-2 font-semibold text-zinc-900">🟡 Проверка не отправлена</div>
-                <p className="mt-1 text-sm text-zinc-700">
-                  Участок сохранён. Отправьте заявку на проверку.
-                </p>
+                {latest?.status === "draft" ? (
+                  <>
+                    <div className="mt-2 font-semibold text-zinc-900">
+                      🟡 Проверка не отправлена
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-700">Черновик сохранён.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-2 font-semibold text-zinc-900">
+                      🟡 Проверка не начата
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-700">
+                      Добавьте заявку на проверку.
+                    </p>
+                  </>
+                )}
                 <Link
                   href="/cabinet/plots/new"
                   className="mt-3 inline-flex rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
@@ -574,6 +408,9 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
                 <div className="mt-2 flex flex-wrap gap-3 text-xs text-zinc-500">
                   <Link href="/help#verification" className="hover:text-[#5E704F] hover:underline">
                     Как проходит проверка
+                  </Link>
+                  <Link href="/help" className="hover:text-[#5E704F] hover:underline">
+                    Написать в правление
                   </Link>
                   <Link href="/help" className="hover:text-[#5E704F] hover:underline">
                     Справка
@@ -619,32 +456,41 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
             🔒 Безопасность и данные
           </Link>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Link
-              href="/cabinet?section=plots"
-              className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
-            >
-              <div className="text-2xl">🏡</div>
-              <div className="mt-2 font-semibold text-zinc-900">Мой участок</div>
-              <p className="mt-1 text-xs text-zinc-600">Данные и статус по вашему участку.</p>
-            </Link>
-            <Link
-              href="/cabinet?section=finance"
-              className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
-            >
-              <div className="text-2xl">💰</div>
-              <div className="mt-2 font-semibold text-zinc-900">Оплаты и взносы</div>
-              <p className="mt-1 text-xs text-zinc-600">Начисления и история платежей.</p>
-            </Link>
-            <Link
-              href="/cabinet?section=electricity"
-              className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
-            >
-              <div className="text-2xl">⚡</div>
-              <div className="mt-2 font-semibold text-zinc-900">Электроэнергия</div>
-              <p className="mt-1 text-xs text-zinc-600">Показания и начисления.</p>
-            </Link>
-          </div>
+          {isConfirmed ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link
+                href="/cabinet?section=plots"
+                className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
+              >
+                <div className="text-2xl">🏡</div>
+                <div className="mt-2 font-semibold text-zinc-900">Мой участок</div>
+                <p className="mt-1 text-xs text-zinc-600">Данные и статус по вашему участку.</p>
+              </Link>
+              <Link
+                href="/cabinet?section=finance"
+                className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
+              >
+                <div className="text-2xl">💰</div>
+                <div className="mt-2 font-semibold text-zinc-900">Оплаты и взносы</div>
+                <p className="mt-1 text-xs text-zinc-600">Начисления и история платежей.</p>
+              </Link>
+              <Link
+                href="/cabinet?section=electricity"
+                className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
+              >
+                <div className="text-2xl">⚡</div>
+                <div className="mt-2 font-semibold text-zinc-900">Электроэнергия</div>
+                <p className="mt-1 text-xs text-zinc-600">Показания и начисления.</p>
+              </Link>
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-500">
+              Разделы кабинета откроются после проверки участка.{" "}
+              <Link href="/help" className="text-[#5E704F] underline">
+                Подробнее
+              </Link>
+            </div>
+          )}
 
           {isConfirmed ? (
             <p className="text-sm text-zinc-600">
@@ -1078,7 +924,6 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   return (
     <CabinetShell
       sections={sections}
-      unreadCount={unreadCount}
       quickActions={quickActions}
       initialActive={initialSection}
       isImpersonating={Boolean(user.isImpersonating)}

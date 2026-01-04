@@ -14,7 +14,6 @@ type Section = {
 
 type Props = {
   sections: Section[];
-  unreadCount: number;
   quickActions?: Array<{ key: SectionKey; title: string; desc?: string; targetId?: string }>;
   initialActive?: SectionKey;
   isImpersonating?: boolean;
@@ -22,7 +21,6 @@ type Props = {
 
 export function CabinetShell({
   sections,
-  unreadCount,
   quickActions = [],
   initialActive = "home",
   isImpersonating = false,
