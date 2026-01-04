@@ -2,7 +2,12 @@ import fs from "fs/promises";
 import path from "path";
 import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
-export type FeatureFlagKey = "newPublicHome" | "debtsV2" | "cabinetMvp" | "forceNewHome";
+export type FeatureFlagKey =
+  | "newPublicHome"
+  | "debtsV2"
+  | "cabinetMvp"
+  | "forceNewHome"
+  | "ai_assistant_enabled";
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
 
 const defaultFlags: FeatureFlags = {
@@ -10,6 +15,7 @@ const defaultFlags: FeatureFlags = {
   debtsV2: false,
   cabinetMvp: false,
   forceNewHome: false,
+  ai_assistant_enabled: false,
 };
 
 const flagsPath = path.join(process.cwd(), "data", "feature-flags.json");
