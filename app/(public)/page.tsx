@@ -18,6 +18,7 @@ const fallbackFlags: FeatureFlags = {
   debtsV2: false,
   cabinetMvp: false,
   forceNewHome: false,
+  ai_assistant_enabled: false,
 };
 
 export default async function Home() {
