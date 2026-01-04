@@ -79,7 +79,7 @@ export function createKvOwnershipStore(): OwnershipVerificationStore {
         userId: input.userId,
         cadastralNumber: input.cadastralNumber,
         documentMeta: input.documentMeta,
-        status: "sent",
+        status: input.status ?? "sent",
         createdAt: now,
         reviewedAt: null,
         reviewNote: null,

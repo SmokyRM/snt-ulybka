@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { getSntSettings } from "@/lib/sntSettings";
+import { getSessionUser } from "@/lib/session.server";
+import { getOnboardingStatus } from "@/lib/onboardingStatus";
+import OnboardingBlock from "@/components/OnboardingBlock";
 
 export const metadata = {
   title: "Электроэнергия — СНТ «Улыбка»",
@@ -10,7 +13,14 @@ export const metadata = {
   },
 };
 
-export default function ElectricityPage() {
+export default async function ElectricityPage() {
+  const user = await getSessionUser();
+  if (user && user.role !== "admin") {
+    const status = await getOnboardingStatus(user.id ?? "");
+    if (status !== "complete") {
+      return <OnboardingBlock />;
+    }
+  }
   const settings = getSntSettings();
   const {
     electricityTariffRubPerKwh,

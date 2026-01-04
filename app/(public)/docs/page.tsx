@@ -1,5 +1,8 @@
 import DocumentsClient from "./DocumentsClient";
 import { getPublicContent } from "@/lib/publicContentStore";
+import { getSessionUser } from "@/lib/session.server";
+import { getOnboardingStatus } from "@/lib/onboardingStatus";
+import OnboardingBlock from "@/components/OnboardingBlock";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -9,6 +12,13 @@ export const metadata = {
 };
 
 export default async function DocsPage() {
+  const user = await getSessionUser();
+  if (user && user.role !== "admin") {
+    const status = await getOnboardingStatus(user.id ?? "");
+    if (status !== "complete") {
+      return <OnboardingBlock />;
+    }
+  }
   const content = await getPublicContent();
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

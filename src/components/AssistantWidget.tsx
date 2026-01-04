@@ -35,6 +35,7 @@ type AssistantMessage = {
 
 type AssistantWidgetProps = {
   variant?: "public" | "admin";
+  initialAuth?: boolean;
 };
 
 const quickPrompts = [
@@ -100,7 +101,10 @@ const safeJson = async <T,>(response: Response): Promise<T> => {
   }
 };
 
-export default function AssistantWidget({ variant = "public" }: AssistantWidgetProps) {
+export default function AssistantWidget({
+  variant = "public",
+  initialAuth,
+}: AssistantWidgetProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -120,7 +124,9 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
   const [lastStatus, setLastStatus] = useState<403 | 429 | 500 | null>(null);
   const [aiLocked, setAiLocked] = useState(false);
   const [aiLockedMessage, setAiLockedMessage] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(
+    typeof initialAuth === "boolean" ? initialAuth : null,
+  );
   const [guestBlocked, setGuestBlocked] = useState(false);
   const [activeTab, setActiveTab] = useState<"help" | "ai">("help");
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -191,6 +197,7 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
 
   useEffect(() => {
     if (!open) return;
+    if (typeof initialAuth === "boolean") return;
     let cancelled = false;
     fetch("/api/auth/me")
       .then((res) => {
@@ -200,14 +207,17 @@ export default function AssistantWidget({ variant = "public" }: AssistantWidgetP
           setGuestBlocked(false);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
         setIsAuthenticated(false);
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[assistant] auth check failed", error);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, initialAuth, pathname, variant]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {

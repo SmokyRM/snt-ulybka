@@ -60,7 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <main className="px-6 py-6">{children}</main>
           </div>
         </div>
-        {hasAccess ? <AssistantWidget variant="admin" /> : null}
+        {hasAccess ? <AssistantWidget variant="admin" initialAuth={Boolean(user)} /> : null}
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>
   );

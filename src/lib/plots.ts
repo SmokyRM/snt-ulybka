@@ -65,7 +65,7 @@ export type OwnershipVerification = {
   userId: string;
   cadastralNumber: string;
   documentMeta: DocumentMeta;
-  status: "sent" | "approved" | "rejected";
+  status: "draft" | "sent" | "approved" | "rejected";
   createdAt: string;
   reviewedAt?: string | null;
   reviewNote?: string | null;
@@ -263,6 +263,7 @@ export async function createOwnershipVerification(input: {
   userId: string;
   cadastralNumber: string;
   documentMeta: DocumentMeta;
+  status?: OwnershipVerification["status"];
 }) {
   if (!input.userId || !input.cadastralNumber) return null;
   const existing = await ownershipStore.listByUser(input.userId);
@@ -275,10 +276,15 @@ export async function createOwnershipVerification(input: {
     (item) => item.cadastralNumber.trim().toLowerCase() === normalized && item.status === "sent",
   );
   if (sent) return sent;
+  const draft = existing.find(
+    (item) => item.cadastralNumber.trim().toLowerCase() === normalized && item.status === "draft",
+  );
+  if (draft) return draft;
   return ownershipStore.create({
     userId: input.userId,
     cadastralNumber: input.cadastralNumber,
     documentMeta: sanitizeDocumentMeta(input.documentMeta),
+    status: input.status,
   });
 }
 
@@ -332,6 +338,46 @@ export async function reviewOwnershipVerification(input: {
   }
 
   return updated;
+}
+
+export async function getAllOwnershipVerifications(input?: {
+  status?: OwnershipVerification["status"];
+  limit?: number;
+}): Promise<OwnershipVerification[]> {
+  const items = await ownershipStore.listAll();
+  const filtered = input?.status ? items.filter((item) => item.status === input.status) : items;
+  const sorted = filtered.sort((a, b) => {
+    const aTs = Date.parse(a.createdAt);
+    const bTs = Date.parse(b.createdAt);
+    return bTs - aTs;
+  });
+  if (input?.limit && input.limit > 0) {
+    return sorted.slice(0, input.limit);
+  }
+  return sorted;
+}
+
+export async function getOwnershipVerificationById(
+  id: string,
+): Promise<OwnershipVerification | null> {
+  if (!id) return null;
+  const items = await ownershipStore.listAll();
+  return items.find((item) => item.id === id) ?? null;
+}
+
+export async function setOwnershipVerificationStatus(input: {
+  id: string;
+  status: OwnershipVerification["status"];
+  reviewNote?: string | null;
+  reviewedByUserId?: string | null;
+}): Promise<OwnershipVerification | null> {
+  if (!input.id) return null;
+  return reviewOwnershipVerification({
+    id: input.id,
+    status: input.status === "approved" ? "approved" : "rejected",
+    reviewNote: input.reviewNote ?? null,
+    reviewerId: input.reviewedByUserId ?? null,
+  });
 }
 
 export async function setUserPlot(input: {

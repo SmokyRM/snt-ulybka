@@ -9,6 +9,8 @@ import { siteCity, siteName } from "@/config/site";
 
 type HeaderClientProps = {
   role?: "user" | "admin" | "board" | "accountant" | "operator" | null;
+  onboardingStatus?: "complete" | "draft" | "pending" | "rejected" | null;
+  verificationStatus?: "draft" | "pending" | "rejected" | "verified" | null;
 };
 
 const navItems = [
@@ -26,11 +28,38 @@ const isActive = (pathname: string, href: string) => {
   return false;
 };
 
-export function HeaderClient({ role }: HeaderClientProps) {
+export function HeaderClient({
+  role,
+  onboardingStatus = null,
+  verificationStatus = null,
+}: HeaderClientProps) {
   const pathname = usePathname();
   const isAdmin = role === "admin";
   const isAuthenticated = Boolean(role);
   const [menuOpen, setMenuOpen] = useState(false);
+  const needsOnboarding = isAuthenticated && onboardingStatus && onboardingStatus !== "complete";
+  const badge = (() => {
+    if (!isAuthenticated) return null;
+    if (verificationStatus === "rejected") {
+      return { label: "❌ Нужны уточнения · Исправить", href: "/cabinet/verification" };
+    }
+    if (verificationStatus === "pending") {
+      return { label: "⏳ На проверке (1–2 дня)", href: "/cabinet/verification" };
+    }
+    if (verificationStatus === "draft") {
+      return { label: "🟡 Регистрация не завершена · Продолжить", href: "/cabinet/verification" };
+    }
+    if (needsOnboarding) {
+      if (onboardingStatus === "pending") {
+        return { label: "⏳ На проверке", href: "/onboarding" };
+      }
+      if (onboardingStatus === "rejected") {
+        return { label: "❌ Нужно исправить · Продолжить", href: "/onboarding" };
+      }
+      return { label: "🟡 Профиль не завершён · Продолжить", href: "/onboarding" };
+    }
+    return null;
+  })();
 
   const action = () => {
     if (isAdmin) {
@@ -100,6 +129,14 @@ export function HeaderClient({ role }: HeaderClientProps) {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          {badge ? (
+            <AppLink
+              href={badge.href}
+              className="hidden text-xs text-zinc-500 transition hover:text-white hover:underline sm:inline-flex"
+            >
+              {badge.label}
+            </AppLink>
+          ) : null}
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
@@ -126,6 +163,15 @@ export function HeaderClient({ role }: HeaderClientProps) {
                   {item.label}
                 </AppLink>
               ))}
+              {badge ? (
+                <AppLink
+                  href={badge.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/10"
+                >
+                  {badge.label}
+                </AppLink>
+              ) : null}
               <div className="pt-2">{action()}</div>
             </div>
           </div>

@@ -12,6 +12,8 @@ type OwnershipReviewStatus = Extract<OwnershipStatus, "approved" | "rejected">;
 
 function statusLabel(status: OwnershipStatus) {
   switch (status) {
+    case "draft":
+      return "Черновик";
     case "sent":
       return "На проверке";
     case "approved":
@@ -26,6 +28,7 @@ function statusLabel(status: OwnershipStatus) {
 function statusTone(status: OwnershipStatus) {
   if (status === "approved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
   if (status === "rejected") return "bg-rose-50 text-rose-700 border-rose-200";
+  if (status === "draft") return "bg-zinc-100 text-zinc-700 border-zinc-200";
   return "bg-amber-50 text-amber-800 border-amber-200";
 }
 
@@ -74,6 +77,14 @@ export default async function CabinetPlotsPage({
             className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4A5A3E]"
           >
             Добавить участок
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-4 text-xs font-semibold text-[#5E704F]">
+          <Link href="/cabinet" className="underline">
+            ← Вернуться в кабинет
+          </Link>
+          <Link href="/" className="underline">
+            ← На главную
           </Link>
         </div>
 

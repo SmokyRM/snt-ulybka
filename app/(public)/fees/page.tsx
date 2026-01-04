@@ -5,6 +5,9 @@ import { FEES_FAQ } from "@/content/fees";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { getSntSettings } from "@/lib/sntSettings";
 import Link from "next/link";
+import { getSessionUser } from "@/lib/session.server";
+import { getOnboardingStatus } from "@/lib/onboardingStatus";
+import OnboardingBlock from "@/components/OnboardingBlock";
 
 export const metadata = {
   title: "Взносы и долги — СНТ «Улыбка»",
@@ -15,7 +18,14 @@ export const metadata = {
   },
 };
 
-export default function FeesPage() {
+export default async function FeesPage() {
+  const user = await getSessionUser();
+  if (user && user.role !== "admin") {
+    const status = await getOnboardingStatus(user.id ?? "");
+    if (status !== "complete") {
+      return <OnboardingBlock />;
+    }
+  }
   const settings = getSntSettings();
   const {
     membershipFeeRubPerYear,

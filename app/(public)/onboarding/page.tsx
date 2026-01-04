@@ -1,8 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { getSessionUser } from "@/lib/session.server";
 import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
-import { claimPlotByCode } from "@/lib/plots";
 import { OnboardingForm } from "./OnboardingForm";
 
 async function saveOnboarding(formData: FormData) {
@@ -16,7 +15,6 @@ async function saveOnboarding(formData: FormData) {
   }
   const fullName = ((formData.get("fullName") as string | null) ?? "").trim();
   const phoneRaw = ((formData.get("phone") as string | null) ?? "").trim();
-  const plotCode = ((formData.get("plotCode") as string | null) ?? "").trim().toUpperCase();
   if (!fullName || !phoneRaw) {
     redirect("/onboarding");
   }
@@ -29,28 +27,6 @@ async function saveOnboarding(formData: FormData) {
   await upsertUserProfileByUser(user.id ?? "", { fullName, phone });
   // Пока сохраняем кадастровые номера в профиле как справочные данные
   await upsertUserProfileByUser(user.id ?? "", { fullName, phone, cadastralNumbers });
-
-  if (!plotCode) {
-    redirect("/onboarding?error=Нужен код участка");
-  }
-  // DEV ONLY: allow local testing without real plot binding.
-  const isDev = process.env.NODE_ENV !== "production";
-  const h = await Promise.resolve(headers());
-  const host = h.get("host") ?? "";
-  const isLocalhost = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-  if (isDev && isLocalhost && plotCode === "PLOT111") {
-    redirect("/cabinet");
-  }
-  const claimResult = await claimPlotByCode(plotCode, user.id ?? "");
-  if (!claimResult.ok) {
-    const reason =
-      claimResult.reason === "taken"
-        ? "Участок уже привязан. Обратитесь к владельцу или в правление."
-        : claimResult.reason === "not_found"
-          ? "Неверный код. Получите код у правления."
-          : "Не удалось привязать участок. Попробуйте снова.";
-    redirect(`/onboarding?error=${encodeURIComponent(reason)}`);
-  }
 
   redirect("/cabinet");
 }
@@ -76,10 +52,16 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
         <div>
           <h1 className="text-2xl font-semibold">Давайте познакомимся</h1>
           <p className="mt-2 text-sm text-zinc-600">
-            Эти данные нужны, чтобы корректно показывать информацию по вашему участку.
+            Эти данные нужны для связи и доступа к информации по вашему участку.
           </p>
         </div>
         <OnboardingForm action={saveOnboarding} error={error} />
+        <Link
+          href="/cabinet/verification"
+          className="text-xs text-zinc-500 transition hover:text-[#5E704F] hover:underline"
+        >
+          ← Вернуться к проверке
+        </Link>
       </div>
     </main>
   );

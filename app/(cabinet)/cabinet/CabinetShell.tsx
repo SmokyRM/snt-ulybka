@@ -37,14 +37,16 @@ export function CabinetShell({
         <div className="flex items-center justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold">Личный кабинет</h1>
+              <h1 className="text-2xl font-semibold">Мой кабинет</h1>
               {isImpersonating && (
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
                   Режим теста
                 </span>
               )}
             </div>
-            <div className="text-xs text-zinc-600">Уведомления: {unreadCount > 0 ? `${unreadCount} новых` : "нет новых"}</div>
+            <div className="text-xs text-zinc-600">
+              Информация по вашему участку и начислениям
+            </div>
           </div>
           <LogoutButton
             redirectTo="/"

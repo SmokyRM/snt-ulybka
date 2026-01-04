@@ -13,6 +13,7 @@ export type OwnershipVerificationStore = {
     userId: string;
     cadastralNumber: string;
     documentMeta: OwnershipVerification["documentMeta"];
+    status?: OwnershipVerification["status"];
   }) => Promise<OwnershipVerification>;
   update: (input: {
     id: string;

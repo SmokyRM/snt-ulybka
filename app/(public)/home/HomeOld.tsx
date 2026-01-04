@@ -20,24 +20,20 @@ export default function HomeOld({ content }: HomeOldProps) {
   const faqItems = content.faq.length > 0 ? content.faq.slice(0, 5) : [];
   return (
     <main className="bg-[#F8F1E9] pb-16 pt-10 sm:pt-14">
-      <section className="mx-auto w-full max-w-5xl space-y-10 px-4 sm:px-6">
+      <section className="mx-auto w-full max-w-5xl space-y-12 px-4 sm:space-y-[72px] sm:px-6">
         <div className="rounded-3xl border border-[#5E704F]/20 bg-white/90 p-6 shadow-sm sm:p-10">
           <h1 className="text-3xl font-semibold leading-tight text-zinc-900 sm:text-4xl">
-            СНТ «Улыбка» — официальный сайт
+            Личный кабинет жителей СНТ «Улыбка»
           </h1>
           <p className="mt-3 max-w-3xl text-base text-zinc-700">
-            Официальный сайт {siteName} ({siteCity}). Доступ к данным по участку, взносам и
-            электроэнергии открывается после подтверждения членства.
+            Участок, взносы и электроэнергия — всё в одном месте.
           </p>
-          <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-            ✨ Сайт улучшается — делаем его проще и понятнее для жителей СНТ.
-          </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               href="/login"
               className="rounded-full bg-[#5E704F] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
             >
-              Войти в личный кабинет
+              Войти
             </Link>
           </div>
           <Link
@@ -46,18 +42,39 @@ export default function HomeOld({ content }: HomeOldProps) {
           >
             Впервые? → Как получить доступ
           </Link>
-          <p className="mt-3 text-sm text-zinc-600">
-            Если у вас нет кода участка, запросите его у правления {siteCity}.
-          </p>
         </div>
 
         <section className="space-y-6">
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-zinc-900">Что даёт регистрация</h2>
-            <ul className="mt-3 grid gap-3 text-sm text-zinc-700 sm:grid-cols-3">
-              <li>Доступ к участку и статусам собственности.</li>
-              <li>Начисления, взносы и история оплат.</li>
-              <li>Электроэнергия: показания, уведомления и напоминания.</li>
+            <h2 className="text-lg font-semibold text-zinc-900">Зачем нужна регистрация</h2>
+            <p className="mt-1 text-xs text-zinc-600">
+              Чтобы все данные по участку были под рукой — без звонков и бумажек.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                <div className="text-2xl">🏡</div>
+                <div className="mt-2 font-semibold text-zinc-900">Мой участок</div>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Статус собственности и данные по участку.
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                <div className="text-2xl">💰</div>
+                <div className="mt-2 font-semibold text-zinc-900">История оплат</div>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Взносы, начисления и платежи.
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                <div className="text-2xl">⚡</div>
+                <div className="mt-2 font-semibold text-zinc-900">Показания счётчика</div>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Электроэнергия и передача показаний.
+                </p>
+              </div>
+            </div>
+            <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-zinc-600">
+              <li>Меньше ошибок и недоразумений с начислениями.</li>
             </ul>
           </div>
           <div
@@ -157,6 +174,9 @@ export default function HomeOld({ content }: HomeOldProps) {
           <h2 className="text-lg font-semibold text-zinc-900">Частые вопросы</h2>
           <FaqAccordion items={faqItems} />
         </section>
+        <div className="text-xs text-zinc-500">
+          ✨ Сайт улучшается — делаем его проще и понятнее для жителей СНТ.
+        </div>
       </section>
     </main>
   );

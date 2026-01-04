@@ -1,3 +1,4 @@
+import Link from "next/link";
 import LoginForm from "./LoginForm";
 
 type SearchParams = {
@@ -18,15 +19,15 @@ export default function LoginPage({
       <div className="mx-auto w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <LoginForm nextParam={rawNext} />
         <div className="mt-6 space-y-2 text-sm text-zinc-500">
-          <a href="/" className="block hover:text-[#5E704F] hover:underline">
+          <Link href="/" className="block hover:text-[#5E704F] hover:underline">
             ← На главную
-          </a>
-          <a href="/#get-access" className="block hover:text-[#5E704F] hover:underline">
+          </Link>
+          <Link href="/#get-access" className="block hover:text-[#5E704F] hover:underline">
             Нет кода или вы впервые? → Как получить доступ
-          </a>
-          <a href="/help" className="block hover:text-[#5E704F] hover:underline">
+          </Link>
+          <Link href="/help" className="block hover:text-[#5E704F] hover:underline">
             Нужна помощь? → Справка
-          </a>
+          </Link>
         </div>
       </div>
     </main>

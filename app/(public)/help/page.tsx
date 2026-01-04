@@ -29,12 +29,14 @@ export default async function HelpPage() {
         </p>
       </header>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Как получить доступ и войти</h2>
-        <p className="text-sm text-zinc-700">
-          Получите код участка у правления, затем введите его на странице входа.
-          После заполнения профиля откроется личный кабинет.
-        </p>
+      <section id="verification" className="space-y-3">
+        <h2 className="text-lg font-semibold">Как проходит проверка</h2>
+        <ul className="space-y-2 text-sm text-zinc-700">
+          <li>• Проверяем связь с участком и право владения.</li>
+          <li>• Обычно это занимает 1–2 рабочих дня.</li>
+          <li>• Документы запрашиваем только при необходимости (выписка ЕГРН/договор).</li>
+          <li>• После подтверждения открывается полный доступ к кабинету.</li>
+        </ul>
         <Link className="text-sm text-[#5E704F] underline" href="/login">
           Перейти ко входу
         </Link>
@@ -127,6 +129,16 @@ export default async function HelpPage() {
             )}
           </div>
         </div>
+      </section>
+
+      <section id="privacy" className="space-y-3">
+        <h2 className="text-lg font-semibold">Безопасность и персональные данные</h2>
+        <ul className="space-y-2 text-sm text-zinc-700">
+          <li>• Данные используются только для работы портала СНТ: подтверждения доступа и связи.</li>
+          <li>• Другие жители не видят ваши персональные данные.</li>
+          <li>• Заявки на проверку видит только правление.</li>
+          <li>• Можно запросить исправление или удаление данных.</li>
+        </ul>
       </section>
     </div>
   );
