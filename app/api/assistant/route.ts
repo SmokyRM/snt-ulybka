@@ -14,7 +14,8 @@ import { categoryForAccrualType } from "@/lib/paymentCategory";
 import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import { getPublicContent } from "@/lib/publicContentStore";
 import { createOpenAIClient, OpenAIKeyMissingError } from "@/lib/openai.server";
-import { enforceAiRateLimit, logAiUsage } from "@/lib/aiUsageStore";
+import { enforceAiRateLimit, logAiUsage, type AiUsageSource } from "@/lib/aiUsageStore";
+import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
 type AssistantBody = {
   message: string;
@@ -466,6 +467,8 @@ const buildDebtDrafts = ({
 export async function POST(request: Request) {
   let success = false;
   let errorMessage: string | null = null;
+  let source: AiUsageSource = "assistant";
+  let cachedFlag = false;
   let body: AssistantBody;
   try {
     body = (await request.json()) as AssistantBody;
@@ -476,8 +479,23 @@ export async function POST(request: Request) {
   const pathHint = body.pageContext?.path ?? null;
   const faqMatch = matchFaq(message);
   if (faqMatch) {
+    const faqUser = await getSessionUser();
+    const faqUserId = faqUser?.id ?? "guest";
+    const faqRole = faqUser?.role ?? "guest";
+    source = "faq";
+    cachedFlag = false;
     success = true;
     const answer = trimAnswer(faqMatch.answer);
+    await logAiUsage({
+      userId: faqUserId,
+      role: faqRole,
+      source,
+      cached: cachedFlag,
+      ts: new Date().toISOString(),
+      success: true,
+      tokens: null,
+      error: null,
+    });
     return NextResponse.json({
       ok: true,
       topic: "public-help",
@@ -486,17 +504,25 @@ export async function POST(request: Request) {
       contextCards: [],
       actions: faqMatch.links.map((link) => ({ type: "link", label: link.label, href: link.href })),
       drafts: [],
-      source: "faq",
-      cached: false,
+      source,
+      cached: cachedFlag,
     });
   }
 
   const sessionUser = await getSessionUser();
   const userId = sessionUser?.id ?? null;
   const role = sessionUser?.role ?? "member";
-  const aiFeatureEnabled = process.env.AI_ASSISTANT_ENABLED === "1";
+  const envEnabled = process.env.AI_ASSISTANT_ENABLED === "1";
+  let flagEnabled = false;
+  try {
+    const flags = await getFeatureFlags();
+    flagEnabled = isFeatureEnabled(flags, "ai_assistant_enabled");
+  } catch {
+    flagEnabled = false;
+  }
+  const aiRuntimeEnabled = envEnabled || flagEnabled;
 
-  if (!userId || (!aiFeatureEnabled && !aiAllowedRoles.has(role))) {
+  if (!userId || !aiAllowedRoles.has(role) || !aiRuntimeEnabled) {
     return NextResponse.json(
       {
         error: "AI not enabled",
@@ -508,10 +534,13 @@ export async function POST(request: Request) {
 
   const startedAt = new Date();
   try {
-    const rate = await enforceAiRateLimit(userId, startedAt);
+    const rate = await enforceAiRateLimit(userId, role, startedAt);
     if (!rate.allowed) {
       await logAiUsage({
         userId,
+        role,
+        source,
+        cached: false,
         ts: startedAt.toISOString(),
         success: false,
         tokens: null,
@@ -526,6 +555,9 @@ export async function POST(request: Request) {
     }
     await logAiUsage({
       userId,
+      role,
+      source,
+      cached: false,
       ts: startedAt.toISOString(),
       success: false,
       tokens: null,
@@ -539,12 +571,14 @@ export async function POST(request: Request) {
     const cacheKey = `ai:cache:${userId}:${createHash("sha256").update(prompt).digest("hex")}`;
     const cached = await cacheGet(cacheKey);
     if (cached) {
+      source = "cache";
+      cachedFlag = true;
       success = true;
       return NextResponse.json({
         ok: true,
         ...cached,
-        cached: true,
-        source: "cache",
+        cached: cachedFlag,
+        source,
       });
     }
 
@@ -628,11 +662,13 @@ export async function POST(request: Request) {
       drafts,
     };
     await cacheSet(cacheKey, payload);
+    source = "assistant";
+    cachedFlag = false;
     return NextResponse.json({
       ok: true,
       ...payload,
-      cached: false,
-      source: "assistant",
+      cached: cachedFlag,
+      source,
     });
   } catch (error) {
     if (error instanceof OpenAIKeyMissingError) {
@@ -645,6 +681,9 @@ export async function POST(request: Request) {
   } finally {
     await logAiUsage({
       userId,
+      role,
+      source,
+      cached: cachedFlag,
       ts: startedAt.toISOString(),
       success,
       tokens: null,

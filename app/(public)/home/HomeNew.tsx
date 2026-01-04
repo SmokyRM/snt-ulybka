@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PublicContent } from "@/lib/publicContentDefaults";
 import { siteCity, siteName, siteTitleFull } from "@/config/site";
+import FaqAccordion from "@/components/home/FaqAccordion";
 
 const formatUrlLabel = (url: string) => url.replace(/^https?:\/\//, "");
 
@@ -26,27 +27,23 @@ export default function HomeNew({ content }: HomeNewProps) {
             Официальный портал {siteTitleFull}. Доступ к данным по участку, взносам и электроэнергии
             открывается после подтверждения членства.
           </p>
-          <p className="mt-3 text-sm text-zinc-600">
-            Официальный сайт {siteName} находится в стадии развития. Разделы и функциональность
-            добавляются поэтапно.
-          </p>
+          <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+            🚀 Сайт обновляется — скоро добавим новые разделы и функции.
+          </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               href="/login"
               className="rounded-full bg-[#5E704F] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
             >
-              Войти в личный кабинет
-            </Link>
-            <Link
-              href="/access"
-              className="rounded-full border border-[#5E704F] px-6 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#5E704F] hover:text-white"
-            >
-              Как получить доступ
+              Войти
             </Link>
           </div>
-          <div className="mt-3 text-xs text-zinc-600">
-            Если у вас нет кода участка — отправьте запрос в правление из кабинета.
-          </div>
+          <Link
+            href="/access#instructions"
+            className="mt-3 inline-flex text-xs font-semibold text-[#5E704F] hover:text-[#4d5d41]"
+          >
+            Нет кода? → Откройте инструкцию «Как получить доступ».
+          </Link>
         </div>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -81,8 +78,26 @@ export default function HomeNew({ content }: HomeNewProps) {
             <div className="mt-1">Территория товарищества: {contactLine}</div>
           </div>
           <div className="mt-4 grid gap-1 text-sm text-zinc-700 sm:grid-cols-2">
-            <div>Телефон: {phone}</div>
-            <div>Почта: {email}</div>
+            <div>
+              Телефон:{" "}
+              {phone !== "—" ? (
+                <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className="text-[#5E704F] underline">
+                  {phone}
+                </a>
+              ) : (
+                "—"
+              )}
+            </div>
+            <div>
+              Почта:{" "}
+              {email !== "—" ? (
+                <a href={`mailto:${email}`} className="text-[#5E704F] underline">
+                  {email}
+                </a>
+              ) : (
+                "—"
+              )}
+            </div>
             <div>
               Telegram:{" "}
               {telegram ? (
@@ -118,14 +133,7 @@ export default function HomeNew({ content }: HomeNewProps) {
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-zinc-900">Частые вопросы</h2>
-          <div className="mt-4 grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
-            {faqItems.map((item, index) => (
-              <div key={`${item.question}-${index}`}>
-                <div className="font-semibold text-zinc-900">{item.question}</div>
-                <p>{item.answer}</p>
-              </div>
-            ))}
-          </div>
+          <FaqAccordion items={faqItems} />
         </section>
       </section>
     </main>

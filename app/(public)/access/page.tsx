@@ -8,20 +8,20 @@ export const metadata = {
 
 const steps = [
   {
-    title: "Заполните профиль",
-    text: "Укажите ФИО и телефон, чтобы правление могло подтвердить собственника.",
+    title: "Войдите",
+    text: "Войдите через кнопку «Войти» (любой email или телефон).",
   },
   {
-    title: "Запросите код доступа",
-    text: "Код выдается правлением после проверки сведений об участке.",
+    title: "Укажите участок",
+    text: "Введите адрес участка (например: «Берёзовая, 12») или код, если он уже есть.",
   },
   {
-    title: "Привяжите участок",
-    text: "Введите код и подтвердите привязку участка к своему кабинету.",
+    title: "Дождитесь проверки",
+    text: "Правление проверит заявку за 1–2 дня.",
   },
   {
-    title: "Откройте личный кабинет",
-    text: "После привязки доступны начисления, документы и обращения.",
+    title: "Пользуйтесь кабинетом",
+    text: "Готово — откроется доступ к начислениям, документам и обращениям.",
   },
 ];
 
@@ -32,12 +32,14 @@ export default function AccessPage() {
         <section className="space-y-2">
           <h1 className="text-3xl font-semibold">Как получить доступ</h1>
           <p className="text-base text-zinc-700">
-            Доступ в личный кабинет предоставляется собственникам участков СНТ после проверки
-            данных правлением.
+            Доступ в личный кабинет появляется после проверки правлением.
           </p>
         </section>
 
-        <ol className="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <ol
+          id="instructions"
+          className="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+        >
           {steps.map((step, index) => (
             <li key={step.title} className="flex gap-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#5E704F] text-sm font-semibold text-white">
@@ -50,6 +52,13 @@ export default function AccessPage() {
             </li>
           ))}
         </ol>
+
+        <p className="text-sm text-zinc-600">
+          Нет кода?{" "}
+          <AppLink href="#instructions" className="text-[#5E704F] underline">
+            → Инструкция ниже
+          </AppLink>
+        </p>
 
         <div className="flex flex-wrap gap-3">
           <AppLink

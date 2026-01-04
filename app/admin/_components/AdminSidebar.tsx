@@ -26,6 +26,11 @@ const baseSections = [
         label: "Проблемы и сводка",
         hint: "Пустые поля, неподтверждённые статусы, ошибки",
       },
+      {
+        href: "/admin/ai-usage",
+        label: "ИИ: статистика",
+        hint: "Использование помощника",
+      },
     ],
   },
   {
@@ -161,6 +166,7 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
           links: section.links.filter((link) => {
             if (link.href === "/admin/plots") return isAdmin;
             if (link.href === "/admin/imports/plots") return hasImportAccess;
+            if (link.href === "/admin/ai-usage") return hasFinanceAccess;
             return true;
           }),
         };

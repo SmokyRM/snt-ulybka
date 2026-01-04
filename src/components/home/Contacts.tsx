@@ -32,7 +32,15 @@ export default function Contacts() {
               Контакты правления
             </h3>
             <div className="mt-4 space-y-2 text-sm text-zinc-700">
-              <p>Телефон: +7 (900) 000-00-00</p>
+              <p>
+                Телефон:{" "}
+                <a
+                  href="tel:+79000000000"
+                  className="text-[#5E704F] underline decoration-[#5E704F]/50 underline-offset-4"
+                >
+                  +7 (900) 000-00-00
+                </a>
+              </p>
               <p>VK:{" "}
                 <a
                   href={OFFICIAL_CHANNELS.vk}

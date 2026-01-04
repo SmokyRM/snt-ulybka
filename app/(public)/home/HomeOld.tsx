@@ -13,6 +13,8 @@ export default function HomeOld({ content }: HomeOldProps) {
   const email = content.contacts.email || "—";
   const telegram = content.contacts.telegram;
   const vk = content.contacts.vk;
+  const phoneHref = phone !== "—" ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
+  const emailHref = email !== "—" ? `mailto:${email}` : "";
   const faqItems = content.faq.length > 0 ? content.faq.slice(0, 5) : [];
   return (
     <main className="bg-[#F8F1E9] pb-16 pt-10 sm:pt-14">
@@ -25,9 +27,8 @@ export default function HomeOld({ content }: HomeOldProps) {
             Официальный сайт {siteName} ({siteCity}). Доступ к данным по участку, взносам и
             электроэнергии открывается после подтверждения членства.
           </p>
-          <div className="mt-4 rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
-            Официальный сайт {siteName} находится в стадии разработки. Разделы и функциональность
-            добавляются поэтапно.
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+            🚀 Сайт обновляется — скоро добавим новые разделы и функции.
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
@@ -81,8 +82,26 @@ export default function HomeOld({ content }: HomeOldProps) {
               {siteName}, {siteCity}. По вопросам регистрации и доступа обращайтесь в правление.
             </p>
             <div className="mt-3 space-y-1 text-sm text-zinc-700">
-              <div>Телефон: {phone}</div>
-              <div>Почта: {email}</div>
+              <div>
+                Телефон:{" "}
+                {phone !== "—" ? (
+                  <a href={phoneHref} className="text-[#5E704F] underline">
+                    {phone}
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </div>
+              <div>
+                Почта:{" "}
+                {email !== "—" ? (
+                  <a href={emailHref} className="text-[#5E704F] underline">
+                    {email}
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </div>
               <div>
                 Telegram:{" "}
                 {telegram ? (

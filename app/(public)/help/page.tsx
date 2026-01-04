@@ -10,7 +10,15 @@ export const metadata = {
 export default async function HelpPage() {
   const content = await getPublicContent();
   const contacts = content.contacts;
+  const phone = contacts.phone || "—";
+  const email = contacts.email || "—";
+  const telegram = contacts.telegram;
+  const vk = contacts.vk;
   const payment = content.paymentDetails;
+  const phoneHref = phone !== "—" ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
+  const emailHref = email !== "—" ? `mailto:${email}` : "";
+  const formatExternalUrl = (value: string) =>
+    value.startsWith("http") ? value : `https://${value}`;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-10 px-4 py-10 sm:px-6">
@@ -68,29 +76,55 @@ export default async function HelpPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Куда обратиться</h2>
         <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
-          <div>Телефон: {contacts.phone}</div>
-          <div>Почта: {contacts.email}</div>
+          <div>
+            Телефон:{" "}
+            {phone !== "—" ? (
+              <a href={phoneHref} className="text-[#5E704F] underline">
+                {phone}
+              </a>
+            ) : (
+              "—"
+            )}
+          </div>
+          <div>
+            Почта:{" "}
+            {email !== "—" ? (
+              <a href={emailHref} className="text-[#5E704F] underline">
+                {email}
+              </a>
+            ) : (
+              "—"
+            )}
+          </div>
           <div>
             Telegram:{" "}
-            <a
-              href={contacts.telegram}
-              className="text-[#5E704F] underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {contacts.telegram}
-            </a>
+            {telegram ? (
+              <a
+                href={formatExternalUrl(telegram)}
+                className="text-[#5E704F] underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {telegram}
+              </a>
+            ) : (
+              "—"
+            )}
           </div>
           <div>
             VK:{" "}
-            <a
-              href={contacts.vk}
-              className="text-[#5E704F] underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {contacts.vk}
-            </a>
+            {vk ? (
+              <a
+                href={formatExternalUrl(vk)}
+                className="text-[#5E704F] underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {vk}
+              </a>
+            ) : (
+              "—"
+            )}
           </div>
         </div>
       </section>

@@ -65,8 +65,26 @@ html {
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
+.animate-assistant-in {
+  animation: assistant-card-in 180ms ease-out both;
+}
+
+@keyframes assistant-card-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
+    animation: none;
+  }
+  .animate-assistant-in {
     animation: none;
   }
 }
