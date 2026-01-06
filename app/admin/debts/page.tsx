@@ -23,24 +23,25 @@ const getLatestPeriodKey = () => {
 export default async function DebtsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
   const flags = await getFeatureFlags();
   const debtsV2On = isFeatureEnabled(flags, "debtsV2");
   const latestPeriod = getLatestPeriodKey();
   const period =
-    typeof searchParams?.period === "string"
-      ? searchParams.period
+    typeof params.period === "string"
+      ? params.period
       : latestPeriod ?? defaultPeriod;
-  const type = (typeof searchParams?.type === "string" ? searchParams.type : "all") as DebtTypeFilter;
+  const type = (typeof params.type === "string" ? params.type : "all") as DebtTypeFilter;
   const minDebt =
-    typeof searchParams?.minDebt === "string" && searchParams.minDebt.trim() !== ""
-      ? Number(searchParams.minDebt)
+    typeof params.minDebt === "string" && params.minDebt.trim() !== ""
+      ? Number(params.minDebt)
       : null;
-  const q = typeof searchParams?.q === "string" ? searchParams.q : "";
-  const onlyUnnotified = searchParams?.onlyUnnotified === "1";
+  const q = typeof params.q === "string" ? params.q : "";
+  const onlyUnnotified = params.onlyUnnotified === "1";
 
   const data = getDebtsData({ period, type, minDebt, q, onlyUnnotified });
   if (data.error) {

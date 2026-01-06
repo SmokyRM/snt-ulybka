@@ -26,15 +26,20 @@ type SearchParams = {
   [key: string]: string | string[] | undefined;
 };
 
-export default async function AdminElectricityPage({ searchParams }: { searchParams?: SearchParams }) {
+export default async function AdminElectricityPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const items = await getAllElectricity();
   const onlyMissing =
-    typeof searchParams?.missing === "string" ? searchParams?.missing === "1" : false;
+    typeof params.missing === "string" ? params.missing === "1" : false;
   const onlyNotified =
-    typeof searchParams?.notified === "string" ? searchParams?.notified === "1" : false;
+    typeof params.notified === "string" ? params.notified === "1" : false;
   const filtered = [...items].filter((item) => {
     if (onlyMissing && (item.lastReading == null || item.lastReadingDate == null)) {
       // keep

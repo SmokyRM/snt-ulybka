@@ -4,6 +4,8 @@ import { getSessionUser } from "@/lib/session.server";
 import { findUserById } from "@/lib/mockDb";
 import { stopImpersonation } from "../admin/impersonationActions";
 import Header from "@/components/home/Header";
+import AssistantWidget from "@/components/AssistantWidget";
+import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
 export default async function CabinetLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -19,12 +21,17 @@ export default async function CabinetLayout({ children }: { children: React.Reac
     }
   }
   const isImpersonating = Boolean(user?.isImpersonating);
+  const canSeeImpersonationBadge = user?.role === "admin" || user?.role === "board";
   const impersonator = user?.impersonatorAdminId ? findUserById(user.impersonatorAdminId) : null;
+
+  const flags = await getFeatureFlags().catch(() => null);
+  const showWidget = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
+  const personalEnabled = flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false;
 
   return (
     <div className="min-h-screen bg-[#F8F1E9]">
       <Header />
-      {isImpersonating && (
+      {isImpersonating && canSeeImpersonationBadge && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
           <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2">
             <div>
@@ -45,6 +52,18 @@ export default async function CabinetLayout({ children }: { children: React.Reac
         </div>
       )}
       {children}
+      {showWidget ? (
+        <AssistantWidget
+          variant="public"
+          initialAuth={Boolean(user)}
+          initialRole={
+            user?.role === "admin" || user?.role === "board" || user?.role === "user"
+              ? user.role
+              : null
+          }
+          aiPersonalEnabled={personalEnabled}
+        />
+      ) : null}
     </div>
   );
 }

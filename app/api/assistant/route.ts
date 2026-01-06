@@ -14,6 +14,10 @@ import { categoryForAccrualType } from "@/lib/paymentCategory";
 import { getMembershipTariffSetting } from "@/lib/membershipTariff";
 import { getPublicContent } from "@/lib/publicContentStore";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
+import { OpenAIKeyMissingError, createOpenAIClient } from "@/lib/openai.server";
+import { searchSiteIndex } from "@/lib/ai/siteIndex";
+import { listDocuments } from "@/lib/documentsStore";
+import { listKnowledgeArticles } from "@/lib/knowledgeStore";
 import { DEFAULT_AI_SETTINGS, getAiSettings } from "@/lib/aiSettings";
 import { enforceAiRateLimit, logAiUsage, type AiUsageSource } from "@/lib/aiUsageStore";
 
@@ -35,6 +39,13 @@ type Topic =
   | "staff-debtors";
 
 const staffRoles = new Set(["admin", "board", "accountant", "operator"]);
+type Role = "guest" | "user" | "board" | "chair" | "admin";
+type RolePermissions = {
+  can_view_own_debts: boolean;
+  can_view_debtors: boolean;
+  can_export_reports: boolean;
+  can_manage_periods: boolean;
+};
 type ContextCardStatus = "success" | "warning" | "error" | "info";
 type ContextCard = {
   title: string;
@@ -57,6 +68,39 @@ type AssistantDraft = {
 type AssistantHint = {
   mode: "guest" | "resident" | "staff";
   verbosity: "short" | "normal" | "long";
+};
+
+const normalizeRole = (input?: string | null): Role => {
+  if (input === "admin") return "admin";
+  if (input === "chair") return "chair";
+  if (input === "board") return "board";
+  if (input === "user") return "user";
+  return "guest";
+};
+
+const getRolePermissions = (role: Role): RolePermissions => {
+  if (role === "admin" || role === "board" || role === "chair") {
+    return {
+      can_view_own_debts: true,
+      can_view_debtors: true,
+      can_export_reports: true,
+      can_manage_periods: true,
+    };
+  }
+  if (role === "user") {
+    return {
+      can_view_own_debts: true,
+      can_view_debtors: false,
+      can_export_reports: false,
+      can_manage_periods: false,
+    };
+  }
+  return {
+    can_view_own_debts: false,
+    can_view_debtors: false,
+    can_export_reports: false,
+    can_manage_periods: false,
+  };
 };
 
 const CACHE_TTL_SECONDS = 60 * 20;
@@ -228,6 +272,177 @@ const applyResponseHints = (payload: AssistantPayload, hint: AssistantHint): Ass
     ].join("\n");
   }
   return next;
+};
+
+const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+
+const callOpenAI = async ({
+  apiKey,
+  system,
+  user,
+  temperature,
+}: {
+  apiKey: string;
+  system: string;
+  user: string;
+  temperature: number;
+}): Promise<string> => {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature,
+      max_tokens: MAX_OUTPUT_TOKENS,
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || `OpenAI error ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>;
+  };
+  const content = data.choices?.[0]?.message?.content?.trim();
+  if (!content) {
+    throw new Error("Empty OpenAI response");
+  }
+  return content;
+};
+
+const buildSystemPrompt = (context: string) =>
+  [
+    "Ты официальный помощник СНТ «Улыбка» и сайта.",
+    "Отвечай кратко, по делу, без выдумок и без персональных данных, если они не предоставлены.",
+    "Если вопрос неясный — задай один уточняющий вопрос.",
+    context ? `Контекст:\n${context}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const resolveTemperature = (settings: typeof DEFAULT_AI_SETTINGS) =>
+  settings.temperature === "medium" ? 0.6 : 0.2;
+
+const isGreeting = (text: string) => {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    /\b(привет|здравствуйте|hi|hello)\b/i.test(normalized) ||
+    /\bдобрый\s+(день|вечер)\b/i.test(normalized)
+  );
+};
+
+const isNavigationQuery = (text: string) =>
+  /(где\s+(найти|посмотреть|находится)|как\s+(сделать|создать|оформить|подать|получить|войти|добавить|оплатить|передать)|куда\s+нажать|не\s+могу\s+найти)/i.test(
+    text,
+  );
+
+const mergeActions = (base: AssistantAction[], extra: AssistantAction[]) => {
+  const seen = new Set(base.map((action) => `${action.type}:${action.href ?? action.label}`));
+  const next = [...base];
+  extra.forEach((action) => {
+    const key = `${action.type}:${action.href ?? action.label}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    next.push(action);
+  });
+  return next;
+};
+
+const buildRoleActions = (role: Role): AssistantAction[] => {
+  if (role === "user") {
+    return [
+      { type: "link", label: "Финансы", href: "/cabinet?section=finance" },
+      { type: "link", label: "Электроэнергия", href: "/cabinet?section=electricity" },
+      { type: "link", label: "Написать обращение", href: "/cabinet?section=appeals" },
+    ];
+  }
+  if (role === "board") {
+    return [
+      { type: "link", label: "Финансы (админ)", href: "/admin/billing" },
+      { type: "link", label: "Импорт", href: "/admin/imports/plots" },
+      { type: "link", label: "Должники", href: "/admin/debts" },
+    ];
+  }
+  if (role === "admin" || role === "chair") {
+    return [
+      { type: "link", label: "Финансы (админ)", href: "/admin/billing" },
+      { type: "link", label: "Должники", href: "/admin/debts" },
+      { type: "link", label: "Настройки ИИ", href: "/admin/ai-usage" },
+    ];
+  }
+  return [];
+};
+
+const buildDocActions = async (
+  query: string,
+  role: Role,
+): Promise<AssistantAction[]> => {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return [];
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return [];
+  const docs = await listDocuments();
+  const published = docs.filter((doc) => doc.published);
+  const scored = published
+    .map((doc) => {
+      const haystack = `${doc.title} ${doc.description ?? ""} ${doc.slug} ${
+        doc.category
+      }`.toLowerCase();
+      const score = tokens.reduce((acc, token) => (haystack.includes(token) ? acc + 1 : acc), 0);
+      return { doc, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+  const actions = scored.map(({ doc }) => {
+    const hasAccess =
+      role === "admin"
+        ? true
+        : role === "board" || role === "chair"
+          ? doc.audience.some((a) => ["board", "chair", "user", "guest"].includes(a))
+          : role === "user"
+            ? doc.audience.some((a) => ["user", "guest"].includes(a))
+            : doc.audience.includes("guest");
+    const suffix = hasAccess ? "" : " (нужен вход)";
+    return {
+      type: "link" as const,
+      label: `Документ: ${doc.title}${suffix}`,
+      href: `/docs/${doc.slug}`,
+    };
+  });
+  return actions;
+};
+
+const buildKnowledgeActions = async (query: string): Promise<AssistantAction[]> => {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return [];
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return [];
+  const articles = await listKnowledgeArticles();
+  const scored = articles
+    .map((article) => {
+      const haystack = `${article.title} ${article.summary} ${article.category} ${
+        article.slug
+      } ${article.tags.join(" ")}`.toLowerCase();
+      const score = tokens.reduce((acc, token) => (haystack.includes(token) ? acc + 1 : acc), 0);
+      return { article, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+  return scored.map(({ article }) => ({
+    type: "link" as const,
+    label: `Статья: ${article.title}`,
+    href: `/knowledge/${article.slug}`,
+  }));
 };
 
 const getUsageMode = ({
@@ -517,7 +732,10 @@ const buildOutOfScopeResponse = () => {
   };
 };
 
-const buildActions = (topic: Topic, options: { lastPeriod: string | null; hasData: boolean }): AssistantAction[] => {
+const buildActions = (
+  topic: Topic,
+  options: { lastPeriod: string | null; hasData: boolean; permissions: RolePermissions },
+): AssistantAction[] => {
   if (topic === "staff-billing") {
     if (!options.hasData || !options.lastPeriod) {
       return [{ type: "link", label: "Перейти в биллинг", href: "/admin/billing" }];
@@ -631,6 +849,18 @@ export async function POST(request: Request) {
   const message = typeof body.message === "string" ? body.message : "";
   const pathHint = body.pageContext?.path ?? null;
   const messageLen = message.trim().length;
+  let openAiKey: string;
+  try {
+    openAiKey = createOpenAIClient((apiKey) => apiKey);
+  } catch (error) {
+    if (error instanceof OpenAIKeyMissingError) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY is missing" },
+        { status: 500 },
+      );
+    }
+    throw error;
+  }
   const aiSettings = await getAiSettings().catch(() => DEFAULT_AI_SETTINGS);
   const flags = await getFeatureFlags().catch(() => null);
   const rawTopic = inferTopic(message, pathHint);
@@ -720,7 +950,8 @@ export async function POST(request: Request) {
 
   const sessionUser = await getSessionUser();
   const userId = sessionUser?.id ?? "guest";
-  const role = sessionUser?.role ?? "guest";
+  const role = normalizeRole(sessionUser?.role);
+  const permissions = getRolePermissions(role);
   const assistantEnabled = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
   const rawHintMode =
     body.hint?.mode === "guest" || body.hint?.mode === "resident" || body.hint?.mode === "staff"
@@ -769,6 +1000,83 @@ export async function POST(request: Request) {
       },
       { status: 403 },
     );
+  }
+
+  if (isGreeting(message)) {
+    const allowPersonal = Boolean(
+      flags &&
+        isFeatureEnabled(flags, "ai_personal_enabled") &&
+        sessionUser?.status === "verified",
+    );
+    const usageMode = getUsageMode({
+      role,
+      isStaff: staffRoles.has(role),
+      allowPersonal,
+    });
+    const greetingActions: AssistantAction[] = [];
+    if (role === "guest") {
+      greetingActions.push(
+        { type: "link", label: "Войти", href: "/login" },
+        { type: "link", label: "Как получить доступ", href: "/access" },
+      );
+    } else {
+      greetingActions.push(
+        { type: "link", label: "Финансы", href: "/cabinet?section=finance" },
+        { type: "link", label: "Электроэнергия", href: "/cabinet?section=electricity" },
+      );
+    }
+    greetingActions.push(
+      { type: "link", label: "Документы", href: "/docs" },
+      { type: "link", label: "Контакты", href: "/contacts" },
+    );
+    const greetingAnswer = await callOpenAI({
+      apiKey: openAiKey,
+      system: buildSystemPrompt(
+        "Сформируй дружелюбное приветствие и кратко перечисли, с чем ты помогаешь (взносы, электроэнергия, документы, обращения).",
+      ),
+      user: message,
+      temperature: resolveTemperature(aiSettings),
+    });
+    const greeting = applyAiSettings(
+      applyResponseHints(
+        {
+          topic: "public-help",
+          answer: greetingAnswer,
+          links: [],
+          contextCards: [],
+          actions: greetingActions,
+          drafts: [],
+        },
+        hint,
+      ),
+      aiSettings,
+    );
+    source = "assistant";
+    cachedFlag = false;
+    success = true;
+    await logAiUsage({
+      userId,
+      role,
+      source,
+      cached: cachedFlag,
+      ts: new Date().toISOString(),
+      success: true,
+      tokens: null,
+      pathHint,
+      topic: "public-help",
+      mode: usageMode,
+      outOfScope: false,
+      latencyMs: Date.now() - requestStart,
+      messageLen,
+      thumb: null,
+      error: null,
+    });
+    return NextResponse.json({
+      ok: true,
+      ...greeting,
+      cached: cachedFlag,
+      source,
+    });
   }
 
   if (!isAllowedTopic(message, pathHint, aiSettings.strictMode)) {
@@ -898,22 +1206,38 @@ export async function POST(request: Request) {
       if (topic === "staff-billing") {
         const billing = buildStaffBillingCards();
         contextCards = billing.cards;
-        actions = buildActions(topic, { lastPeriod: billing.lastPeriod, hasData: billing.hasData });
+        actions = buildActions(topic, {
+          lastPeriod: billing.lastPeriod,
+          hasData: billing.hasData,
+          permissions,
+        });
         if (!billing.hasData) answer = buildNoDataAnswer(topic);
       } else if (topic === "staff-debts") {
         const debts = buildStaffDebtsCards();
         contextCards = debts.cards;
-        actions = buildActions(topic, { lastPeriod: debts.lastPeriod, hasData: debts.hasData });
+        actions = buildActions(topic, {
+          lastPeriod: debts.lastPeriod,
+          hasData: debts.hasData,
+          permissions,
+        });
         if (!debts.hasData) answer = buildNoDataAnswer(topic);
       } else if (topic === "staff-imports") {
         const imports = buildStaffImportCards();
         contextCards = imports.cards;
-        actions = buildActions(topic, { lastPeriod: null, hasData: imports.hasData });
+        actions = buildActions(topic, {
+          lastPeriod: null,
+          hasData: imports.hasData,
+          permissions,
+        });
         if (!imports.hasData) answer = buildNoDataAnswer(topic);
       }
     } else {
       contextCards = buildPublicCards();
-      actions = buildActions("public-help", { lastPeriod: null, hasData: true });
+      actions = buildActions("public-help", {
+        lastPeriod: null,
+        hasData: true,
+        permissions,
+      });
     }
     if (isStaff && (topic === "staff-debts" || topic === "staff-debtors")) {
       const period = getLastPeriod("membership_fee");
@@ -938,6 +1262,24 @@ export async function POST(request: Request) {
       }
     }
 
+    const contextSummary = [
+      answer,
+      contextCards.length > 0
+        ? `Данные:\n${contextCards
+            .map((card) => `- ${card.title}: ${card.lines.join(" ")}`)
+            .join("\n")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const userPrompt = pathHint ? `${message}\n\nСтраница: ${pathHint}` : message;
+    answer = await callOpenAI({
+      apiKey: openAiKey,
+      system: buildSystemPrompt(contextSummary),
+      user: userPrompt,
+      temperature: resolveTemperature(aiSettings),
+    });
+
     const messagePreview = message.slice(0, 120);
 
     await logAdminAction({
@@ -954,6 +1296,26 @@ export async function POST(request: Request) {
     });
 
     success = true;
+    const isNavQuery = isNavigationQuery(message);
+    const wordCount = message.trim().split(/\s+/).filter(Boolean).length;
+    const isShortHint = wordCount > 0 && wordCount <= 6;
+    const shouldSuggestKnowledge = isNavQuery || isShortHint;
+    const knowledgeActions = shouldSuggestKnowledge ? await buildKnowledgeActions(message) : [];
+    const docActions = isNavQuery ? await buildDocActions(message, role) : [];
+    const navigationResults = isNavQuery ? searchSiteIndex(message, role) : [];
+    const navigationActions = navigationResults.map((item) => ({
+      type: "link" as const,
+      label: item.title,
+      href: item.href,
+    }));
+    const roleActions = isNavQuery || isShortHint ? buildRoleActions(role) : [];
+    const combinedActions = mergeActions(
+      mergeActions(
+        mergeActions(knowledgeActions, docActions),
+        navigationActions,
+      ),
+      roleActions,
+    );
     const payload: AssistantPayload = applyAiSettings(
       applyResponseHints(
         {
@@ -961,7 +1323,7 @@ export async function POST(request: Request) {
           answer: trimAnswer(answer),
           links,
           contextCards,
-          actions,
+          actions: mergeActions(actions, combinedActions),
           drafts,
         },
         hint,

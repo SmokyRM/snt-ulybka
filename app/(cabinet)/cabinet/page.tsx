@@ -20,13 +20,23 @@ import { getDecisions } from "@/lib/decisions";
 import { getLatestMembershipRequestForUser, getMembershipStatus } from "@/lib/membership";
 import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { getUserPreferences } from "@/lib/userPreferences";
+import { getSntSettings } from "@/lib/sntSettings";
 import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { getVerificationStatus } from "@/lib/verificationStatus";
+import CopyToClipboard from "@/components/CopyToClipboard";
 
 const logCabinetError = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown error";
   console.error(`[cabinet] ${label} failed`, message);
+};
+
+const formatMonthYear = (value: Date) => {
+  const raw = value
+    .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
+    .replace(" г.", "");
+  if (!raw) return "—";
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
 };
 
 async function safeFetch<T>(
@@ -82,7 +92,9 @@ async function submitElectricity(formData: FormData) {
   const value = Number(formData.get("reading"));
   const plotId = (formData.get("plotId") as string | null) ?? null;
   const plotNumber = (formData.get("plotNumber") as string | null) ?? null;
-  if (!Number.isFinite(value) || value < 0) redirect("/cabinet");
+  if (!Number.isFinite(value) || value < 0) {
+    redirect("/cabinet?section=electricity&electricityError=reading");
+  }
   await submitReading(user.id ?? "", value, plotId, plotNumber);
   redirect("/cabinet?section=electricity");
 }
@@ -148,7 +160,12 @@ async function ackDoc(formData: FormData) {
   redirect("/cabinet?section=docs");
 }
 
-export default async function CabinetPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function CabinetPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = (await Promise.resolve(searchParams)) ?? {};
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
@@ -282,11 +299,19 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const decisions = await safeFetch("decisions", [], () => getDecisions(), dataErrors);
   const decisionMap = new Map(decisions.map((d) => [d.id, d]));
   const userPlotMap = new Map(userPlots.map((p) => [p.plotId, p]));
+  const settings = getSntSettings();
   if (dataErrors.length > 0) {
     console.error("[cabinet] data fetch errors", dataErrors);
   }
 
+  const { electricityPaymentDeadlineDay } = settings.value;
   const hasAnyFinanceData = finance.membershipDebt !== null || finance.electricityDebt !== null;
+  const hasDebt =
+    (finance.membershipDebt ?? 0) > 0 || (finance.electricityDebt ?? 0) > 0;
+  const hasCharges = charges.length > 0;
+  const hasPayables = hasDebt || hasCharges;
+  const financeHistoryError = dataErrors.includes("financeHistory");
+  const electricityHistoryError = dataErrors.includes("electricityHistory");
   const plotsCount = userPlots.length;
   const verificationsApproved = ownershipVerifications.filter((v) => v.status === "approved").length;
   const verificationsSent = ownershipVerifications.filter((v) => v.status === "sent").length;
@@ -302,6 +327,27 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     contactEmail ? { label: "Почта", href: `mailto:${contactEmail}` } : null,
     { label: "Контакты", href: "/contacts" },
   ].filter(Boolean) as Array<{ label: string; href: string }>;
+  const electricityError =
+    typeof sp.electricityError === "string" ? sp.electricityError : null;
+  const lastReadingDate =
+    electricity?.lastReadingDate && !Number.isNaN(new Date(electricity.lastReadingDate).getTime())
+      ? new Date(electricity.lastReadingDate)
+      : null;
+  const readingPeriodLabel = formatMonthYear(lastReadingDate ?? new Date());
+  const lastReadingDateLabel = lastReadingDate ? lastReadingDate.toLocaleString("ru-RU") : "—";
+  const readingStatusLabel = electricity?.lastReading != null ? "Переданы" : "Не переданы";
+  const readingDeadlineText = `до ${electricityPaymentDeadlineDay} числа`;
+  const readingPeriodHint = lastReadingDate
+    ? `за ${readingPeriodLabel}`
+    : "за текущий период";
+  const requisitesText = [
+    `Получатель: ${paymentDetails.recipientName}`,
+    `ИНН/КПП: ${paymentDetails.inn} / ${paymentDetails.kpp}`,
+    `Р/с: ${paymentDetails.account}`,
+    `Банк: ${paymentDetails.bank}`,
+    `БИК: ${paymentDetails.bik}`,
+    `Корр. счёт: ${paymentDetails.corrAccount}`,
+  ].join("\n");
 
   const homeSection = (
     <div className="space-y-4">
@@ -442,9 +488,9 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
               </>
             ) : (
               <>
-                <div className="mt-2 font-semibold text-emerald-700">✅ Доступ открыт</div>
+                <div className="mt-2 font-semibold text-emerald-700">✅ Доступ подтверждён</div>
                 <p className="mt-1 text-sm text-emerald-800">
-                  Все разделы кабинета доступны.
+                  Правление подтвердило ваш доступ к данным кабинета.
                 </p>
               </>
             )}
@@ -460,26 +506,35 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
             <div className="grid gap-3 sm:grid-cols-3">
               <Link
                 href="/cabinet?section=plots"
-                className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
+                className="cursor-pointer rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40 hover:shadow-md"
               >
                 <div className="text-2xl">🏡</div>
-                <div className="mt-2 font-semibold text-zinc-900">Мой участок</div>
+                <div className="mt-2 flex items-center justify-between font-semibold text-zinc-900">
+                  <span>Мой участок</span>
+                  <span className="text-sm text-zinc-400">→</span>
+                </div>
                 <p className="mt-1 text-xs text-zinc-600">Данные и статус по вашему участку.</p>
               </Link>
               <Link
                 href="/cabinet?section=finance"
-                className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
+                className="cursor-pointer rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40 hover:shadow-md"
               >
                 <div className="text-2xl">💰</div>
-                <div className="mt-2 font-semibold text-zinc-900">Оплаты и взносы</div>
+                <div className="mt-2 flex items-center justify-between font-semibold text-zinc-900">
+                  <span>Оплаты и взносы</span>
+                  <span className="text-sm text-zinc-400">→</span>
+                </div>
                 <p className="mt-1 text-xs text-zinc-600">Начисления и история платежей.</p>
               </Link>
               <Link
                 href="/cabinet?section=electricity"
-                className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40"
+                className="cursor-pointer rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm transition hover:border-[#5E704F]/40 hover:shadow-md"
               >
                 <div className="text-2xl">⚡</div>
-                <div className="mt-2 font-semibold text-zinc-900">Электроэнергия</div>
+                <div className="mt-2 flex items-center justify-between font-semibold text-zinc-900">
+                  <span>Электроэнергия</span>
+                  <span className="text-sm text-zinc-400">→</span>
+                </div>
                 <p className="mt-1 text-xs text-zinc-600">Показания и начисления.</p>
               </Link>
             </div>
@@ -493,9 +548,36 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           )}
 
           {isConfirmed ? (
-            <p className="text-sm text-zinc-600">
-              Всё в порядке. Если появятся начисления или уведомления — мы покажем их здесь.
-            </p>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+              {hasPayables ? (
+                <>
+                  <div className="font-semibold text-amber-700">Есть начисления к оплате</div>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Проверьте начисления и при необходимости оплатите в разделе финансов.
+                  </p>
+                  <Link
+                    href="/cabinet?section=finance"
+                    className="mt-3 inline-flex rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white"
+                  >
+                    Открыть Финансы
+                  </Link>
+                </>
+              ) : !hasAnyFinanceData && !hasCharges ? (
+                <>
+                  <div className="font-semibold text-zinc-800">Данные обновляются</div>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Пока нет начислений или данные ещё не подтянулись.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="font-semibold text-emerald-700">Задолженности нет</div>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Если появятся начисления или уведомления — мы покажем их здесь.
+                  </p>
+                </>
+              )}
+            </div>
           ) : null}
         </>
       )}
@@ -515,7 +597,9 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
         </div>
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
           <div className="font-semibold text-zinc-900">Статус</div>
-          <div>{electricity?.lastReading != null ? "Переданы" : "Не переданы"}</div>
+          <div>{readingStatusLabel}</div>
+          <div className="text-xs text-zinc-600">Период: за {readingPeriodLabel}</div>
+          <div className="text-xs text-zinc-600">Последняя отправка: {lastReadingDateLabel}</div>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
           <div className="font-semibold text-zinc-900">Долг</div>
@@ -525,14 +609,24 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
       <form action={submitElectricity} className="mt-3 flex flex-col gap-2 text-sm">
         <label className="text-zinc-800">
           Передать показания
+          <div className="mt-1 text-xs text-zinc-500">
+            Приём показаний {readingDeadlineText}, {readingPeriodHint}.
+          </div>
           <input
-            type="number"
+            type="text"
             name="reading"
-            min={0}
-            step="0.01"
+            inputMode="numeric"
+            pattern="[0-9]+"
+            placeholder="Например: 012345"
             required
             className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
           />
+          <div className="mt-1 text-xs text-zinc-500">Только цифры, как на счётчике.</div>
+          {electricityError === "reading" ? (
+            <div className="mt-1 text-xs text-rose-600">
+              Проверьте показания: нужны только цифры, без пробелов и знаков.
+            </div>
+          ) : null}
         </label>
         <button
           type="submit"
@@ -595,6 +689,12 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           <div>БИК: {paymentDetails.bik}</div>
           <div>Корр. счёт: {paymentDetails.corrAccount}</div>
         </div>
+        <Link
+          href="/cabinet?section=docs#requisites"
+          className="inline-flex text-xs font-semibold text-[#5E704F] underline"
+        >
+          Реквизиты
+        </Link>
         <PaymentPurposeClient
           street={userPlot?.street ?? null}
           plotNumber={userPlot?.plotNumber ?? null}
@@ -604,8 +704,28 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
           <div className="font-semibold text-zinc-900">Электроэнергия (последние 6 мес.)</div>
-          {electricityHistory.length === 0 ? (
-            <div className="text-zinc-600">Нет данных</div>
+          {electricityHistoryError ? (
+            <div className="mt-2 space-y-2 text-xs text-zinc-600">
+              <div>Ошибка загрузки, попробуйте обновить.</div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/cabinet?section=finance"
+                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                >
+                  Перейти в Финансы
+                </Link>
+                <Link
+                  href="/contacts"
+                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                >
+                  Контакты
+                </Link>
+              </div>
+            </div>
+          ) : !hasAnyFinanceData && electricityHistory.length === 0 ? (
+            <div className="text-zinc-600">Данные загружаются</div>
+          ) : electricityHistory.length === 0 ? (
+            <div className="text-zinc-600">Начислений пока нет</div>
           ) : (
             <ul className="mt-2 space-y-1">
               {electricityHistory.map((h) => (
@@ -619,8 +739,28 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
         </div>
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
           <div className="font-semibold text-zinc-900">Взносы (последние 6 мес.)</div>
-          {financeHistory.length === 0 ? (
-            <div className="text-zinc-600">Нет данных</div>
+          {financeHistoryError ? (
+            <div className="mt-2 space-y-2 text-xs text-zinc-600">
+              <div>Не удалось загрузить платежи.</div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/cabinet?section=finance"
+                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                >
+                  Перейти в Финансы
+                </Link>
+                <Link
+                  href="/contacts"
+                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                >
+                  Контакты
+                </Link>
+              </div>
+            </div>
+          ) : !hasAnyFinanceData && financeHistory.length === 0 ? (
+            <div className="text-zinc-600">Данные загружаются</div>
+          ) : financeHistory.length === 0 ? (
+            <div className="text-zinc-600">Платежей пока нет</div>
           ) : (
             <ul className="mt-2 space-y-2">
               {financeHistory.map((f) => {
@@ -648,6 +788,7 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
   const chargesSection = (
     <div className="space-y-3" id="charges-section">
       <h2 className="text-lg font-semibold text-zinc-900">Начисления</h2>
+      <p className="text-xs text-zinc-500">Начисления — суммы к оплате за период.</p>
       {charges.length === 0 ? (
         <p className="text-sm text-zinc-700">Начислений пока нет.</p>
       ) : (
@@ -745,6 +886,26 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           </div>
         )}
       </div>
+      <div
+        id="requisites"
+        className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900">Реквизиты СНТ</h3>
+            <p className="text-xs text-zinc-700">Для оплаты взносов и электроэнергии.</p>
+          </div>
+          <CopyToClipboard text={requisitesText} label="📋 Копировать" />
+        </div>
+        <div className="mt-3 space-y-1 text-xs text-zinc-700">
+          <div>Получатель: {paymentDetails.recipientName}</div>
+          <div>ИНН/КПП: {paymentDetails.inn} / {paymentDetails.kpp}</div>
+          <div>Р/с: {paymentDetails.account}</div>
+          <div>Банк: {paymentDetails.bank}</div>
+          <div>БИК: {paymentDetails.bik}</div>
+          <div>Корр. счёт: {paymentDetails.corrAccount}</div>
+        </div>
+      </div>
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
@@ -777,6 +938,9 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           </form>
         )}
       </div>
+      <p className="text-xs text-zinc-600">
+        Здесь появятся уведомления от правления и статусы ваших обращений.
+      </p>
       {events.length === 0 ? (
         <p className="text-sm text-zinc-700">Пока нет новых уведомлений.</p>
       ) : (
@@ -844,19 +1008,19 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
       <div className="space-y-2 text-sm text-zinc-800">
         <div className="text-sm font-semibold text-zinc-900">Мои обращения</div>
         {appeals.length === 0 ? (
-          <p className="text-sm text-zinc-600">Обращений пока нет.</p>
+          <p className="text-sm text-zinc-600">Обращений нет — вы можете написать новое.</p>
         ) : (
           <ul className="space-y-2">
             {appeals.map((a) => (
               <li key={a.id} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
                 <div className="flex items-center justify-between text-xs text-zinc-600">
-                  <span>{new Date(a.createdAt).toLocaleString("ru-RU")}</span>
+                  <span>Создано: {new Date(a.createdAt).toLocaleString("ru-RU")}</span>
                   <span>
                     {a.status === "new"
-                      ? "Новый"
+                      ? "Принято"
                       : a.status === "in_progress"
                         ? "В работе"
-                        : "Отвечен"}
+                        : "Отвечено"}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-zinc-800">{a.text}</p>
@@ -876,14 +1040,16 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
           <div className="text-xs text-zinc-500">Участков</div>
           <div className="text-lg font-semibold text-zinc-900">{plotsCount}</div>
         </div>
-        <div className="rounded-xl border border-zinc-200 bg-white px-3 py-3">
-          <div className="text-xs text-zinc-500">Заявки</div>
-          <div className="mt-1 text-sm text-zinc-800">
-            Подтверждено: {verificationsApproved}
+        {user.role !== "user" && (
+          <div className="rounded-xl border border-zinc-200 bg-white px-3 py-3">
+            <div className="text-xs text-zinc-500">Заявки</div>
+            <div className="mt-1 text-sm text-zinc-800">
+              Подтверждено: {verificationsApproved}
+            </div>
+            <div className="text-sm text-zinc-800">На проверке: {verificationsSent}</div>
+            <div className="text-sm text-zinc-800">Отклонено: {verificationsRejected}</div>
           </div>
-          <div className="text-sm text-zinc-800">На проверке: {verificationsSent}</div>
-          <div className="text-sm text-zinc-800">Отклонено: {verificationsRejected}</div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -909,14 +1075,14 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
     profileComplete && isConfirmed
       ? [
           { key: "electricity" as SectionKey, title: "Передать показания", desc: "Электроэнергия", targetId: "electricity-section" },
-          { key: "charges" as SectionKey, title: "Начисления", desc: "Основания и суммы", targetId: "charges-section" },
+          { key: "charges" as SectionKey, title: "Начисления", desc: "Суммы к оплате за период", targetId: "charges-section" },
           { key: "appeals" as SectionKey, title: "Написать обращение", desc: "Вопросы правлению", targetId: "appeals-section" },
           { key: "docs" as SectionKey, title: "Документы", desc: "Устав и протоколы", targetId: "docs-section" },
         ]
       : [];
 
   const initialSection = (() => {
-    const param = typeof searchParams?.section === "string" ? searchParams?.section : "home";
+    const param = typeof sp.section === "string" ? sp.section : "home";
     const allowed: SectionKey[] = sections.map((s) => s.key);
     return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
   })();
@@ -927,6 +1093,9 @@ export default async function CabinetPage({ searchParams }: { searchParams?: Rec
       quickActions={quickActions}
       initialActive={initialSection}
       isImpersonating={Boolean(user.isImpersonating)}
+      role={user.role}
+      userName={profile.fullName ?? null}
+      plotsCount={plotsCount}
     />
   );
 }

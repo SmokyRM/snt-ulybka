@@ -66,25 +66,6 @@ const safeJson = async <T,>(response: Response): Promise<T> => {
   }
 };
 
-const isMetaPrompt = (text: string): boolean => {
-  const normalized = text.trim().toLowerCase();
-  if (!normalized) return false;
-  const match =
-    normalized.includes("что ты умеешь") ||
-    normalized.includes("что ты можешь") ||
-    normalized.includes("помоги") ||
-    normalized.includes("как пользоваться") ||
-    normalized.includes("привет") ||
-    normalized.includes("здравств") ||
-    normalized.includes("hello");
-  if (match) return true;
-  const words = normalized.split(/\s+/).filter(Boolean);
-  if (words.length <= 3 && (normalized.includes("помощник") || normalized.includes("ии"))) {
-    return true;
-  }
-  return false;
-};
-
 export default function AssistantWidget({
   variant = "public",
   initialAuth,
@@ -175,16 +156,22 @@ export default function AssistantWidget({
   const primaryChips = uniqueChips.slice(0, 4);
   const visibleChips = chipsExpanded ? uniqueChips : primaryChips;
   const hasMoreChips = uniqueChips.length > primaryChips.length;
-  const fallbackChips = useMemo(
-    () => [
-      "Как получить доступ?",
-      "Где реквизиты?",
-      "Как передать показания?",
-      "Контакты правления",
-    ],
-    [],
+  const clarificationChips = useMemo(() => {
+    if (pathname.includes("electricity")) {
+      return ["Передать показания", "Где посмотреть начисления", "Тариф", "Контакты"];
+    }
+    if (pathname.includes("finance")) {
+      return ["Где посмотреть долги", "Как оплатить", "Реквизиты", "Контакты"];
+    }
+    if (pathname.includes("docs") || pathname.includes("help")) {
+      return ["Устав", "Протоколы", "217-ФЗ", "Контакты"];
+    }
+    return ["Взносы", "Электроэнергия", "Долги", "Документы", "Доступ/вход"];
+  }, [pathname]);
+  const outOfScopeRedirectChips = useMemo(
+    () => [...clarificationChips, "Контакты"],
+    [clarificationChips],
   );
-  const outOfScopeChips = primaryChips.length > 0 ? primaryChips : fallbackChips;
 
   useEffect(() => {
     if (!open || historyLoadedRef.current) return;
@@ -426,8 +413,8 @@ export default function AssistantWidget({
           setLastStatus(500);
           setBanner({
             tone: "neutral",
-            title: "Временно недоступно",
-            message: "Сервис ответа занят. Попробуйте повторить запрос.",
+            title: "Техническая ошибка",
+            message: "Попробуйте ещё раз.",
             actionLabel: "Повторить",
             onAction: () => {
               void retryLastPrompt();
@@ -491,29 +478,6 @@ export default function AssistantWidget({
     setError(null);
     setBanner(null);
     setLastStatus(null);
-    if (isMetaPrompt(trimmed)) {
-      const suggestions =
-        primaryChips.length > 0
-          ? primaryChips
-          : ["Как получить доступ?", "Где реквизиты?", "Как передать показания?", "Контакты правления"];
-      const assistantMessage: AssistantMessage = {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        text: [
-          "Официальный помощник СНТ «Улыбка».",
-          "Помогу с вопросами про взносы, электроэнергию, документы, доступ и контакты/обращения.",
-          "",
-          "Попробуйте спросить:",
-          ...suggestions.slice(0, 4).map((item) => `- ${item}`),
-        ].join("\n"),
-        source: "assistant",
-        outOfScope: false,
-        meta: true,
-      };
-      setMessages((prev) => [...prev, userMessage, assistantMessage]);
-      setLoading(false);
-      return;
-    }
     setMessages((prev) => [...prev, userMessage]);
     try {
       const response = await fetch("/api/assistant", {
@@ -570,8 +534,8 @@ export default function AssistantWidget({
           setLastStatus(500);
           setBanner({
             tone: "neutral",
-            title: "Временно недоступно",
-            message: "Сервис ответа занят. Попробуйте повторить запрос.",
+            title: "Техническая ошибка",
+            message: "Попробуйте ещё раз.",
             actionLabel: "Повторить",
             onAction: () => {
               if (lastPrompt) void sendMessage(lastPrompt);
@@ -695,11 +659,6 @@ export default function AssistantWidget({
   const inputPlaceholder = "Спросите про оплату, доступ, документы…";
   const canInsertDraft =
     variant === "admin" && pathname.startsWith("/admin/notifications/debtors");
-  const aiNoticeText = isGuest
-    ? "Отвечаю по сайту и вопросам СНТ."
-    : isVerified === false
-      ? "Общие вопросы доступны. Личное — после проверки участка."
-      : "Можно спрашивать и по вашему участку (если включён расширенный режим).";
   const showContactCta = useMemo(() => {
     if (error) return true;
     const lastAssistant = [...messages].reverse().find((item) => item.role === "assistant");
@@ -720,12 +679,27 @@ export default function AssistantWidget({
     return "ИИ";
   };
 
+  const stripSources = (text: string) => {
+    if (!text.trim()) {
+      return "Привет! Я помогу по вопросам СНТ «Улыбка» и сайту. Что нужно найти?";
+    }
+    const lines = text.split("\n");
+    const filtered = lines.filter((line) => !line.trim().toLowerCase().startsWith("источник:"));
+    const next = filtered.join("\n").trim();
+    return next.length > 0 ? next : text;
+  };
+
   const handleScroll = () => {
     if (!listRef.current) return;
     const el = listRef.current;
     const threshold = 24;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
   };
+
+  const lastPromptWordCount = lastPrompt
+    ? lastPrompt.trim().split(/\s+/).filter(Boolean).length
+    : 0;
+  const isShortPrompt = lastPromptWordCount > 0 && lastPromptWordCount <= 6;
 
   const minimizedBar = (
     <div className="flex w-[calc(100vw-24px)] max-w-[320px] items-center justify-between rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-lg">
@@ -756,13 +730,9 @@ export default function AssistantWidget({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-zinc-900">
-              Официальный помощник СНТ «Улыбка»
-            </p>
-            <p className="text-xs text-zinc-500">
-              Взносы · Участки · Электроэнергия · Документы · 217-ФЗ
+              Помощник СНТ «Улыбка»
             </p>
             <p className="mt-1 text-[11px] text-zinc-500">{statusLine}</p>
-            <p className="mt-1 text-xs text-zinc-500">{aiNoticeText}</p>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <button
@@ -902,55 +872,23 @@ export default function AssistantWidget({
           </div>
         ) : null}
         {isHelpTab ? (
-          <div className="mb-3 space-y-3 text-xs text-zinc-700">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              <p className="text-xs font-semibold text-zinc-900">Доступ и вход</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {["Как получить доступ?", "Как войти в кабинет?"].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => handleQuickSend(prompt)}
-                    disabled={loading}
-                    className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              <p className="text-xs font-semibold text-zinc-900">Оплата и документы</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {["Где реквизиты?", "Где найти документы?"].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => handleQuickSend(prompt)}
-                    disabled={loading}
-                    className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-              <p className="text-xs font-semibold text-zinc-900">Контакты</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {["Контакты правления", "Как отправить обращение?"].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => handleQuickSend(prompt)}
-                    disabled={loading}
-                    className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-zinc-700">
+            {[
+              { label: "Доступ", prompt: "Как получить доступ?" },
+              { label: "Финансы", prompt: "Где реквизиты?" },
+              { label: "Электроэнергия", prompt: "Как передать показания?" },
+              { label: "Документы", prompt: "Где найти документы?" },
+            ].map((tile) => (
+              <button
+                key={tile.label}
+                type="button"
+                onClick={() => handleQuickSend(tile.prompt)}
+                disabled={loading}
+                className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-left text-xs font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {tile.label}
+              </button>
+            ))}
           </div>
         ) : null}
         {!isContactsTab && !isHelpTab ? (
@@ -996,13 +934,34 @@ export default function AssistantWidget({
         <div
           ref={listRef}
           onScroll={handleScroll}
-          className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-700"
+          className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700"
         >
-          {messages.length > 0
-            ? messages.map((item) => (
+          {messages.length === 0 ? (
+            <div className="flex flex-col gap-3 rounded-lg bg-white/70 p-3 text-xs text-zinc-600">
+              <p>Задайте вопрос — я подскажу, где это на сайте.</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Где реквизиты?",
+                  "Как оплатить взносы?",
+                  "Как передать показания?",
+                ].map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => handleQuickSend(prompt)}
+                    disabled={loading}
+                    className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 transition hover:border-[#5E704F] hover:text-[#5E704F]"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            messages.map((item) => (
               <div
                 key={item.id}
-                className="rounded-xl border border-zinc-200 bg-white p-3 animate-assistant-in"
+                className="rounded-lg bg-white/80 p-2 animate-assistant-in"
               >
                 <div className="flex items-center justify-between text-[11px] text-zinc-400">
                   <span>{item.role === "user" ? "Вы" : "Помощник"}</span>
@@ -1013,38 +972,67 @@ export default function AssistantWidget({
                   ) : null}
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
-                  {item.text}
+                  {item.role === "assistant" ? stripSources(item.text) : item.text}
                 </p>
                 {item.role === "assistant" &&
                 item.id === lastAssistantId &&
-                item.outOfScope &&
-                !item.meta ? (
+                !item.meta &&
+                isShortPrompt &&
+                (lastStatus ?? 0) < 400 &&
+                !error ? (
                   <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                    <p className="font-semibold">
-                      Я отвечаю по вопросам СНТ «Улыбка» и сайта.
-                    </p>
+                    <p className="font-semibold">Уточните, пожалуйста</p>
                     <p className="mt-1 text-zinc-600">
-                      Попробуйте сформулировать вопрос конкретнее или выберите тему ниже.
+                      Вы про взносы, электроэнергию, долги, документы или доступ?
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {outOfScopeChips.map((prompt) => (
+                      {clarificationChips.map((prompt) => (
                         <button
-                          key={`out-scope-${prompt}`}
+                          key={`clarify-${prompt}`}
                           type="button"
-                          onClick={() => handleQuickSend(prompt)}
+                          onClick={() => {
+                            if (prompt === "Контакты") {
+                              setActiveTab("contacts");
+                            } else {
+                              handleQuickSend(prompt);
+                            }
+                          }}
                           disabled={loading}
                           className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
                         >
                           {prompt}
                         </button>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("contacts")}
-                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                      >
-                        Контакты
-                      </button>
+                    </div>
+                  </div>
+                ) : item.role === "assistant" &&
+                item.id === lastAssistantId &&
+                item.outOfScope &&
+                !item.meta ? (
+                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                    <p className="font-semibold">Я могу помочь и с этим</p>
+                    <p className="mt-1 text-zinc-600">
+                      Я в первую очередь про СНТ и портал. Отвечу кратко и привяжу к контексту СНТ.
+                      Что именно нужно?
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {outOfScopeRedirectChips.map((prompt) => (
+                        <button
+                          key={`out-scope-${prompt}`}
+                          type="button"
+                          onClick={() => {
+                            if (prompt === "Контакты") {
+                              setActiveTab("contacts");
+                            } else {
+                              handleQuickSend(prompt);
+                            }
+                          }}
+                          disabled={loading}
+                          className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 ) : item.role === "assistant" &&
@@ -1222,7 +1210,7 @@ export default function AssistantWidget({
                 ) : null}
               </div>
             ))
-            : null}
+          )}
           {loading ? (
             <div className="rounded-xl border border-zinc-200 bg-white p-3">
               <div className="flex items-center gap-2 text-xs text-zinc-500">

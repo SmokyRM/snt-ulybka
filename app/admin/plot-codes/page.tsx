@@ -83,13 +83,18 @@ async function rejectProposal(formData: FormData) {
   redirect("/admin/plot-codes");
 }
 
-export default async function PlotCodesPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function PlotCodesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const plots = await getPlots();
-  const code = typeof searchParams?.code === "string" ? searchParams.code : null;
-  const plotParam = typeof searchParams?.plot === "string" ? searchParams.plot : null;
-  const success = typeof searchParams?.success === "string" ? searchParams.success : null;
+  const code = typeof params.code === "string" ? params.code : null;
+  const plotParam = typeof params.plot === "string" ? params.plot : null;
+  const success = typeof params.success === "string" ? params.success : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

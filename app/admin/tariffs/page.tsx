@@ -8,14 +8,15 @@ import { logAdminAction } from "@/lib/audit";
 export default async function AdminTariffsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const tariffSetting = getMembershipTariffSetting();
-  const status = typeof searchParams?.status === "string" ? searchParams.status : null;
-  const message = typeof searchParams?.message === "string" ? searchParams.message : null;
+  const status = typeof params.status === "string" ? params.status : null;
+  const message = typeof params.message === "string" ? params.message : null;
 
   async function saveTariff(formData: FormData) {
     "use server";

@@ -9,7 +9,7 @@ import AiSettingsToggle from "./AiSettingsToggle";
 export default async function AdminAiUsagePage({
   searchParams,
 }: {
-  searchParams?: { days?: string; role?: string; outOfScope?: string };
+  searchParams?: Promise<{ days?: string; role?: string; outOfScope?: string }>;
 }) {
   // Manual checks:
   // - Period/role/out-of-scope filters update summary and recent table.
@@ -20,9 +20,10 @@ export default async function AdminAiUsagePage({
     redirect("/login?next=/admin");
   }
 
-  const days = searchParams?.days === "30" ? 30 : 7;
-  const roleFilter = searchParams?.role ?? "all";
-  const outOfScopeOnly = searchParams?.outOfScope === "1";
+  const params = (await searchParams) ?? {};
+  const days = params.days === "30" ? 30 : 7;
+  const roleFilter = params.role ?? "all";
+  const outOfScopeOnly = params.outOfScope === "1";
   const dashboard = await getAiUsageDashboard({
     days,
     role: roleFilter === "all" ? null : roleFilter,

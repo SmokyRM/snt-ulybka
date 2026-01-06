@@ -9,22 +9,23 @@ import RegistryFiltersClient from "./RegistryFiltersClient";
 export default async function RegistryPage({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 
-  const query = typeof searchParams.query === "string" ? searchParams.query : "";
-  const statusRaw = typeof searchParams.status === "string" ? searchParams.status : "";
+  const query = typeof params.query === "string" ? params.query : "";
+  const statusRaw = typeof params.status === "string" ? params.status : "";
   const allowedStatuses = ["DRAFT", "INVITE_READY", "CLAIMED", "VERIFIED"] as const;
   const status: (typeof allowedStatuses)[number] | null = allowedStatuses.includes(
     statusRaw as (typeof allowedStatuses)[number]
   )
     ? (statusRaw as (typeof allowedStatuses)[number])
     : null;
-  const page = Number(searchParams.page || "1");
+  const page = Number((params.page as string | undefined) || "1");
   const statusParam = status ?? "";
   const { items, total, pageSize } = listPlotsWithFilters({
     query,

@@ -7,13 +7,14 @@ import { getSntSettings, updateSntSettingsByAdmin } from "@/lib/sntSettings";
 export default async function AdminSettingsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) redirect("/login?next=/admin");
 
   const settings = getSntSettings();
-  const saved = typeof searchParams?.saved === "string";
+  const saved = typeof params.saved === "string";
 
   async function saveSettings(formData: FormData) {
     "use server";

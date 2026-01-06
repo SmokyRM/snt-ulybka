@@ -31,7 +31,12 @@ async function saveOnboarding(formData: FormData) {
   redirect("/cabinet");
 }
 
-export default async function OnboardingPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!user || (user.role !== "user" && user.role !== "board" && user.role !== "admin")) {
     redirect("/login");
@@ -44,7 +49,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
     redirect("/cabinet");
   }
 
-  const error = typeof searchParams?.error === "string" ? searchParams.error : null;
+  const error = typeof params.error === "string" ? params.error : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

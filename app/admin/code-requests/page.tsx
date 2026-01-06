@@ -23,13 +23,18 @@ async function resolveAction(formData: FormData) {
   redirect(`/admin/code-requests?${params.toString()}`);
 }
 
-export default async function CodeRequestsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+export default async function CodeRequestsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) redirect("/login?next=/admin");
   const requests = await listCodeRequests();
   const plots = await getPlots();
-  const resolvedPlot = typeof searchParams?.code_for === "string" ? searchParams.code_for : null;
-  const resolvedFlag = typeof searchParams?.resolved === "string";
+  const resolvedPlot = typeof params.code_for === "string" ? params.code_for : null;
+  const resolvedFlag = typeof params.resolved === "string";
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

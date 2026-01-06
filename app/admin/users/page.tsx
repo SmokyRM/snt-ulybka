@@ -25,14 +25,15 @@ async function saveProfile(formData: FormData) {
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const admin = await getSessionUser();
   if (!hasAdminAccess(admin)) {
     redirect("/login?next=/admin");
   }
 
-  const userIdParam = typeof searchParams?.userId === "string" ? searchParams.userId.trim() : "";
+  const userIdParam = typeof params.userId === "string" ? params.userId.trim() : "";
   const profile = userIdParam ? await getUserProfile(userIdParam) : null;
   const membership = userIdParam ? await getMembershipStatus(userIdParam) : null;
   const plots = userIdParam ? await getUserPlots(userIdParam) : [];

@@ -26,14 +26,15 @@ const formatDate = (value: string) => {
 export default async function AdminTicketsPage({
   searchParams,
 }: {
-  searchParams?: { status?: string };
+  searchParams?: Promise<{ status?: string }>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 
-  const filterStatus = searchParams?.status;
+  const filterStatus = params.status;
   const allTickets = listTickets(
     filterStatus === "NEW" || filterStatus === "IN_PROGRESS" || filterStatus === "DONE"
       ? (filterStatus as Ticket["status"])

@@ -66,9 +66,10 @@ function errorMessage(code?: string) {
 export default async function PlotRequestPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const error = typeof searchParams?.error === "string" ? searchParams.error : undefined;
+  const params = (await searchParams) ?? {};
+  const error = typeof params.error === "string" ? params.error : undefined;
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
@@ -82,6 +83,12 @@ export default async function PlotRequestPage({
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-lg space-y-6">
         <div className="space-y-1">
+          <div className="text-xs text-zinc-500">
+            <Link href="/cabinet" className="hover:text-[#5E704F] hover:underline">
+              Личный кабинет
+            </Link>{" "}
+            → Добавить участок
+          </div>
           <h1 className="text-2xl font-semibold">Добавить участок</h1>
           <p className="text-sm text-zinc-600">
             Документы могут понадобиться только при необходимости.

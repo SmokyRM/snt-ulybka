@@ -26,13 +26,14 @@ const statusBadge = (status: string) => {
 export default async function VerificationsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin/verifications");
   }
-  const statusParam = typeof searchParams?.status === "string" ? searchParams.status : "sent";
+  const statusParam = typeof params.status === "string" ? params.status : "sent";
   const allowedStatuses = ["sent", "rejected", "approved", "draft"] as const;
   const status = allowedStatuses.includes(statusParam as (typeof allowedStatuses)[number])
     ? (statusParam as OwnershipVerification["status"])
@@ -41,7 +42,7 @@ export default async function VerificationsPage({
   const userIds = Array.from(new Set(items.map((item) => item.userId)));
   const profiles = await Promise.all(userIds.map((id) => getUserProfile(id)));
   const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
-  const updated = typeof searchParams?.updated === "string" ? searchParams.updated : null;
+  const updated = typeof params.updated === "string" ? params.updated : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

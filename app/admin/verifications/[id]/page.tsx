@@ -49,8 +49,9 @@ export default async function VerificationDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const query = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin/verifications");
@@ -67,7 +68,7 @@ export default async function VerificationDetailPage({
   const reviewedAt = verification.reviewedAt
     ? new Date(verification.reviewedAt).toLocaleString("ru-RU")
     : "—";
-  const error = typeof searchParams?.error === "string" ? searchParams.error : null;
+  const error = typeof query.error === "string" ? query.error : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

@@ -24,8 +24,61 @@ export type AiUsageLogEntry = {
   error?: string | null;
 };
 
-const KV_URL = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+// Configure KV via KV_URL/KV_TOKEN or Vercel KV REST vars KV_REST_API_URL/KV_REST_API_TOKEN.
+const KV_URL =
+  process.env.KV_URL ?? process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const KV_WRITE_TOKEN =
+  process.env.KV_TOKEN ??
+  process.env.KV_REST_API_TOKEN ??
+  process.env.UPSTASH_REDIS_REST_TOKEN;
+const KV_READ_TOKEN =
+  KV_WRITE_TOKEN ??
+  process.env.KV_REST_API_READ_ONLY_TOKEN ??
+  process.env.UPSTASH_REDIS_REST_READ_ONLY_TOKEN;
+
+export const isKvConfigured = () => Boolean(KV_URL && KV_READ_TOKEN);
+const isKvWriteConfigured = () => Boolean(KV_URL && KV_WRITE_TOKEN);
+const useMemoryStore = !isKvConfigured() && process.env.NODE_ENV !== "production";
+
+// Optional in-memory fallback for local dev when KV is not configured.
+const memoryStore = {
+  values: new Map<string, { value: unknown; expiresAt: number | null }>(),
+};
+
+const nowMs = () => Date.now();
+
+const memGetRaw = (key: string) => {
+  const entry = memoryStore.values.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt && entry.expiresAt <= nowMs()) {
+    memoryStore.values.delete(key);
+    return null;
+  }
+  return entry;
+};
+
+const memGet = <T>(key: string): T | null => {
+  const entry = memGetRaw(key);
+  return entry ? (entry.value as T) : null;
+};
+
+const memSet = (key: string, value: unknown, ttlSeconds?: number) => {
+  const expiresAt = ttlSeconds ? nowMs() + ttlSeconds * 1000 : null;
+  memoryStore.values.set(key, { value, expiresAt });
+};
+
+const memExpire = (key: string, seconds: number) => {
+  const entry = memGetRaw(key);
+  if (!entry) return;
+  memoryStore.values.set(key, { value: entry.value, expiresAt: nowMs() + seconds * 1000 });
+};
+
+const memIncr = (key: string, amount = 1) => {
+  const entry = memGetRaw(key);
+  const next = Number(entry?.value ?? 0) + amount;
+  memoryStore.values.set(key, { value: next, expiresAt: entry?.expiresAt ?? null });
+  return next;
+};
 
 type RoleLimits = { minute: number; day: number };
 type RoleLimitsMap = Record<string, RoleLimits>;
@@ -91,14 +144,18 @@ const getRoleLimits = (role: string): RoleLimits => {
   return limits ?? DEFAULT_ROLE_LIMITS[normalizedRole] ?? { day: 0, minute: 0 };
 };
 
-async function kvFetch(path: string, init?: RequestInit) {
-  if (!KV_URL || !KV_TOKEN) {
+async function kvFetch(path: string, init?: RequestInit, requireWrite = false) {
+  if (!KV_URL || (!KV_READ_TOKEN && !KV_WRITE_TOKEN)) {
+    throw new Error("AI_USAGE_STORE_UNCONFIGURED");
+  }
+  const token = requireWrite ? KV_WRITE_TOKEN : KV_READ_TOKEN;
+  if (!token) {
     throw new Error("AI_USAGE_STORE_UNCONFIGURED");
   }
   const res = await fetch(`${KV_URL}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${KV_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       ...(init?.headers ?? {}),
     },
   });
@@ -110,20 +167,35 @@ async function kvFetch(path: string, init?: RequestInit) {
 }
 
 const kvIncr = async (key: string) => {
-  const data = await kvFetch(`/incr/${encodeURIComponent(key)}`, { method: "POST" });
+  if (useMemoryStore) return memIncr(key, 1);
+  if (!isKvWriteConfigured()) return 0;
+  const data = await kvFetch(`/incr/${encodeURIComponent(key)}`, { method: "POST" }, true);
   return Number(data?.result ?? 0);
 };
 
 const kvIncrBy = async (key: string, amount: number) => {
-  const data = await kvFetch(`/incrby/${encodeURIComponent(key)}/${amount}`, { method: "POST" });
+  if (useMemoryStore) return memIncr(key, amount);
+  if (!isKvWriteConfigured()) return 0;
+  const data = await kvFetch(
+    `/incrby/${encodeURIComponent(key)}/${amount}`,
+    { method: "POST" },
+    true,
+  );
   return Number(data?.result ?? 0);
 };
 
 const kvExpire = async (key: string, seconds: number) => {
-  await kvFetch(`/expire/${encodeURIComponent(key)}/${seconds}`, { method: "POST" });
+  if (useMemoryStore) {
+    memExpire(key, seconds);
+    return;
+  }
+  if (!isKvWriteConfigured()) return;
+  await kvFetch(`/expire/${encodeURIComponent(key)}/${seconds}`, { method: "POST" }, true);
 };
 
 const kvGet = async <T>(key: string): Promise<T | null> => {
+  if (useMemoryStore) return memGet<T>(key);
+  if (!isKvConfigured()) return null;
   const data = await kvFetch(`/get/${encodeURIComponent(key)}`);
   const raw = data?.result;
   if (raw == null) return null;
@@ -138,11 +210,20 @@ const kvGet = async <T>(key: string): Promise<T | null> => {
 };
 
 const kvSet = async (key: string, value: unknown) => {
-  await kvFetch(`/set/${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(value),
-  });
+  if (useMemoryStore) {
+    memSet(key, value);
+    return;
+  }
+  if (!isKvWriteConfigured()) return;
+  await kvFetch(
+    `/set/${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    },
+    true,
+  );
 };
 
 const addToList = async (key: string, value: string) => {
@@ -214,24 +295,35 @@ export async function enforceAiRateLimit(
   if (limits.day <= 0 || limits.minute <= 0) {
     return { allowed: false, minuteCount: 0, dayCount: 0 };
   }
+  if (!isKvConfigured() && !useMemoryStore) {
+    return { allowed: true, minuteCount: 0, dayCount: 0 };
+  }
   const minuteKey = `ai_usage:minute:${userId}:${toUtcMinute(now)}`;
   const dayKey = `ai_usage:day:${userId}:${toUtcDay(now)}`;
-  const [minuteCount, dayCount] = await Promise.all([kvIncr(minuteKey), kvIncr(dayKey)]);
-  if (minuteCount === 1) {
-    await kvExpire(minuteKey, MINUTE_TTL_SECONDS);
+  try {
+    const [minuteCount, dayCount] = await Promise.all([kvIncr(minuteKey), kvIncr(dayKey)]);
+    if (minuteCount === 1) {
+      await kvExpire(minuteKey, MINUTE_TTL_SECONDS);
+    }
+    if (dayCount === 1) {
+      await kvExpire(dayKey, DAY_TTL_SECONDS);
+    }
+    return {
+      allowed: minuteCount <= limits.minute && dayCount <= limits.day,
+      minuteCount,
+      dayCount,
+    };
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[ai-usage] rate limit failed", error);
+    }
+    return { allowed: true, minuteCount: 0, dayCount: 0 };
   }
-  if (dayCount === 1) {
-    await kvExpire(dayKey, DAY_TTL_SECONDS);
-  }
-  return {
-    allowed: minuteCount <= limits.minute && dayCount <= limits.day,
-    minuteCount,
-    dayCount,
-  };
 }
 
 export async function logAiUsage(entry: AiUsageLogEntry): Promise<void> {
   try {
+    if (!isKvConfigured() && !useMemoryStore) return;
     const key = `ai_usage:log:${entry.userId}:${makeId()}`;
     await kvSet(key, entry);
     await kvExpire(key, LOG_TTL_SECONDS);
@@ -277,7 +369,7 @@ const isNonEmptyString = (value: unknown): value is string =>
 export async function getAiUsageDashboard(
   options: AiUsageDashboardOptions = {},
 ): Promise<AiUsageDashboard | null> {
-  if (!KV_URL || !KV_TOKEN) return null;
+  if (!isKvConfigured() && !useMemoryStore) return null;
   try {
     const days = options.days ?? 7;
     const dayKeys = listDays(days);

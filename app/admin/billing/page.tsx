@@ -133,15 +133,16 @@ async function recalcElectricity(year: number, month: number) {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
 
-  const typeParam = (typeof searchParams?.type === "string" ? searchParams.type : "membership_fee") as PeriodType;
+  const typeParam = (typeof params.type === "string" ? params.type : "membership_fee") as PeriodType;
   const periods = listAccrualPeriods().filter((p) => p.type === typeParam);
   const selectedPeriod =
-    periods.find((p) => (typeof searchParams?.periodId === "string" ? searchParams.periodId : undefined) === p.id) ??
+    periods.find((p) => (typeof params.periodId === "string" ? params.periodId : undefined) === p.id) ??
     periods.sort((a, b) => (a.year === b.year ? b.month - a.month : b.year - a.year))[0];
 
   const plots = listPlots();

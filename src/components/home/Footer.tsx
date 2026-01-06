@@ -44,6 +44,9 @@ export default function Footer() {
               <Link href="/help" className="text-[#5E704F] hover:underline">
                 Помощь
               </Link>
+              <Link href="/knowledge" className="text-[#5E704F] hover:underline">
+                База знаний
+              </Link>
               <Link href="/updates" className="text-[#5E704F] hover:underline">
                 Что нового
               </Link>

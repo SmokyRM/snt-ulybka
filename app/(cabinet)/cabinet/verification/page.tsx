@@ -33,6 +33,12 @@ export default async function VerificationPage() {
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <header className="space-y-2">
+          <div className="text-xs text-zinc-500">
+            <Link href="/cabinet" className="hover:text-[#5E704F] hover:underline">
+              Личный кабинет
+            </Link>{" "}
+            → Доступ и проверка
+          </div>
           <h1 className="text-2xl font-semibold">Доступ и проверка</h1>
           <p className="text-sm text-zinc-600">
             Проверяем связь с участком, чтобы открыть персональные данные.

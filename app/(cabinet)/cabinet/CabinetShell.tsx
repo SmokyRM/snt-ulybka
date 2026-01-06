@@ -17,6 +17,9 @@ type Props = {
   quickActions?: Array<{ key: SectionKey; title: string; desc?: string; targetId?: string }>;
   initialActive?: SectionKey;
   isImpersonating?: boolean;
+  role?: "user" | "admin" | "board" | "chair" | null;
+  userName?: string | null;
+  plotsCount?: number;
 };
 
 export function CabinetShell({
@@ -24,31 +27,45 @@ export function CabinetShell({
   quickActions = [],
   initialActive = "home",
   isImpersonating = false,
+  role = null,
+  userName = null,
+  plotsCount,
 }: Props) {
+  const canSeeImpersonationBadge = role === "admin" || role === "board" || role === "chair";
   const [active, setActive] = useState<SectionKey>(initialActive);
   const activeContent = sections.find((s) => s.key === active)?.content;
   const activeTitle = sections.find((s) => s.key === active)?.title ?? "Секция";
+  const trimmedName = typeof userName === "string" ? userName.trim() : "";
+  const greetingName = trimmedName ? trimmedName.split(" ")[0] : "";
+  const headerTitle = greetingName ? `Здравствуйте, ${greetingName}` : "Личный кабинет";
+  const plotsLabel =
+    typeof plotsCount === "number" && plotsCount > 0
+      ? plotsCount === 1
+        ? "Участок: 1"
+        : `Участков: ${plotsCount}`
+      : null;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-4xl space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold">Мой кабинет</h1>
-              {isImpersonating && (
+              <h1 className="text-2xl font-semibold">{headerTitle}</h1>
+              {isImpersonating && canSeeImpersonationBadge && (
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
                   Режим теста
                 </span>
               )}
             </div>
-            <div className="text-xs text-zinc-600">
-              Информация по вашему участку и начислениям
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
+              <span>Информация по вашему участку и начислениям</span>
+              {plotsLabel ? <span>• {plotsLabel}</span> : null}
             </div>
           </div>
           <LogoutButton
             redirectTo="/"
-            className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="self-start rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400 disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto"
             busyLabel="Выходим..."
           />
         </div>

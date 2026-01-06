@@ -25,14 +25,15 @@ const parseFilters = (params?: Record<string, string | string[] | undefined>) =>
 export default async function AdminPlotsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 
-  const filters = parseFilters(searchParams);
+  const filters = parseFilters(params);
   const plots = listPlots(filters);
 
   return (

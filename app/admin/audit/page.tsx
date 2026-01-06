@@ -6,8 +6,9 @@ import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 export default async function AuditPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     return (
@@ -23,7 +24,7 @@ export default async function AuditPage({
     );
   }
   await Promise.resolve(cookies());
-  const actionFilter = typeof searchParams?.action === "string" ? searchParams.action.trim() : "";
+  const actionFilter = typeof params.action === "string" ? params.action.trim() : "";
   const logs = listAuditLogs({ limit: 200, action: actionFilter || null });
 
   return (

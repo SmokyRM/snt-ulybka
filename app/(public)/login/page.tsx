@@ -5,14 +5,13 @@ type SearchParams = {
   next?: string | string[];
 };
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: SearchParams;
+  searchParams?: Promise<SearchParams>;
 }) {
-  const rawNext = Array.isArray(searchParams?.next)
-    ? searchParams?.next[0]
-    : searchParams?.next;
+  const sp = (await Promise.resolve(searchParams)) ?? {};
+  const rawNext = Array.isArray(sp.next) ? sp.next[0] : sp.next;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">

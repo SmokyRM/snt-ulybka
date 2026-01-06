@@ -14,17 +14,18 @@ const matchesSearch = (street: string, number: string, name?: string | null, q?:
 export default async function ContactsRequestPage({
   searchParams,
 }: {
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
 
-  const q = typeof searchParams?.q === "string" ? searchParams.q : undefined;
-  const missPhone = searchParams?.missingPhone === "1";
-  const missEmail = searchParams?.missingEmail === "1";
-  const missBoth = searchParams?.missingBoth === "1" || (!missPhone && !missEmail);
+  const q = typeof params.q === "string" ? params.q : undefined;
+  const missPhone = params.missingPhone === "1";
+  const missEmail = params.missingEmail === "1";
+  const missBoth = params.missingBoth === "1" || (!missPhone && !missEmail);
 
   const plots = listPlots();
   const counts = {

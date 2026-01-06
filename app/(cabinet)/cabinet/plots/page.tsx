@@ -53,16 +53,17 @@ async function setStatus(formData: FormData) {
 export default async function CabinetPlotsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
     redirect("/login");
   }
   const isDev = process.env.NODE_ENV !== "production";
   const items = await getUserOwnershipVerifications(user.id ?? "");
-  const submitted = typeof searchParams?.submitted === "string" ? searchParams.submitted === "1" : false;
-  const error = typeof searchParams?.error === "string" ? searchParams.error : undefined;
+  const submitted = typeof params.submitted === "string" ? params.submitted === "1" : false;
+  const error = typeof params.error === "string" ? params.error : undefined;
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
