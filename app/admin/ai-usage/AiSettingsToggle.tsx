@@ -101,184 +101,221 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
         : "border-zinc-200 bg-white text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
     } ${pending ? "cursor-not-allowed opacity-60" : ""}`;
 
+  const SettingRow = ({
+    title,
+    description,
+    control,
+  }: {
+    title: string;
+    description: string;
+    control: React.ReactNode;
+  }) => (
+    <div className="flex items-start justify-between gap-4">
+      <div className="max-w-[420px] space-y-1">
+        <p className="text-sm font-semibold text-zinc-900">{title}</p>
+        <p className="text-xs text-zinc-500">{description}</p>
+      </div>
+      <div className="flex min-w-[180px] justify-end whitespace-nowrap">{control}</div>
+    </div>
+  );
+
   return (
-    <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-zinc-900">
-              Показывать виджет «Помощник» на публичных страницах
-            </p>
-            <p className="text-xs text-zinc-500">
-              Показывает/скрывает кнопку помощника на публичных страницах.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => applyUpdate({ ai_widget_enabled: !widgetEnabled })}
-            disabled={pending}
-            className={toggleClass(widgetEnabled)}
-          >
-            <span>{widgetEnabled ? "Включен" : "Выключен"}</span>
-            <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
-              <span
-                className={`h-3 w-3 rounded-full transition ${
-                  widgetEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-zinc-900">
-              Расширенный ИИ (личные данные жителей)
-            </p>
-            <p className="text-xs text-zinc-500">
-              Доступ к личным данным — только при включенном режиме и для пользователей со статусом
-              verified.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => applyUpdate({ ai_personal_enabled: !personalEnabled })}
-            disabled={pending}
-            className={toggleClass(personalEnabled)}
-          >
-            <span>{personalEnabled ? "Включен" : "Выключен"}</span>
-            <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
-              <span
-                className={`h-3 w-3 rounded-full transition ${
-                  personalEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-        <p className="text-sm font-semibold text-zinc-900">Качество ответов</p>
-        <div className="mt-3 grid gap-3 text-xs text-zinc-700 sm:grid-cols-2">
-          <div className="flex items-center justify-between gap-2">
-            <span>Строгий режим</span>
+    <div className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+        <h3 className="text-sm font-semibold text-zinc-900">Виджет на сайте</h3>
+        <SettingRow
+          title="Показывать виджет «Помощник» на публичных страницах"
+          description="Показывает или скрывает кнопку помощника на публичных страницах."
+          control={
             <button
               type="button"
-              onClick={() => applyUpdate({ strictMode: !localSettings.strictMode })}
+              onClick={() => applyUpdate({ ai_widget_enabled: !widgetEnabled })}
               disabled={pending}
-              className={toggleClass(localSettings.strictMode)}
+              className={toggleClass(widgetEnabled)}
             >
-              <span>{localSettings.strictMode ? "Включен" : "Выключен"}</span>
+              <span>{widgetEnabled ? "Включен" : "Выключен"}</span>
+              <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
+                <span
+                  className={`h-3 w-3 rounded-full transition ${
+                    widgetEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
+                  }`}
+                />
+              </span>
             </button>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span>Ссылки и источники</span>
+          }
+        />
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+        <h3 className="text-sm font-semibold text-zinc-900">Персональные ответы</h3>
+        <SettingRow
+          title="Расширенный ИИ (личные данные жителей)"
+          description="Доступ к данным по участку — только для пользователей со статусом verified."
+          control={
             <button
               type="button"
-              onClick={() => applyUpdate({ citations: !localSettings.citations })}
+              onClick={() => applyUpdate({ ai_personal_enabled: !personalEnabled })}
               disabled={pending}
-              className={toggleClass(localSettings.citations)}
+              className={toggleClass(personalEnabled)}
             >
-              <span>{localSettings.citations ? "Включены" : "Выключены"}</span>
+              <span>{personalEnabled ? "Включен" : "Выключен"}</span>
+              <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
+                <span
+                  className={`h-3 w-3 rounded-full transition ${
+                    personalEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
+                  }`}
+                />
+              </span>
             </button>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>Длина ответа</span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => applyUpdate({ verbosity: "short" })}
-                disabled={pending}
-                className={segmentedClass(localSettings.verbosity === "short")}
-              >
-                Коротко
-              </button>
-              <button
-                type="button"
-                onClick={() => applyUpdate({ verbosity: "normal" })}
-                disabled={pending}
-                className={segmentedClass(localSettings.verbosity === "normal")}
-              >
-                Обычно
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>Температура</span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => applyUpdate({ temperature: "low" })}
-                disabled={pending}
-                className={segmentedClass(localSettings.temperature === "low")}
-              >
-                Точнее
-              </button>
-              <button
-                type="button"
-                onClick={() => applyUpdate({ temperature: "medium" })}
-                disabled={pending}
-                className={segmentedClass(localSettings.temperature === "medium")}
-              >
-                Чуть креативнее
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>Стиль ответа</span>
-            <div className="flex flex-wrap gap-2">
-              {(["short", "normal", "detailed"] as const).map((style) => (
+          }
+        />
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+        <h3 className="text-sm font-semibold text-zinc-900">Качество ответов</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SettingRow
+            title="Стиль ответа"
+            description="Насколько подробен основной ответ."
+            control={
+              <div className="flex flex-wrap justify-end gap-2">
+                {(["short", "normal", "detailed"] as const).map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    onClick={() =>
+                      applyUpdate({ ai_answer_style: style }, "/api/admin/ai-format-settings")
+                    }
+                    disabled={pending}
+                    className={segmentedClass(localSettings.ai_answer_style === style)}
+                  >
+                    {style === "short" ? "Коротко" : style === "detailed" ? "Подробно" : "Нормально"}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <SettingRow
+            title="Тон"
+            description="Формулировки официально или проще."
+            control={
+              <div className="flex justify-end gap-2">
                 <button
-                  key={style}
                   type="button"
-                  onClick={() =>
-                    applyUpdate({ ai_answer_style: style }, "/api/admin/ai-format-settings")
-                  }
+                  onClick={() => applyUpdate({ ai_tone: "official" }, "/api/admin/ai-format-settings")}
                   disabled={pending}
-                  className={segmentedClass(localSettings.ai_answer_style === style)}
+                  className={segmentedClass(localSettings.ai_tone === "official")}
                 >
-                  {style === "short" ? "Коротко" : style === "detailed" ? "Подробно" : "Нормально"}
+                  Официальный
                 </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>Тон</span>
-            <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyUpdate({ ai_tone: "simple" }, "/api/admin/ai-format-settings")}
+                  disabled={pending}
+                  className={segmentedClass(localSettings.ai_tone === "simple")}
+                >
+                  Простой
+                </button>
+              </div>
+            }
+          />
+          <SettingRow
+            title="Источники"
+            description="Показывает ссылки на разделы портала."
+            control={
               <button
                 type="button"
-                onClick={() => applyUpdate({ ai_tone: "official" }, "/api/admin/ai-format-settings")}
+                onClick={() =>
+                  applyUpdate(
+                    { ai_show_sources: !localSettings.ai_show_sources },
+                    "/api/admin/ai-format-settings",
+                  )
+                }
                 disabled={pending}
-                className={segmentedClass(localSettings.ai_tone === "official")}
+                className={toggleClass(localSettings.ai_show_sources)}
               >
-                Официальный
+                <span>{localSettings.ai_show_sources ? "Показывать" : "Скрывать"}</span>
               </button>
+            }
+          />
+          <SettingRow
+            title="Строгий режим"
+            description="Ограничивает ответы только темой СНТ."
+            control={
               <button
                 type="button"
-                onClick={() => applyUpdate({ ai_tone: "simple" }, "/api/admin/ai-format-settings")}
+                onClick={() => applyUpdate({ strictMode: !localSettings.strictMode })}
                 disabled={pending}
-                className={segmentedClass(localSettings.ai_tone === "simple")}
+                className={toggleClass(localSettings.strictMode)}
               >
-                Простой
+                <span>{localSettings.strictMode ? "Включен" : "Выключен"}</span>
               </button>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span>Источники</span>
-            <button
-              type="button"
-              onClick={() =>
-                applyUpdate({ ai_show_sources: !localSettings.ai_show_sources }, "/api/admin/ai-format-settings")
-              }
-              disabled={pending}
-              className={toggleClass(localSettings.ai_show_sources)}
-            >
-              <span>{localSettings.ai_show_sources ? "Показывать" : "Скрывать"}</span>
-            </button>
-          </div>
+            }
+          />
+          <SettingRow
+            title="Ссылки и источники (старое)"
+            description="Добавляет блок ссылок внизу ответа."
+            control={
+              <button
+                type="button"
+                onClick={() => applyUpdate({ citations: !localSettings.citations })}
+                disabled={pending}
+                className={toggleClass(localSettings.citations)}
+              >
+                <span>{localSettings.citations ? "Включены" : "Выключены"}</span>
+              </button>
+            }
+          />
+          <SettingRow
+            title="Длина ответа"
+            description="Коротко или обычно."
+            control={
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyUpdate({ verbosity: "short" })}
+                  disabled={pending}
+                  className={segmentedClass(localSettings.verbosity === "short")}
+                >
+                  Коротко
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyUpdate({ verbosity: "normal" })}
+                  disabled={pending}
+                  className={segmentedClass(localSettings.verbosity === "normal")}
+                >
+                  Обычно
+                </button>
+              </div>
+            }
+          />
+          <SettingRow
+            title="Температура"
+            description="Чуть креативнее или точнее."
+            control={
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyUpdate({ temperature: "low" })}
+                  disabled={pending}
+                  className={segmentedClass(localSettings.temperature === "low")}
+                >
+                  Точнее
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyUpdate({ temperature: "medium" })}
+                  disabled={pending}
+                  className={segmentedClass(localSettings.temperature === "medium")}
+                >
+                  Чуть креативнее
+                </button>
+              </div>
+            }
+          />
         </div>
-      </div>
+      </section>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
         <span>{status === "saving" ? "Сохранение..." : status === "saved" ? "Сохранено" : ""}</span>

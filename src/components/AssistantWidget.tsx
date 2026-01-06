@@ -819,50 +819,6 @@ export default function AssistantWidget({
               Контакты
             </button>
           </div>
-          {isAiTab ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
-              <button
-                type="button"
-                onClick={() => setAiEnabled((prev) => !prev)}
-                className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-              >
-                <span>ИИ: {aiEnabled ? "Вкл" : "Выкл"}</span>
-                <span className="inline-flex h-3 w-6 items-center rounded-full bg-zinc-100 p-0.5">
-                  <span
-                    className={`h-2 w-2 rounded-full transition ${
-                      aiEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
-                    }`}
-                  />
-                </span>
-              </button>
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-zinc-500">Стиль:</span>
-                {(["short", "normal", "detailed"] as const).map((style) => (
-                  <button
-                    key={style}
-                    type="button"
-                    onClick={() => setAiStyle(style)}
-                    className={`rounded-full border px-2 py-1 font-semibold transition ${
-                      aiStyle === style
-                        ? "border-[#5E704F] bg-[#5E704F] text-white"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-[#5E704F] hover:text-[#5E704F]"
-                    }`}
-                  >
-                    {style === "short" ? "Short" : style === "normal" ? "Normal" : "Detailed"}
-                  </button>
-                ))}
-              </div>
-              <label className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700">
-                <input
-                  type="checkbox"
-                  checked={aiShowSources}
-                  onChange={(event) => setAiShowSources(event.target.checked)}
-                  className="h-3 w-3 rounded border-zinc-300 text-[#5E704F]"
-                />
-                Источники
-              </label>
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -922,7 +878,7 @@ export default function AssistantWidget({
           </div>
         ) : null}
         {isContactsTab ? (
-          <div className="space-y-3 text-xs text-zinc-700">
+          <div className="mb-3 space-y-3 text-xs text-zinc-700">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
               <p className="text-xs font-semibold text-zinc-900">Связаться с правлением</p>
               <p className="mt-1 text-zinc-600">
@@ -944,8 +900,9 @@ export default function AssistantWidget({
               </div>
             </div>
           </div>
-        ) : isHelpTab ? (
-          <div className="space-y-3 text-xs text-zinc-700">
+        ) : null}
+        {isHelpTab ? (
+          <div className="mb-3 space-y-3 text-xs text-zinc-700">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
               <p className="text-xs font-semibold text-zinc-900">Доступ и вход</p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -995,7 +952,8 @@ export default function AssistantWidget({
               </div>
             </div>
           </div>
-        ) : (
+        ) : null}
+        {!isContactsTab && !isHelpTab ? (
           <>
             {!aiEnabled ? (
               <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
@@ -1033,247 +991,247 @@ export default function AssistantWidget({
                 </div>
               </div>
             ) : null}
-            <div
-              ref={listRef}
-              onScroll={handleScroll}
-              className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-700"
-            >
-              {messages.length > 0
-                ? messages.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-xl border border-zinc-200 bg-white p-3 animate-assistant-in"
-                  >
-                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                      <span>{item.role === "user" ? "Вы" : "Помощник"}</span>
-                      {item.role === "assistant" ? (
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
-                          {badgeLabel(item)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
-                      {item.text}
+          </>
+        ) : null}
+        <div
+          ref={listRef}
+          onScroll={handleScroll}
+          className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-700"
+        >
+          {messages.length > 0
+            ? messages.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-zinc-200 bg-white p-3 animate-assistant-in"
+              >
+                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>{item.role === "user" ? "Вы" : "Помощник"}</span>
+                  {item.role === "assistant" ? (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
+                      {badgeLabel(item)}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
+                  {item.text}
+                </p>
+                {item.role === "assistant" &&
+                item.id === lastAssistantId &&
+                item.outOfScope &&
+                !item.meta ? (
+                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                    <p className="font-semibold">
+                      Я отвечаю по вопросам СНТ «Улыбка» и сайта.
                     </p>
-                    {item.role === "assistant" &&
-                    item.id === lastAssistantId &&
-                    item.outOfScope &&
-                    !item.meta ? (
-                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                        <p className="font-semibold">
-                          Я отвечаю по вопросам СНТ «Улыбка» и сайта.
-                        </p>
-                        <p className="mt-1 text-zinc-600">
-                          Попробуйте сформулировать вопрос конкретнее или выберите тему ниже.
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {outOfScopeChips.map((prompt) => (
-                            <button
-                              key={`out-scope-${prompt}`}
-                              type="button"
-                              onClick={() => handleQuickSend(prompt)}
-                              disabled={loading}
-                              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                            >
-                              {prompt}
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab("contacts")}
-                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                          >
-                            Контакты
-                          </button>
-                        </div>
-                      </div>
-                    ) : item.role === "assistant" &&
-                    item.id === lastAssistantId &&
-                    ((lastStatus ?? 0) >= 500 || Boolean(error)) &&
-                    !item.meta ? (
-                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                        <p className="font-semibold">Техническая ошибка.</p>
-                        <p className="mt-1 text-zinc-600">Попробуйте ещё раз.</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void retryLastPrompt()}
-                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                          >
-                            Повторить
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab("contacts")}
-                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                          >
-                            Контакты
-                          </button>
-                        </div>
-                      </div>
-                    ) : item.role === "assistant" &&
-                    item.id === lastAssistantId &&
-                    (!item.text.trim() ||
-                      item.text.toLowerCase().includes("не удалось найти точный ответ")) &&
-                    !item.meta ? (
-                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                        <p className="font-semibold">Не удалось найти точный ответ</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab("contacts")}
-                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                          >
-                            Написать в правление
-                          </button>
-                          <a
-                            href="/contacts"
-                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                          >
-                            Контакты
-                          </a>
-                        </div>
-                      </div>
-                    ) : null}
-                    {item.role === "assistant" ? (
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <p className="mt-1 text-zinc-600">
+                      Попробуйте сформулировать вопрос конкретнее или выберите тему ниже.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {outOfScopeChips.map((prompt) => (
                         <button
+                          key={`out-scope-${prompt}`}
                           type="button"
-                          onClick={() => handleCopy(item.id, item.text)}
-                          className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100"
+                          onClick={() => handleQuickSend(prompt)}
+                          disabled={loading}
+                          className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
                         >
-                          {copiedId === item.id ? "Скопировано" : "📋 Копировать ответ"}
+                          {prompt}
                         </button>
-                        {item.id === lastAssistantId && item.links && item.links.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {item.links.map((link) => (
-                              <a
-                                key={`${item.id}-${link.href}`}
-                                href={link.href}
-                                className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                              >
-                                {link.label}
-                              </a>
-                            ))}
-                          </div>
-                        ) : null}
-                        {item.id === lastAssistantId && item.actions && item.actions.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {item.actions.map((action, actionIndex) => {
-                              const key = `${item.id}-action-${actionIndex}`;
-                              if (action.type === "link" && action.href) {
-                                return (
-                                  <a
-                                    key={key}
-                                    href={action.href}
-                                    className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                                  >
-                                    {action.label}
-                                  </a>
-                                );
-                              }
-                              if (action.type === "copy") {
-                                return (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => handleCopy(key, action.text)}
-                                    className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                                  >
-                                    {copiedId === key ? "Скопировано" : action.label}
-                                  </button>
-                                );
-                              }
-                              return null;
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {item.contextCards && item.contextCards.length > 0 ? (
-                      <div className="mt-2 space-y-2">
-                        {item.contextCards.map((card, index) => (
-                          <div
-                            key={`${item.id}-card-${index}`}
-                            className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-700"
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("contacts")}
+                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                      >
+                        Контакты
+                      </button>
+                    </div>
+                  </div>
+                ) : item.role === "assistant" &&
+                item.id === lastAssistantId &&
+                ((lastStatus ?? 0) >= 500 || Boolean(error)) &&
+                !item.meta ? (
+                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                    <p className="font-semibold">Техническая ошибка.</p>
+                    <p className="mt-1 text-zinc-600">Попробуйте ещё раз.</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void retryLastPrompt()}
+                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                      >
+                        Повторить
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("contacts")}
+                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                      >
+                        Контакты
+                      </button>
+                    </div>
+                  </div>
+                ) : item.role === "assistant" &&
+                item.id === lastAssistantId &&
+                (!item.text.trim() ||
+                  item.text.toLowerCase().includes("не удалось найти точный ответ")) &&
+                !item.meta ? (
+                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                    <p className="font-semibold">Не удалось найти точный ответ</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("contacts")}
+                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                      >
+                        Написать в правление
+                      </button>
+                      <a
+                        href="/contacts"
+                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                      >
+                        Контакты
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
+                {item.role === "assistant" ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(item.id, item.text)}
+                      className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100"
+                    >
+                      {copiedId === item.id ? "Скопировано" : "📋 Копировать ответ"}
+                    </button>
+                    {item.id === lastAssistantId && item.links && item.links.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {item.links.map((link) => (
+                          <a
+                            key={`${item.id}-${link.href}`}
+                            href={link.href}
+                            className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-semibold text-zinc-900">{card.title}</p>
-                              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-zinc-600">
-                                {statusLabel(card.status)}
-                              </span>
-                            </div>
-                            <ul className="mt-1 space-y-0.5">
-                              {card.lines.map((line, lineIndex) => (
-                                <li key={`${item.id}-line-${lineIndex}`} className="text-zinc-600">
-                                  {line}
-                                </li>
-                              ))}
-                            </ul>
-                            {card.href ? (
-                              <a
-                                href={card.href}
-                                className="mt-1 inline-block text-[#5E704F] hover:underline"
-                              >
-                                Открыть
-                              </a>
-                            ) : null}
-                          </div>
+                            {link.label}
+                          </a>
                         ))}
                       </div>
                     ) : null}
-                    {item.drafts && item.drafts.length > 0 ? (
-                      <div className="mt-2 space-y-2 text-xs">
-                        {item.drafts.map((draft) => {
-                          const key = `${item.id}-draft-${draft.id}`;
-                          return (
-                            <div
-                              key={key}
-                              className="rounded-lg border border-zinc-200 bg-zinc-50 p-2"
-                            >
-                              <p className="font-semibold text-zinc-900">{draft.title}</p>
-                              <div className="mt-1 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopy(key, draft.text)}
-                                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                                >
-                                  {copiedId === key ? "Скопировано" : "Скопировать"}
-                                </button>
-                                {canInsertDraft ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleInsertDraft(key, draft.text)}
-                                    className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                                  >
-                                    {insertedId === key ? "Готово" : "Вставить"}
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
+                    {item.id === lastAssistantId && item.actions && item.actions.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {item.actions.map((action, actionIndex) => {
+                          const key = `${item.id}-action-${actionIndex}`;
+                          if (action.type === "link" && action.href) {
+                            return (
+                              <a
+                                key={key}
+                                href={action.href}
+                                className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                              >
+                                {action.label}
+                              </a>
+                            );
+                          }
+                          if (action.type === "copy") {
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => handleCopy(key, action.text)}
+                                className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                              >
+                                {copiedId === key ? "Скопировано" : action.label}
+                              </button>
+                            );
+                          }
+                          return null;
                         })}
-                        {canInsertDraft ? (
-                          <p className="text-[11px] text-zinc-500">
-                            Черновик появится в разделе должников после вставки.
-                          </p>
-                        ) : null}
                       </div>
                     ) : null}
                   </div>
-                ))
-                : null}
-              {loading ? (
-                <div className="rounded-xl border border-zinc-200 bg-white p-3">
-                  <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
-                    🤖 Генерирую ответ…
+                ) : null}
+                {item.contextCards && item.contextCards.length > 0 ? (
+                  <div className="mt-2 space-y-2">
+                    {item.contextCards.map((card, index) => (
+                      <div
+                        key={`${item.id}-card-${index}`}
+                        className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-700"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-zinc-900">{card.title}</p>
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-zinc-600">
+                            {statusLabel(card.status)}
+                          </span>
+                        </div>
+                        <ul className="mt-1 space-y-0.5">
+                          {card.lines.map((line, lineIndex) => (
+                            <li key={`${item.id}-line-${lineIndex}`} className="text-zinc-600">
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
+                        {card.href ? (
+                          <a
+                            href={card.href}
+                            className="mt-1 inline-block text-[#5E704F] hover:underline"
+                          >
+                            Открыть
+                          </a>
+                        ) : null}
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+                {item.drafts && item.drafts.length > 0 ? (
+                  <div className="mt-2 space-y-2 text-xs">
+                    {item.drafts.map((draft) => {
+                      const key = `${item.id}-draft-${draft.id}`;
+                      return (
+                        <div
+                          key={key}
+                          className="rounded-lg border border-zinc-200 bg-zinc-50 p-2"
+                        >
+                          <p className="font-semibold text-zinc-900">{draft.title}</p>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(key, draft.text)}
+                              className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                            >
+                              {copiedId === key ? "Скопировано" : "Скопировать"}
+                            </button>
+                            {canInsertDraft ? (
+                              <button
+                                type="button"
+                                onClick={() => handleInsertDraft(key, draft.text)}
+                                className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                              >
+                                {insertedId === key ? "Готово" : "Вставить"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {canInsertDraft ? (
+                      <p className="text-[11px] text-zinc-500">
+                        Черновик появится в разделе должников после вставки.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ))
+            : null}
+          {loading ? (
+            <div className="rounded-xl border border-zinc-200 bg-white p-3">
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+                🤖 Генерирую ответ…
+              </div>
             </div>
-          </>
-        )}
+          ) : null}
+        </div>
       </div>
 
       {!isContactsTab && !(isAiTab && isGuest) && !(isAiTab && !aiEnabled) ? (
