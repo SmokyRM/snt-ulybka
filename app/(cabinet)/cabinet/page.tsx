@@ -244,6 +244,7 @@ export default async function CabinetPage({
   const profileComplete = Boolean(profile.fullName && profile.phone);
 
   const appeals = await safeFetch("appeals", [], () => getUserAppeals(userId), dataErrors);
+  const unreadAppealsCount = appeals.filter((a) => a.unreadByUser).length;
   const finance = await safeFetch(
     "financeInfo",
     { membershipDebt: null, electricityDebt: null, status: "unknown" },
@@ -394,6 +395,23 @@ export default async function CabinetPage({
         </div>
       ) : (
         <>
+          {unreadAppealsCount > 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
+              <div className="font-semibold">Ответы по обращениям: {unreadAppealsCount}</div>
+              <div className="mt-1 text-amber-800">
+                Правление ответило на ваши обращения. Откройте список, чтобы прочитать и отметить прочитанными.
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link
+                  href="/cabinet/appeals"
+                  className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-900 shadow-sm ring-1 ring-amber-200 transition hover:ring-amber-400"
+                >
+                  Открыть обращения
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-800 shadow-sm">
             <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Доступ</div>
             {!profileComplete ? (
@@ -1023,10 +1041,14 @@ export default async function CabinetPage({
                       ? "Принято"
                       : a.status === "in_progress"
                         ? "В работе"
-                        : "Отвечено"}
+                        : a.status === "answered"
+                          ? "Отвечено"
+                          : a.status === "closed"
+                            ? "Закрыто"
+                            : "Черновик"}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-zinc-800">{a.text}</p>
+                <p className="mt-1 text-sm text-zinc-800">{(a as { message?: string }).message ?? ""}</p>
               </li>
             ))}
           </ul>

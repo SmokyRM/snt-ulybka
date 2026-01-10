@@ -61,6 +61,65 @@ type AssistantWidgetProps = {
   aiPersonalEnabled?: boolean;
 };
 
+function TabBar({
+  activeTab,
+  onChange,
+}: {
+  activeTab: "help" | "ai" | "contacts";
+  onChange: (tab: "help" | "ai" | "contacts") => void;
+}) {
+  const isHelpTab = activeTab === "help";
+  const isAiTab = activeTab === "ai";
+  const isContactsTab = activeTab === "contacts";
+  return (
+    <div
+      className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 p-1 text-xs"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onChange("help");
+        }}
+        className={`rounded-full px-3 py-1 font-semibold transition ${
+          isHelpTab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+        }`}
+      >
+        Быстрые ответы
+      </button>
+      <button
+        type="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onChange("ai");
+        }}
+        title="Задать вопрос"
+        className={`rounded-full px-3 py-1 font-semibold transition ${
+          isAiTab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+        }`}
+      >
+        Задать вопрос
+      </button>
+      <button
+        type="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onChange("contacts");
+        }}
+        className={`rounded-full px-3 py-1 font-semibold transition ${
+          isContactsTab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+        }`}
+      >
+        Связаться
+      </button>
+  </div>
+);
+}
+
 const safeJson = async <T,>(response: Response): Promise<T> => {
   const raw = await response.text();
   if (!raw) {
@@ -126,9 +185,13 @@ export default function AssistantWidget({
   const [expandedAnswers, setExpandedAnswers] = useState<Set<string>>(new Set());
   const [helpExpanded, setHelpExpanded] = useState(false);
   const [textSize, setTextSize] = useState<"normal" | "large">("normal");
+  const [lastTopicAnswer, setLastTopicAnswer] = useState<AssistantMessage | null>(null);
+  const [unreadAppeals, setUnreadAppeals] = useState<number>(0);
+  const [uiScale, setUiScale] = useState<number>(1);
   const aiSettingsLoadedRef = useRef(false);
   const historyLoadedRef = useRef(false);
   const scrollTimeoutRef = useRef<number | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const lastTopicRef = useRef<string | null>(null);
@@ -144,11 +207,16 @@ export default function AssistantWidget({
   const sizeStorageKey = "assistantWidgetSize:v1";
   const onboardingKey = "assistantOnboardingSeen:v1";
   const textSizeKey = "assistantTextSize:v1";
+  const uiScaleKey = "assistantUiScale:v1";
   const resizeSession = useRef<{
     startX: number;
     startY: number;
     startW: number;
     startH: number;
+  } | null>(null);
+  const scaleSession = useRef<{
+    startX: number;
+    startScale: number;
   } | null>(null);
 
   const aiExampleChips = useMemo(
@@ -197,8 +265,9 @@ export default function AssistantWidget({
     },
     [],
   );
+  const clampScale = useCallback((value: number) => clampSize(value, 0.9, 1.25), []);
   const clarificationChips = ["Взносы", "Электроэнергия", "Долги", "Документы", "Доступ"];
-  const outOfScopeRedirectChips = useMemo(() => [...clarificationChips, "Контакты"], []);
+  const outOfScopeRedirectChips = [...clarificationChips, "Контакты"];
 
   useEffect(() => {
     if (viewState !== "open" || historyLoadedRef.current) return;
@@ -328,6 +397,23 @@ export default function AssistantWidget({
   }, [clampHeight, clampWidth, viewState, widgetSize]);
 
   useEffect(() => {
+    if (viewState === "closed") return;
+    if (isAuthenticated !== true) return;
+    let cancelled = false;
+    fetch("/api/appeals/my")
+      .then((res) => res.json().catch(() => null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data && typeof data.unreadCount === "number") {
+          setUnreadAppeals(data.unreadCount);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, viewState]);
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(onboardingKey);
     setOnboardingSeen(raw === "true");
@@ -349,6 +435,60 @@ export default function AssistantWidget({
       // ignore
     }
   }, [textSize, textSizeKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(uiScaleKey);
+    if (!raw) return;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    setUiScale(clampScale(parsed));
+  }, [clampScale, uiScaleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(uiScaleKey, String(clampScale(uiScale)));
+    } catch {
+      // ignore
+    }
+  }, [clampScale, uiScale, uiScaleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(uiScaleKey);
+    if (!raw) return;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    setUiScale(clampScale(parsed));
+  }, [clampScale, uiScaleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(uiScaleKey, String(clampScale(uiScale)));
+    } catch {
+      // ignore
+    }
+  }, [clampScale, uiScale, uiScaleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(uiScaleKey);
+    if (!raw) return;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    setUiScale(clampScale(parsed));
+  }, [clampScale, uiScaleKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(uiScaleKey, String(clampScale(uiScale)));
+    } catch {
+      // ignore
+    }
+  }, [clampScale, uiScale, uiScaleKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -440,6 +580,17 @@ export default function AssistantWidget({
   }, [resetWidget]);
 
   useEffect(() => {
+    if (viewState === "closed") return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (rootRef.current && target && rootRef.current.contains(target)) return;
+      closeWidget();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [closeWidget, viewState]);
+
+  useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (viewState !== "closed") closeWidget();
@@ -503,6 +654,7 @@ export default function AssistantWidget({
         actions?: AssistantAction[];
         drafts?: AssistantDraft[];
         error?: string;
+        error_code?: string;
         message?: string;
         source?: "faq" | "assistant" | "cache";
         cached?: boolean;
@@ -512,7 +664,8 @@ export default function AssistantWidget({
         facts?: AssistantFacts | null;
         isSmalltalk?: boolean;
       }>(response);
-      if (!response.ok || !data.ok) {
+      const hasApiError = Boolean(data.error || data.error_code);
+      if (!response.ok || !data.ok || hasApiError) {
         if (response.status === 403) {
           const lockedText =
             isAuthenticated === true
@@ -538,7 +691,7 @@ export default function AssistantWidget({
             title: "Лимит исчерпан",
             message: "Лимит исчерпан. Справка доступна.",
           });
-        } else if (response.status >= 500) {
+        } else if (response.status >= 500 || hasApiError) {
           setLastStatus(500);
           setBanner({
             tone: "neutral",
@@ -553,7 +706,7 @@ export default function AssistantWidget({
           setBanner({
             tone: "neutral",
             title: "Не удалось получить ответ",
-            message: data.error ?? "Попробуйте другой вопрос.",
+            message: data.error ?? data.error_code ?? "Попробуйте другой вопрос.",
           });
         }
         return;
@@ -575,12 +728,16 @@ export default function AssistantWidget({
         isSmalltalk: data.isSmalltalk ?? false,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      if (lastTopicRef.current) {
+        setLastTopicAnswer(assistantMessage);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Ошибка запроса. Попробуйте позже.";
       setError(message);
     } finally {
       setLoading(false);
+      setLoadingTopic(null);
     }
   };
 
@@ -632,6 +789,7 @@ export default function AssistantWidget({
         actions?: AssistantAction[];
         drafts?: AssistantDraft[];
         error?: string;
+        error_code?: string;
         message?: string;
         source?: "faq" | "assistant" | "cache";
         cached?: boolean;
@@ -639,7 +797,11 @@ export default function AssistantWidget({
         suggestedKnowledge?: Array<{ slug: string; title: string; category?: string; reason?: string }>;
         suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
       }>(response);
-      if (!response.ok || !data.ok) {
+      const hasApiError = Boolean(data.error || data.error_code);
+      if (!response.ok || !data.ok || hasApiError) {
+        if (hasApiError && !response.ok) {
+          // keep below handlers
+        }
         if (response.status === 403) {
           const lockedText =
             isAuthenticated === true
@@ -665,7 +827,7 @@ export default function AssistantWidget({
             title: "Лимит исчерпан",
             message: "Лимит исчерпан. Справка доступна.",
           });
-        } else if (response.status >= 500) {
+        } else if (response.status >= 500 || hasApiError) {
           setLastStatus(500);
           setBanner({
             tone: "neutral",
@@ -701,29 +863,31 @@ export default function AssistantWidget({
         suggestedTemplates: data.suggestedTemplates,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      if (lastTopicRef.current) {
+        setLastTopicAnswer(assistantMessage);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Ошибка запроса. Попробуйте позже.";
       setError(message);
     } finally {
       setLoading(false);
+      setLoadingTopic(null);
     }
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!requireAuth()) return;
+    setActiveTab("ai");
     await sendMessage(message);
     setMessage("");
   };
 
   const handleQuickSend = async (prompt: string, topicLabel?: string) => {
     if (loading) return;
-    if (topicLabel) {
-      setLoadingTopic(topicLabel);
-    } else {
-      setLoadingTopic("тема");
-    }
+    setLoadingTopic(topicLabel ?? "тема");
+    setLastTopicAnswer(null);
     lastTopicRef.current = topicLabel ?? prompt;
     setMessage(prompt);
     await sendMessage(prompt);
@@ -735,6 +899,7 @@ export default function AssistantWidget({
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       if (!requireAuth()) return;
+      setActiveTab("ai");
       void sendMessage(message);
       setMessage("");
     }
@@ -800,6 +965,7 @@ export default function AssistantWidget({
       : isVerified === true
         ? "Персонально: вкл"
         : "Персонально: после подтверждения";
+  const showStatusLine = userRole === "admin" || userRole === "board";
   const statusLine = `Режим: ${roleLabel} · ${personalStatus}`;
   const inputPlaceholder = "Спросите про оплату, доступ, документы…";
   const canInsertDraft =
@@ -817,7 +983,8 @@ export default function AssistantWidget({
   const contactEmail = OFFICIAL_CHANNELS.email || PUBLIC_CONTENT_DEFAULTS.contacts.email;
   const contactPhone = PUBLIC_CONTENT_DEFAULTS.contacts.phone;
   const contactTelegram = OFFICIAL_CHANNELS.telegram || PUBLIC_CONTENT_DEFAULTS.contacts.telegram;
-  const contactVk = OFFICIAL_CHANNELS.vk || PUBLIC_CONTENT_DEFAULTS.contacts.vk;
+  const isFakePhone =
+    !contactPhone || /0000000/.test(contactPhone) || /\+7\s*\(000\)/.test(contactPhone);
   const lastAssistantId = useMemo(() => {
     const last = [...messages].reverse().find((item) => item.role === "assistant");
     return last?.id ?? null;
@@ -845,11 +1012,6 @@ export default function AssistantWidget({
     const threshold = 24;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
   };
-
-  const lastPromptWordCount = lastPrompt
-    ? lastPrompt.trim().split(/\s+/).filter(Boolean).length
-    : 0;
-  const isShortPrompt = lastPromptWordCount > 0 && lastPromptWordCount <= 6;
 
   const startResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -895,6 +1057,27 @@ export default function AssistantWidget({
     [clampHeight, clampWidth, isMobileWidth, sizeStorageKey, viewState, widgetSize],
   );
 
+  const startScaleDrag = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (isMobileWidth || viewState !== "open") return;
+      scaleSession.current = { startX: event.clientX, startScale: uiScale };
+      const handleMove = (e: MouseEvent) => {
+        if (!scaleSession.current) return;
+        const deltaX = e.clientX - scaleSession.current.startX;
+        const next = clampScale(scaleSession.current.startScale + deltaX * 0.002);
+        setUiScale(next);
+      };
+      const handleUp = () => {
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseup", handleUp);
+        scaleSession.current = null;
+      };
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleUp);
+    },
+    [clampScale, isMobileWidth, uiScale, viewState],
+  );
+
   const minimizedBar = (
     <div className="flex w-[calc(100vw-24px)] max-w-[320px] items-center justify-between rounded-full border border-zinc-200 bg-white px-4 py-2 shadow-lg">
       <span className="text-sm font-semibold text-zinc-900">Помощник</span>
@@ -914,9 +1097,9 @@ export default function AssistantWidget({
         >
           ✕
         </button>
-      </div>
     </div>
-  );
+  </div>
+);
 
   const appliedSize = useMemo(() => {
     if (isMobileWidth) {
@@ -935,11 +1118,25 @@ export default function AssistantWidget({
     >
       <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white px-4 pt-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-zinc-900">
-              Помощник СНТ «Улыбка»
-            </p>
-            <p className="mt-1 text-[11px] text-zinc-500">{statusLine}</p>
+          <div className="flex items-start gap-2">
+            {!isMobileWidth ? (
+              <div
+                role="presentation"
+                onMouseDown={startScaleDrag}
+                className="flex h-8 min-w-[28px] cursor-ew-resize select-none items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-[11px] font-semibold text-zinc-600"
+                title="Тяните, чтобы увеличить или уменьшить масштаб"
+              >
+                ⇆
+              </div>
+            ) : null}
+            <div>
+              <p className="text-sm font-semibold text-zinc-900">
+                Помощник СНТ «Улыбка»
+              </p>
+              {showStatusLine ? (
+                <p className="mt-1 text-[11px] text-zinc-500">{statusLine}</p>
+              ) : null}
+            </div>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <button
@@ -968,47 +1165,21 @@ export default function AssistantWidget({
           </div>
         </div>
         <div className="mt-3 pb-3">
-          <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 p-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveTab("help")}
-              className={`rounded-full px-3 py-1 font-semibold transition ${
-                isHelpTab
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-700"
-              }`}
-            >
-              Быстрые ответы
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("ai");
-              }}
-              title="Задать вопрос"
-              className={`rounded-full px-3 py-1 font-semibold transition ${
-                isAiTab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-              }`}
-            >
-              Задать вопрос
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("contacts")}
-              className={`rounded-full px-3 py-1 font-semibold transition ${
-                isContactsTab
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-700"
-              }`}
-            >
-              Связаться
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-zinc-500">{tabDescription}</p>
+          <TabBar activeTab={activeTab} onChange={setActiveTab} />
+          <p className="mt-2 text-sm text-zinc-600">{tabDescription}</p>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3">
+        <div
+          className="origin-top-left"
+          style={{
+            transform: `scale(${uiScale})`,
+            transformOrigin: "top left",
+            width: `${(1 / uiScale) * 100}%`,
+          }}
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {banner && !isContactsTab ? (
           <div
             className={`mb-3 rounded-xl border px-3 py-2 text-xs ${
@@ -1081,52 +1252,94 @@ export default function AssistantWidget({
         ) : null}
         {isContactsTab ? (
           <div className="mb-3 space-y-3 text-sm text-zinc-700">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3">
-              <p className="text-sm font-semibold text-zinc-900">Контакты правления</p>
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-900">Телефон</div>
-                    <div className="text-xs text-zinc-600">{contactPhone ?? "Уточняется"}</div>
-                  </div>
-                  <a
-                    href={contactPhone ? `tel:${contactPhone}` : "/contacts"}
-                    className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                  >
-                    Позвонить
-                  </a>
+            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-base font-semibold text-zinc-900">Контакты правления</p>
+                  <p className="text-xs text-zinc-600">
+                    Свяжитесь удобным способом или отправьте обращение.
+                  </p>
                 </div>
-                <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-900">Мессенджер</div>
-                    <div className="text-xs text-zinc-600">{contactTelegram ?? "Уточняется"}</div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-900">Телефон</div>
+                      <div className="text-xs text-zinc-600">
+                        {isFakePhone ? "Телефон уточняется" : contactPhone ?? "Телефон уточняется"}
+                      </div>
+                    </div>
+                    {!isFakePhone && contactPhone ? (
+                      <a
+                        href={`tel:${contactPhone}`}
+                        className="flex h-10 items-center rounded-xl bg-[#5E704F] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
+                      >
+                        Позвонить
+                      </a>
+                    ) : null}
                   </div>
-                  <a
-                    href={contactTelegram ? contactTelegram : "/contacts"}
-                    className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                  >
-                    Написать
-                  </a>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-900">Email</div>
-                    <div className="text-xs text-zinc-600">{contactEmail ?? "Уточняется"}</div>
+                  <div className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-900">Мессенджер</div>
+                      <div className="text-xs text-zinc-600">{contactTelegram ?? "Уточняется"}</div>
+                    </div>
+                    <a
+                      href={contactTelegram ? contactTelegram : "/contacts"}
+                      className="flex h-10 items-center rounded-xl border border-[#D7DDCF] bg-white px-4 text-sm font-semibold text-[#5E704F] transition hover:bg-[#F4F6F1]"
+                    >
+                      Написать
+                    </a>
                   </div>
-                  <a
-                    href={contactEmail ? `mailto:${contactEmail}` : "/contacts"}
-                    className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                  >
-                    Написать
-                  </a>
+                  <div className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-900">Email</div>
+                      <div className="text-xs text-zinc-600">{contactEmail ?? "Уточняется"}</div>
+                    </div>
+                    <a
+                      href={contactEmail ? `mailto:${contactEmail}` : "/contacts"}
+                      className="flex h-10 items-center rounded-xl border border-[#D7DDCF] bg-white px-4 text-sm font-semibold text-[#5E704F] transition hover:bg-[#F4F6F1]"
+                    >
+                      Написать
+                    </a>
+                  </div>
+                  <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                    <div className="font-semibold text-zinc-900">Адрес и приём</div>
+                    <div className="mt-1">
+                      Адрес и часы приёма уточняются. Позвоните или напишите — подскажем.
+                    </div>
+                  </div>
+                  {!isGuest && unreadAppeals > 0 ? (
+                    <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-900">Ответы по обращениям</div>
+                        <div className="text-xs text-zinc-700">Новых ответов: {unreadAppeals}</div>
+                      </div>
+                      <a
+                        href="/cabinet/appeals"
+                        className="flex h-10 items-center rounded-xl border border-amber-200 bg-white px-4 text-sm font-semibold text-amber-900 transition hover:border-amber-400"
+                      >
+                        Открыть
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
-                  <div className="font-semibold text-zinc-900">Адрес / приём</div>
-                  <div className="mt-1">Уточняется</div>
-                  <div className="mt-1">Часы приёма: Уточняется</div>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={
+                      isGuest
+                        ? "/login?next=/cabinet/appeals/new"
+                        : `/cabinet/appeals/new${
+                            lastUserPromptRef.current
+                              ? `?prefill=${encodeURIComponent(lastUserPromptRef.current)}`
+                              : ""
+                          }`
+                    }
+                    className="flex h-10 items-center rounded-xl bg-[#5E704F] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
+                  >
+                    Написать в правление
+                  </a>
                   <a
                     href="/contacts"
-                    className="mt-2 inline-flex min-h-[44px] items-center justify-center rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                    className="flex h-10 items-center rounded-xl border border-[#D7DDCF] bg-white px-4 text-sm font-semibold text-[#5E704F] transition hover:bg-[#F4F6F1]"
                   >
                     Открыть контакты на сайте
                   </a>
@@ -1218,298 +1431,304 @@ export default function AssistantWidget({
             ) : null}
           </>
         ) : null}
-        <div
-          ref={listRef}
-          onScroll={handleScroll}
-          className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700"
-        >
-          {messages.length === 0 ? (
-            <div className="flex flex-col gap-3 rounded-lg bg-white/70 p-3 text-xs text-zinc-600">
-              <p>Задайте вопрос — я подскажу, где это на сайте.</p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "Где реквизиты?",
-                  "Как оплатить взносы?",
-                  "Как передать показания?",
-                ].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => handleQuickSend(prompt)}
-                    disabled={loading}
-                    className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 transition hover:border-[#5E704F] hover:text-[#5E704F]"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            messages.map((item) => (
-          <div
-            key={item.id}
-            className="rounded-lg bg-white/80 p-3 animate-assistant-in"
-          >
-            <div className="flex items-center justify-between text-[11px] text-zinc-400">
-              <span>{item.role === "user" ? "Вы" : "Помощник"}</span>
-              {item.role === "assistant" ? (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
-                  {badgeLabel(item)}
-                </span>
-              ) : null}
-            </div>
-            {item.role === "assistant" && item.topicTitle ? (
-              <div className="mt-1 text-[11px] font-semibold text-zinc-600">
-                По теме: {item.topicTitle}
-              </div>
-            ) : null}
-                {item.role === "assistant" && item.facts ? (
-                  (() => {
-                    const statusMap: Record<string, string> = {
-                      pending: "На проверке",
-                      verified: "Подтверждено",
-                      rejected: "Отклонено",
-                      draft: "Черновик",
-                    };
-                    const statusLabel = item.facts.verificationStatus
-                      ? statusMap[item.facts.verificationStatus] ?? item.facts.verificationStatus
-                      : null;
-                    const debt = item.facts.debtSummary;
-                    const debtParts: string[] = [];
-                    if (debt?.membership) debtParts.push("взносы");
-                    if (debt?.electricity) debtParts.push("электроэнергия");
-                    const showDebt = typeof debt?.hasDebt === "boolean";
-                    return (
-                      <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
-                        {statusLabel ? (
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-zinc-700">Статус:</span>
-                            <span>{statusLabel}</span>
-                          </div>
-                        ) : null}
-                        {showDebt ? (
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="font-semibold text-zinc-700">Задолженность:</span>
-                            <span>
-                              {debt?.hasDebt ? "есть" : "нет"}
-                              {debtParts.length > 0 ? ` (${debtParts.join(", ")})` : ""}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })()
-                ) : null}
-                <div className={`mt-2 ${textSize === "large" ? "text-[18px]" : "text-base"} leading-relaxed text-zinc-700`}>
-                  <div
-                    className={
-                      !expandedAnswers.has(item.id) ? "max-h-[12em] overflow-hidden" : ""
-                    }
-                  >
-                    {item.role === "assistant" ? stripSources(item.text) : item.text}
-                  </div>
-                  {item.text.length > 800 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExpandedAnswers((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(item.id)) next.delete(item.id);
-                          else next.add(item.id);
-                          return next;
-                        });
-                      }}
-                      className="mt-2 text-sm font-semibold text-[#5E704F] hover:underline"
-                    >
-                      {expandedAnswers.has(item.id) ? "Свернуть" : "Показать полностью"}
-                    </button>
-                  )}
+        {isHelpTab ? (
+          <div className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700">
+            {lastTopicAnswer ? (
+              <div className="rounded-lg bg-white/80 p-3 animate-assistant-in">
+                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>Помощник</span>
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
+                    По теме
+                  </span>
                 </div>
-                {item.role === "assistant" &&
-                item.id === lastAssistantId &&
-                !item.meta &&
-                !item.isSmalltalk &&
-                (item.text.trim().length === 0 ||
-                  item.text.length < 300 ||
-                  /уточните|что именно|какой вариант/i.test(item.text)) &&
-                (lastStatus ?? 0) < 400 &&
-                !error ? (
-                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                    <p className="font-semibold">Уточните, пожалуйста</p>
-                    <p className="mt-1 text-zinc-600">
-                      Вы про взносы, электроэнергию, долги, документы или доступ?
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {clarificationChips.map((prompt) => (
-                        <button
-                          key={`clarify-${prompt}`}
-                          type="button"
-                          onClick={() => {
-                            if (prompt === "Контакты") {
-                              setActiveTab("contacts");
-                            } else {
-                              handleQuickSend(prompt);
-                            }
-                          }}
-                          disabled={loading}
-                          className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                        >
-                          {prompt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : item.role === "assistant" &&
-                item.id === lastAssistantId &&
-                item.outOfScope &&
-                !item.meta ? (
-                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                    <p className="font-semibold">Я могу помочь и с этим</p>
-                    <p className="mt-1 text-zinc-600">
-                      Я в первую очередь про СНТ и портал. Отвечу кратко и привяжу к контексту СНТ.
-                      Что именно нужно?
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {outOfScopeRedirectChips.map((prompt) => (
-                        <button
-                          key={`out-scope-${prompt}`}
-                          type="button"
-                          onClick={() => {
-                            if (prompt === "Контакты") {
-                              setActiveTab("contacts");
-                            } else {
-                              handleQuickSend(prompt);
-                            }
-                          }}
-                          disabled={loading}
-                          className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                        >
-                          {prompt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : item.role === "assistant" &&
-                item.id === lastAssistantId &&
-                ((lastStatus ?? 0) >= 500 || Boolean(error)) &&
-                !item.meta ? (
-                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                    <p className="font-semibold">Техническая ошибка.</p>
-                    <p className="mt-1 text-zinc-600">Попробуйте ещё раз.</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void retryLastPrompt()}
-                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                      >
-                        Повторить
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("contacts")}
-                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                      >
-                        Контакты
-                      </button>
-                    </div>
-                  </div>
-                ) : item.role === "assistant" &&
-                item.id === lastAssistantId &&
-                (!item.text.trim() ||
-                  item.text.toLowerCase().includes("не удалось найти точный ответ")) &&
-                !item.meta ? (
-                  <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                    <p className="font-semibold">Не удалось найти точный ответ</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("contacts")}
-                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                      >
-                        Написать в правление
-                      </button>
-                      <a
-                        href="/contacts"
-                        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
-                      >
-                        Контакты
-                      </a>
-                    </div>
+                {lastTopicAnswer.topicTitle ? (
+                  <div className="mt-1 text-[11px] font-semibold text-zinc-600">
+                    По теме: {lastTopicAnswer.topicTitle}
                   </div>
                 ) : null}
-                {item.role === "assistant" ? (
-                  <div className="mt-2 space-y-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleCopy(item.id, item.text)}
-              className={`rounded-full border border-zinc-200 bg-zinc-50 px-3 ${
-                textSize === "large" ? "py-2 text-sm" : "py-1 text-xs"
-              } text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100`}
-            >
-              {copiedId === item.id ? "Скопировано" : "📋 Копировать ответ"}
-            </button>
-                      {item.id === lastAssistantId && item.links && item.links.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {item.links.map((link) => (
-                            <a
-                              key={`${item.id}-${link.href}`}
-                              href={link.href}
-                              className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                            >
-                              {link.label}
-                            </a>
-                          ))}
-                        </div>
+                <div
+                  className={`mt-2 ${textSize === "large" ? "text-[18px]" : "text-base"} leading-relaxed text-zinc-700`}
+                >
+                  {stripSources(lastTopicAnswer.text)}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 rounded-lg bg-white/70 p-3 text-xs text-zinc-600">
+                <p>Выберите тему, чтобы увидеть ответ.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            ref={listRef}
+            onScroll={handleScroll}
+            className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700"
+          >
+            {messages.length === 0 ? (
+              <div className="flex flex-col gap-3 rounded-lg bg-white/70 p-3 text-xs text-zinc-600">
+                <p>Задайте вопрос — я подскажу, где это на сайте.</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "Где реквизиты?",
+                    "Как оплатить взносы?",
+                    "Как передать показания?",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => handleQuickSend(prompt)}
+                      disabled={loading}
+                      className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 transition hover:border-[#5E704F] hover:text-[#5E704F]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              messages.map((item) => {
+                const showFacts = item.role === "assistant" && item.facts;
+                const isLastAssistant = item.role === "assistant" && item.id === lastAssistantId;
+                const shouldClarify =
+                  item.role === "assistant" &&
+                  isLastAssistant &&
+                  !item.meta &&
+                  !item.isSmalltalk &&
+                  ((item.text.trim().length === 0 ||
+                    (item.text.length < 250 &&
+                      !/(1\\)|1\\.|шаг|перейдите|сделайте|✅/i.test(item.text))) ||
+                    /уточните|что именно|какой вариант/i.test(item.text)) &&
+                  (lastStatus ?? 0) < 400 &&
+                  !error;
+                const shouldOutOfScope =
+                  item.role === "assistant" &&
+                  isLastAssistant &&
+                  item.outOfScope &&
+                  !item.meta;
+                const shouldError =
+                  item.role === "assistant" &&
+                  isLastAssistant &&
+                  ((lastStatus ?? 0) >= 500 || Boolean(error)) &&
+                  !item.meta;
+                const shouldNoAnswer =
+                  item.role === "assistant" &&
+                  isLastAssistant &&
+                  (!item.text.trim() ||
+                    item.text.toLowerCase().includes("не удалось найти точный ответ")) &&
+                  !item.meta;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="animate-assistant-in rounded-lg bg-white/80 p-3"
+                  >
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                      <span>{item.role === "user" ? "Вы" : "Помощник"}</span>
+                      {item.role === "assistant" ? (
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
+                          {badgeLabel(item)}
+                        </span>
                       ) : null}
-                      {item.id === lastAssistantId && item.actions && item.actions.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {item.actions.slice(0, 1).map((action, actionIndex) => {
-                            const key = `${item.id}-action-${actionIndex}`;
-                            if (action.type === "link" && action.href) {
-                              return (
-                                <a
-                                  key={key}
-                                  href={action.href}
-                                  className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                                >
-                                  {action.label}
-                                </a>
-                              );
-                            }
-                            if (action.type === "copy") {
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => handleCopy(key, action.text)}
-                                  className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                                >
-                                  {copiedId === key ? "Скопировано" : action.label}
-                                </button>
-                              );
-                            }
-                            return null;
-                          })}
-                          {item.actions.length > 1 ? (
+                    </div>
+                    {item.role === "assistant" && item.topicTitle ? (
+                      <div className="mt-1 text-[11px] font-semibold text-zinc-600">
+                        По теме: {item.topicTitle}
+                      </div>
+                    ) : null}
+
+                    {showFacts ? (
+                      (() => {
+                        const statusMap: Record<string, string> = {
+                          pending: "На проверке",
+                          verified: "Подтверждено",
+                          rejected: "Отклонено",
+                          draft: "Черновик",
+                        };
+                        const statusLabel = item.facts?.verificationStatus
+                          ? statusMap[item.facts.verificationStatus] ?? item.facts.verificationStatus
+                          : null;
+                        const debt = item.facts?.debtSummary;
+                        const debtParts: string[] = [];
+                        if (debt?.membership) debtParts.push("взносы");
+                        if (debt?.electricity) debtParts.push("электроэнергия");
+                        const showDebt = typeof debt?.hasDebt === "boolean";
+                        return (
+                          <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
+                            {statusLabel ? (
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-zinc-700">Статус:</span>
+                                <span>{statusLabel}</span>
+                              </div>
+                            ) : null}
+                            {showDebt ? (
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className="font-semibold text-zinc-700">Задолженность:</span>
+                                <span>
+                                  {debt?.hasDebt ? "есть" : "нет"}
+                                  {debtParts.length > 0 ? ` (${debtParts.join(", ")})` : ""}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()
+                    ) : null}
+
+                    <div className={`mt-2 ${textSize === "large" ? "text-[18px]" : "text-base"} leading-relaxed text-zinc-700`}>
+                      <div
+                        className={
+                          !expandedAnswers.has(item.id) ? "max-h-[12em] overflow-hidden" : ""
+                        }
+                      >
+                        {item.role === "assistant" ? stripSources(item.text) : item.text}
+                      </div>
+                      {item.text.length > 800 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedAnswers((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(item.id)) next.delete(item.id);
+                              else next.add(item.id);
+                              return next;
+                            });
+                          }}
+                          className="mt-2 text-sm font-semibold text-[#5E704F] hover:underline"
+                        >
+                          {expandedAnswers.has(item.id) ? "Свернуть" : "Показать полностью"}
+                        </button>
+                      )}
+                    </div>
+
+                    {shouldClarify ? (
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                        <p className="font-semibold">Уточните, пожалуйста</p>
+                        <p className="mt-1 text-zinc-600">
+                          Вы про взносы, электроэнергию, долги, документы или доступ?
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {clarificationChips.map((prompt) => (
                             <button
+                              key={`clarify-${prompt}`}
                               type="button"
                               onClick={() => {
-                                setExpandedActions((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(item.id)) next.delete(item.id);
-                                  else next.add(item.id);
-                                  return next;
-                                });
+                                if (prompt === "Контакты") {
+                                  setActiveTab("contacts");
+                                } else {
+                                  handleQuickSend(prompt);
+                                }
                               }}
-                              className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:border-[#5E704F]"
+                              disabled={loading}
+                              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
                             >
-                              {expandedActions.has(item.id) ? "Скрыть действия" : "Другие действия"}
+                              {prompt}
                             </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {shouldOutOfScope ? (
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                        <p className="font-semibold">Я могу помочь и с этим</p>
+                        <p className="mt-1 text-zinc-600">
+                          Я в первую очередь про СНТ и портал. Отвечу кратко и привяжу к контексту СНТ.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {outOfScopeRedirectChips.map((prompt) => (
+                            <button
+                              key={`out-scope-${prompt}`}
+                              type="button"
+                              onClick={() => {
+                                if (prompt === "Контакты") {
+                                  setActiveTab("contacts");
+                                } else {
+                                  handleQuickSend(prompt);
+                                }
+                              }}
+                              disabled={loading}
+                              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                            >
+                              {prompt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {shouldError ? (
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                        <p className="font-semibold">Техническая ошибка.</p>
+                        <p className="mt-1 text-zinc-600">Попробуйте ещё раз.</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void retryLastPrompt()}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          >
+                            Повторить
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("contacts")}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          >
+                            Контакты
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {shouldNoAnswer ? (
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+                        <p className="font-semibold">Не удалось найти точный ответ</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("contacts")}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          >
+                            Написать в правление
+                          </button>
+                          <a
+                            href="/contacts"
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                          >
+                            Контакты
+                          </a>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {item.role === "assistant" ? (
+                      <div className="mt-2 space-y-2 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(item.id, item.text)}
+                            className={`rounded-full border border-zinc-200 bg-zinc-50 px-3 ${
+                              textSize === "large" ? "py-2 text-sm" : "py-1 text-xs"
+                            } text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100`}
+                          >
+                            {copiedId === item.id ? "Скопировано" : "📋 Копировать ответ"}
+                          </button>
+                          {isLastAssistant && item.links && item.links.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {item.links.map((link) => (
+                                <a
+                                  key={`${item.id}-${link.href}`}
+                                  href={link.href}
+                                  className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                >
+                                  {link.label}
+                                </a>
+                              ))}
+                            </div>
                           ) : null}
-                          {expandedActions.has(item.id)
-                            ? item.actions.slice(1).map((action, idx) => {
-                                const key = `${item.id}-action-extra-${idx}`;
+                          {isLastAssistant && item.actions && item.actions.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {item.actions.slice(0, 1).map((action, actionIndex) => {
+                                const key = `${item.id}-action-${actionIndex}`;
                                 if (action.type === "link" && action.href) {
                                   return (
                                     <a
@@ -1534,209 +1753,256 @@ export default function AssistantWidget({
                                   );
                                 }
                                 return null;
-                              })
-                            : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    {item.id === lastAssistantId &&
-                    item.suggestedKnowledge &&
-                    item.suggestedKnowledge.length > 0 ? (
-                      <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <div className="flex items-center justify-between text-xs font-semibold text-zinc-800">
-                          <span>Материалы</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedSuggestions((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(item.id)) next.delete(item.id);
-                                else next.add(item.id);
-                                return next;
-                              });
-                            }}
-                            className="text-[#5E704F] hover:underline"
-                          >
-                            {expandedSuggestions.has(item.id)
-                              ? "Свернуть"
-                              : `Подробнее (${item.suggestedKnowledge.length} материалов)`}
-                          </button>
-                        </div>
-                        {expandedSuggestions.has(item.id)
-                          ? item.suggestedKnowledge.slice(0, 2).map((sugg) => (
-                              <a
-                                key={`${item.id}-sugg-k-${sugg.slug}`}
-                                href={`/knowledge/${sugg.slug}`}
-                                className="mt-2 inline-flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                              >
-                                <span>{sugg.title}</span>
-                                <span className="text-[10px] text-zinc-500">{sugg.category}</span>
-                              </a>
-                            ))
-                          : null}
-                      </div>
-                    ) : null}
-                    {item.id === lastAssistantId &&
-                    item.suggestedTemplates &&
-                    item.suggestedTemplates.length > 0 ? (
-                      <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <div className="flex items-center justify-between text-xs font-semibold text-zinc-800">
-                          <span>Документы</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedSuggestions((prev) => {
-                                const next = new Set(prev);
-                                const key = `${item.id}-tpl`;
-                                if (next.has(key)) next.delete(key);
-                                else next.add(key);
-                                return next;
-                              });
-                            }}
-                            className="text-[#5E704F] hover:underline"
-                          >
-                            {expandedSuggestions.has(`${item.id}-tpl`)
-                              ? "Свернуть"
-                              : `Документы (${item.suggestedTemplates.length} шаблонов)`}
-                          </button>
-                        </div>
-                        {expandedSuggestions.has(`${item.id}-tpl`)
-                          ? item.suggestedTemplates.slice(0, 2).map((sugg) => {
-                              const href = isGuest
-                                ? `/templates/${sugg.slug}`
-                                : `/cabinet/templates/${sugg.slug}`;
-                              return (
-                                <a
-                                  key={`${item.id}-sugg-t-${sugg.slug}`}
-                                  href={href}
-                                  className="mt-2 inline-flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                              })}
+                              {item.actions.length > 1 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpandedActions((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(item.id)) next.delete(item.id);
+                                      else next.add(item.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:border-[#5E704F]"
                                 >
-                                  <span>{sugg.title}</span>
-                                  <span className="text-[10px] text-zinc-500">Открыть</span>
+                                  {expandedActions.has(item.id) ? "Скрыть действия" : "Другие действия"}
+                                </button>
+                              ) : null}
+                              {expandedActions.has(item.id)
+                                ? item.actions.slice(1).map((action, idx) => {
+                                    const key = `${item.id}-action-extra-${idx}`;
+                                    if (action.type === "link" && action.href) {
+                                      return (
+                                        <a
+                                          key={key}
+                                          href={action.href}
+                                          className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                        >
+                                          {action.label}
+                                        </a>
+                                      );
+                                    }
+                                    if (action.type === "copy") {
+                                      return (
+                                        <button
+                                          key={key}
+                                          type="button"
+                                          onClick={() => handleCopy(key, action.text)}
+                                          className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                        >
+                                          {copiedId === key ? "Скопировано" : action.label}
+                                        </button>
+                                      );
+                                    }
+                                    return null;
+                                  })
+                                : null}
+                            </div>
+                          ) : null}
+                        </div>
+                        {isLastAssistant &&
+                        item.suggestedKnowledge &&
+                        item.suggestedKnowledge.length > 0 ? (
+                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                            <div className="flex items-center justify-between text-sm font-semibold text-zinc-800">
+                              <span className="flex items-center gap-1">📘 Материалы</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedSuggestions((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(item.id)) next.delete(item.id);
+                                    else next.add(item.id);
+                                    return next;
+                                  });
+                                }}
+                                className="flex items-center gap-1 rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F] hover:bg-white"
+                              >
+                                {expandedSuggestions.has(item.id)
+                                  ? "Свернуть ▴"
+                                  : `Подробнее (${item.suggestedKnowledge.length} материалов) ▾`}
+                              </button>
+                            </div>
+                            {expandedSuggestions.has(item.id)
+                              ? item.suggestedKnowledge.slice(0, 2).map((sugg) => (
+                                  <a
+                                    key={`${item.id}-sugg-k-${sugg.slug}`}
+                                    href={`/knowledge/${sugg.slug}`}
+                                    className="mt-2 inline-flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                  >
+                                    <span>{sugg.title}</span>
+                                    <span className="text-[11px] text-zinc-500">{sugg.category}</span>
+                                  </a>
+                                ))
+                              : null}
+                          </div>
+                        ) : null}
+                        {isLastAssistant &&
+                        item.suggestedTemplates &&
+                        item.suggestedTemplates.length > 0 ? (
+                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                            <div className="flex items-center justify-between text-sm font-semibold text-zinc-800">
+                              <span className="flex items-center gap-1">📄 Документы</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedSuggestions((prev) => {
+                                    const next = new Set(prev);
+                                    const key = `${item.id}-tpl`;
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                }}
+                                className="flex items-center gap-1 rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F] hover:bg-white"
+                              >
+                                {expandedSuggestions.has(`${item.id}-tpl`)
+                                  ? "Свернуть ▴"
+                                  : `Документы (${item.suggestedTemplates.length} шаблонов) ▾`}
+                              </button>
+                            </div>
+                            {expandedSuggestions.has(`${item.id}-tpl`)
+                              ? item.suggestedTemplates.slice(0, 2).map((sugg) => {
+                                  const href = isGuest
+                                    ? `/templates/${sugg.slug}`
+                                    : `/cabinet/templates/${sugg.slug}`;
+                                  return (
+                                    <a
+                                      key={`${item.id}-sugg-t-${sugg.slug}`}
+                                      href={href}
+                                      className="mt-2 inline-flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                    >
+                                      <span>{sugg.title}</span>
+                                      <span className="text-[11px] text-zinc-500">Открыть</span>
+                                    </a>
+                                  );
+                                })
+                              : null}
+                          </div>
+                        ) : null}
+                        {item.actions &&
+                        item.actions.some((action) => action.href?.startsWith("/knowledge/")) ? (
+                          <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                            <div className="text-xs font-semibold text-zinc-800">
+                              Материал из базы знаний
+                            </div>
+                            {item.actions
+                              .filter((action) => action.href?.startsWith("/knowledge/"))
+                              .slice(0, 1)
+                              .map((action, idx) => (
+                                <a
+                                  key={`${item.id}-knowledge-${idx}`}
+                                  href={action.href}
+                                  className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
+                                >
+                                  Открыть раздел
                                 </a>
-                              );
-                            })
-                          : null}
+                              ))}
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("contacts")}
+                          className="text-xs font-semibold text-[#5E704F] hover:underline"
+                        >
+                          Не нашли ответ? Связаться
+                        </button>
                       </div>
                     ) : null}
-            {item.actions && item.actions.some((action) => action.href?.startsWith("/knowledge/")) ? (
-              <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <div className="text-xs font-semibold text-zinc-800">
-                  Материал из базы знаний
+
+                    {item.contextCards && item.contextCards.length > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        {item.contextCards.map((card, index) => (
+                          <div
+                            key={`${item.id}-card-${index}`}
+                            className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-700"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-semibold text-zinc-900">{card.title}</p>
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-zinc-600">
+                                {statusLabel(card.status)}
+                              </span>
+                            </div>
+                            <ul className="mt-1 space-y-0.5">
+                              {card.lines.map((line, lineIndex) => (
+                                <li key={`${item.id}-line-${lineIndex}`} className="text-zinc-600">
+                                  {line}
+                                </li>
+                              ))}
+                            </ul>
+                            {card.href ? (
+                              <a
+                                href={card.href}
+                                className="mt-1 inline-block text-[#5E704F] hover:underline"
+                              >
+                                Открыть
+                              </a>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {item.drafts && item.drafts.length > 0 ? (
+                      <div className="mt-2 space-y-2 text-xs">
+                        {item.drafts.map((draft) => {
+                          const key = `${item.id}-draft-${draft.id}`;
+                          return (
+                            <div
+                              key={key}
+                              className="rounded-lg border border-zinc-200 bg-zinc-50 p-2"
+                            >
+                              <p className="font-semibold text-zinc-900">{draft.title}</p>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(key, draft.text)}
+                                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                                >
+                                  {copiedId === key ? "Скопировано" : "Скопировать"}
+                                </button>
+                                {canInsertDraft ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsertDraft(key, draft.text)}
+                                    className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
+                                  >
+                                    {insertedId === key ? "Готово" : "Вставить"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {canInsertDraft ? (
+                          <p className="text-[11px] text-zinc-500">
+                            Черновик появится в разделе должников после вставки.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+            {loading ? (
+              <div className="rounded-xl border border-zinc-200 bg-white p-3">
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+                  🤖 Генерирую ответ…
                 </div>
-                {item.actions
-                  .filter((action) => action.href?.startsWith("/knowledge/"))
-                  .slice(0, 1)
-                  .map((action, idx) => (
-                    <a
-                      key={`${item.id}-knowledge-${idx}`}
-                      href={action.href}
-                      className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
-                    >
-                      Открыть раздел
-                    </a>
-                  ))}
-              </div>
-            ) : null}
-            {item.role === "assistant" && !item.isSmalltalk ? (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("contacts")}
-                  className="text-xs font-semibold text-[#5E704F] hover:underline"
-                >
-                  Не нашли ответ? Связаться
-                </button>
               </div>
             ) : null}
           </div>
-        ) : null}
-                {item.contextCards && item.contextCards.length > 0 ? (
-                  <div className="mt-2 space-y-2">
-                    {item.contextCards.map((card, index) => (
-                      <div
-                        key={`${item.id}-card-${index}`}
-                        className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-700"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-zinc-900">{card.title}</p>
-                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-zinc-600">
-                            {statusLabel(card.status)}
-                          </span>
-                        </div>
-                        <ul className="mt-1 space-y-0.5">
-                          {card.lines.map((line, lineIndex) => (
-                            <li key={`${item.id}-line-${lineIndex}`} className="text-zinc-600">
-                              {line}
-                            </li>
-                          ))}
-                        </ul>
-                        {card.href ? (
-                          <a
-                            href={card.href}
-                            className="mt-1 inline-block text-[#5E704F] hover:underline"
-                          >
-                            Открыть
-                          </a>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {item.drafts && item.drafts.length > 0 ? (
-                  <div className="mt-2 space-y-2 text-xs">
-                    {item.drafts.map((draft) => {
-                      const key = `${item.id}-draft-${draft.id}`;
-                      return (
-                        <div
-                          key={key}
-                          className="rounded-lg border border-zinc-200 bg-zinc-50 p-2"
-                        >
-                          <p className="font-semibold text-zinc-900">{draft.title}</p>
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(key, draft.text)}
-                              className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                            >
-                              {copiedId === key ? "Скопировано" : "Скопировать"}
-                            </button>
-                            {canInsertDraft ? (
-                              <button
-                                type="button"
-                                onClick={() => handleInsertDraft(key, draft.text)}
-                                className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-[#5E704F] hover:border-[#5E704F]"
-                              >
-                                {insertedId === key ? "Готово" : "Вставить"}
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {canInsertDraft ? (
-                      <p className="text-[11px] text-zinc-500">
-                        Черновик появится в разделе должников после вставки.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ))
-          )}
-          {loading ? (
-            <div className="rounded-xl border border-zinc-200 bg-white p-3">
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
-                🤖 Генерирую ответ…
-              </div>
-            </div>
-          ) : null}
+        )}
+        </div>
         </div>
       </div>
 
-        {isAiTab && !(isAiTab && isGuest) && !(isAiTab && !aiEnabled) ? (
-          <div className="sticky bottom-0 bg-white px-4 pb-4 pt-3">
+      {isAiTab && !(isAiTab && isGuest) && !(isAiTab && !aiEnabled) ? (
+        <div className="sticky bottom-0 bg-white px-4 pb-4 pt-3">
           <div className={`flex flex-wrap gap-2 ${chipsExpanded ? "" : "max-h-14 overflow-hidden"}`}>
             {visibleChips.map((prompt) => (
               <button
@@ -1769,13 +2035,16 @@ export default function AssistantWidget({
               className="w-full resize-none rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-[#5E704F]"
               placeholder={inputPlaceholder}
             />
-            <button
-              type="submit"
-              disabled={!message.trim()}
-              className="w-full rounded-lg bg-[#5E704F] px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-6"
-            >
-              {loading ? "Отправляем..." : "Задать вопрос"}
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="submit"
+                disabled={!message.trim()}
+                className="w-full rounded-lg bg-[#5E704F] px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-6"
+              >
+                {loading ? "Отправляем..." : "Задать вопрос"}
+              </button>
+              <span className="text-xs text-zinc-500">Enter — отправить, Shift+Enter — перенос</span>
+            </div>
           </form>
           {error ? (
             <p className="mt-2 text-xs text-zinc-500">{error}</p>
@@ -1816,7 +2085,7 @@ export default function AssistantWidget({
   // - Tabs switch without clearing history.
   return (
     <div className="pointer-events-none fixed bottom-6 right-4 z-50 sm:bottom-4">
-      <div className="pointer-events-auto flex flex-col items-end gap-3">
+      <div ref={rootRef} className="pointer-events-auto flex flex-col items-end gap-3">
         {widgetBody}
         {viewState === "closed" ? (
           <button
