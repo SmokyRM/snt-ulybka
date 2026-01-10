@@ -17,9 +17,13 @@ import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import { OpenAIKeyMissingError, createOpenAIClient } from "@/lib/openai.server";
 import { searchSiteIndex } from "@/lib/ai/siteIndex";
 import { listDocuments } from "@/lib/documentsStore";
-import { listKnowledgeArticles } from "@/lib/knowledgeStore";
+import { getAllArticles } from "@/lib/knowledge";
+import { getAllTemplates } from "@/lib/templates";
 import { DEFAULT_AI_SETTINGS, getAiSettings } from "@/lib/aiSettings";
 import { enforceAiRateLimit, logAiUsage, type AiUsageSource } from "@/lib/aiUsageStore";
+import { getUserOwnershipVerifications, getUserPlots } from "@/lib/plots";
+import { getVerificationStatus } from "@/lib/verificationStatus";
+import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 
 type AssistantBody = {
   message: string;
@@ -69,6 +73,16 @@ type AssistantHint = {
   mode: "guest" | "resident" | "staff";
   verbosity: "short" | "normal" | "long";
 };
+type AssistantFacts = {
+  verificationStatus?: string;
+  plotsCount?: number;
+  debtSummary?: {
+    hasDebt: boolean;
+    membership: boolean;
+    electricity: boolean;
+  };
+  updatedAt?: string;
+};
 
 const normalizeRole = (input?: string | null): Role => {
   if (input === "admin") return "admin";
@@ -117,6 +131,7 @@ type AssistantPayload = {
   contextCards: ContextCard[];
   actions: AssistantAction[];
   drafts: AssistantDraft[];
+  facts?: AssistantFacts | null;
 };
 
 const topicFiles: Record<Topic, string> = {
@@ -219,8 +234,7 @@ const applyAiSettings = (payload: AssistantPayload, settings: typeof DEFAULT_AI_
     next.answer = `${next.answer.trim()}\n\nЕсли нужна детализация, уточните контекст — подскажу шаги.`;
   }
   if (tone === "simple") {
-    const trimmedAnswer = next.answer.trim();
-    next.answer = trimmedAnswer.startsWith("Просто:") ? trimmedAnswer : `Просто: ${trimmedAnswer}`;
+    next.answer = next.answer.trim();
   }
   if (!settings.citations || settings.ai_show_sources === false) {
     next.links = [];
@@ -276,6 +290,14 @@ const applyResponseHints = (payload: AssistantPayload, hint: AssistantHint): Ass
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
+class OpenAIResponseError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 const callOpenAI = async ({
   apiKey,
   system,
@@ -305,7 +327,7 @@ const callOpenAI = async ({
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(text || `OpenAI error ${response.status}`);
+    throw new OpenAIResponseError(response.status, text || `OpenAI error ${response.status}`);
   }
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string | null } }>;
@@ -320,22 +342,135 @@ const callOpenAI = async ({
 const buildSystemPrompt = (context: string) =>
   [
     "Ты официальный помощник СНТ «Улыбка» и сайта.",
-    "Отвечай кратко, по делу, без выдумок и без персональных данных, если они не предоставлены.",
-    "Если вопрос неясный — задай один уточняющий вопрос.",
+    "Отвечай по делу, без выдумок и без персональных данных, если они не предоставлены.",
+    "Если запрос комплексный — разбей ответ на 3–6 подпунктов.",
+    "Структура ответа:",
+    "- Коротко: 1–2 предложения по сути.",
+    "- Подробно по пунктам: маркированный список с шагами/пояснениями.",
+    "- Что сделать сейчас: 3 конкретных шага.",
+    "Если информации недостаточно — задай ровно один уточняющий вопрос.",
+    "Никогда не пиши только «посмотрите раздел» — сначала дай краткий ответ по сути.",
+    "Не добавляй префиксы вроде «Просто:», «Коротко:», «Подробно:» — пиши естественно.",
+    "Не описывай текущую страницу/маршрут (например, /cabinet), если пользователь явно не спросил, что это за страница.",
+    "Не выдумывай суммы/реквизиты. Если вопрос про долги или статус — опирайся на известные факты (без цифр).",
+    "Всегда заканчивай блоком «Материалы» (список или «Материалы: —»).",
     context ? `Контекст:\n${context}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 
+const tokenize = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[^a-zа-я0-9ё]+/i)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+const scoreContent = (tokens: string[], title: string, summary: string, tags: string[] = []) => {
+  if (!tokens.length) return 0;
+  const lowerTitle = title.toLowerCase();
+  const lowerSummary = summary.toLowerCase();
+  const lowerTags = tags.map((t) => t.toLowerCase());
+  let score = 0;
+  tokens.forEach((token) => {
+    if (lowerTitle.includes(token)) score += 3;
+    if (lowerSummary.includes(token)) score += 1;
+    if (lowerTags.includes(token)) score += 2;
+  });
+  return score;
+};
+
+const buildKnowledgeSuggestions = async (message: string) => {
+  let articles = [];
+  try {
+    articles = await getAllArticles();
+  } catch (error) {
+    console.error("[assistant] knowledge fetch failed", error);
+    return [];
+  }
+  const tokens = tokenize(message);
+  const scored = articles
+    .map((article) => {
+      const score = scoreContent(tokens, article.title, article.summary, article.tags);
+      return { article, score };
+    })
+    .filter((item) => item.score >= 3)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2);
+  return scored.map(({ article }) => ({
+    slug: article.slug,
+    title: article.title,
+    category: article.category,
+    reason: "Похоже по теме вопроса",
+  }));
+};
+
+const buildTemplateSuggestions = async (message: string) => {
+  let templates = [];
+  try {
+    templates = await getAllTemplates();
+  } catch (error) {
+    console.error("[assistant] templates fetch failed", error);
+    return [];
+  }
+  const tokens = tokenize(message);
+  const scored = templates
+    .map((tpl) => {
+      const score = scoreContent(tokens, tpl.title, tpl.summary, tpl.tags);
+      return { tpl, score };
+    })
+    .filter((item) => item.score >= 3)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 1);
+  return scored.map(({ tpl }) => ({
+    slug: tpl.slug,
+    title: tpl.title,
+    reason: "Шаблон подходит к вопросу",
+  }));
+};
+
+const buildAssistantFacts = async (userId: string): Promise<AssistantFacts | null> => {
+  if (!userId) return null;
+  try {
+    const [plots, verifications, finance] = await Promise.all([
+      getUserPlots(userId),
+      getUserOwnershipVerifications(userId),
+      getUserFinanceInfo(userId),
+    ]);
+    const { status } = getVerificationStatus(plots, verifications);
+    const membershipDebt = finance.membershipDebt ?? 0;
+    const electricityDebt = finance.electricityDebt ?? 0;
+    const membershipHasDebt = membershipDebt > 0;
+    const electricityHasDebt = electricityDebt > 0;
+    return {
+      verificationStatus: status,
+      plotsCount: plots.length,
+      debtSummary: {
+        hasDebt: membershipHasDebt || electricityHasDebt,
+        membership: membershipHasDebt,
+        electricity: electricityHasDebt,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error("[assistant] facts fetch failed", error);
+    return null;
+  }
+};
+
 const resolveTemperature = (settings: typeof DEFAULT_AI_SETTINGS) =>
   settings.temperature === "medium" ? 0.6 : 0.2;
 
-const isGreeting = (text: string) => {
-  const normalized = text.trim().toLowerCase();
+const isSmalltalk = (text: string) => {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .trim();
   if (!normalized) return false;
   return (
     /\b(привет|здравствуйте|hi|hello)\b/i.test(normalized) ||
-    /\bдобрый\s+(день|вечер)\b/i.test(normalized)
+    /\bдобрый\s+(день|вечер|утро)\b/i.test(normalized) ||
+    /\b(спасибо|спс|ок|окей|понял|ясно|хорошо)\b/i.test(normalized)
   );
 };
 
@@ -362,6 +497,7 @@ const buildRoleActions = (role: Role): AssistantAction[] => {
       { type: "link", label: "Финансы", href: "/cabinet?section=finance" },
       { type: "link", label: "Электроэнергия", href: "/cabinet?section=electricity" },
       { type: "link", label: "Написать обращение", href: "/cabinet?section=appeals" },
+      { type: "link", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   if (role === "board") {
@@ -369,6 +505,7 @@ const buildRoleActions = (role: Role): AssistantAction[] => {
       { type: "link", label: "Финансы (админ)", href: "/admin/billing" },
       { type: "link", label: "Импорт", href: "/admin/imports/plots" },
       { type: "link", label: "Должники", href: "/admin/debts" },
+      { type: "link", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   if (role === "admin" || role === "chair") {
@@ -376,9 +513,36 @@ const buildRoleActions = (role: Role): AssistantAction[] => {
       { type: "link", label: "Финансы (админ)", href: "/admin/billing" },
       { type: "link", label: "Должники", href: "/admin/debts" },
       { type: "link", label: "Настройки ИИ", href: "/admin/ai-usage" },
+      { type: "link", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   return [];
+};
+
+const buildActionsFromFacts = (facts: AssistantFacts | null): AssistantAction[] => {
+  if (!facts) return [];
+  const actions: AssistantAction[] = [];
+  if (facts.verificationStatus === "pending") {
+    actions.push({
+      type: "link",
+      label: "Проверить статус",
+      href: "/cabinet/verification/status?status=pending",
+    });
+  } else if (facts.verificationStatus === "rejected" || facts.verificationStatus === "draft") {
+    actions.push({
+      type: "link",
+      label: "Подтверждение участка",
+      href: "/cabinet/verification",
+    });
+  }
+  if (facts.debtSummary?.hasDebt) {
+    actions.push({
+      type: "link",
+      label: "Оплата и долги",
+      href: "/cabinet/billing",
+    });
+  }
+  return actions;
 };
 
 const buildDocActions = async (
@@ -426,7 +590,7 @@ const buildKnowledgeActions = async (query: string): Promise<AssistantAction[]> 
   if (!trimmed) return [];
   const tokens = trimmed.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return [];
-  const articles = await listKnowledgeArticles();
+  const articles = await getAllArticles();
   const scored = articles
     .map((article) => {
       const haystack = `${article.title} ${article.summary} ${article.category} ${
@@ -835,12 +999,14 @@ const buildDebtDrafts = ({
 };
 
 export async function POST(request: Request) {
+  const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   const requestStart = Date.now();
   let success = false;
   let errorMessage: string | null = null;
   let source: AiUsageSource = "assistant";
   let cachedFlag = false;
   let body: AssistantBody;
+  let facts: AssistantFacts | null = null;
   try {
     body = (await request.json()) as AssistantBody;
   } catch {
@@ -849,13 +1015,32 @@ export async function POST(request: Request) {
   const message = typeof body.message === "string" ? body.message : "";
   const pathHint = body.pageContext?.path ?? null;
   const messageLen = message.trim().length;
+  const smalltalk = isSmalltalk(message);
+  if (!openaiKey) {
+    return NextResponse.json(
+      { error: "OPENAI_KEY_MISSING", hint: "OPENAI_API_KEY is missing" },
+      { status: 500 },
+    );
+  }
+  if (openaiKey.length < 20) {
+    return NextResponse.json(
+      {
+        error: "OPENAI_KEY_INVALID_FORMAT",
+        hint:
+          process.env.NODE_ENV !== "production"
+            ? `OPENAI_API_KEY слишком короткий (len=${openaiKey.length}); проверь .env.local и переменные окружения`
+            : undefined,
+      },
+      { status: 500 },
+    );
+  }
   let openAiKey: string;
   try {
     openAiKey = createOpenAIClient((apiKey) => apiKey);
   } catch (error) {
     if (error instanceof OpenAIKeyMissingError) {
       return NextResponse.json(
-        { error: "OPENAI_API_KEY is missing" },
+        { error: "OPENAI_KEY_MISSING", hint: "OPENAI_API_KEY is missing" },
         { status: 500 },
       );
     }
@@ -867,12 +1052,16 @@ export async function POST(request: Request) {
   let logTopic: string = rawTopic;
   const logOutOfScope = false;
   let logMode: "guest_short" | "verified_clarify" | "staff_checklist" = "guest_short";
+  const suggestedKnowledge = smalltalk ? [] : await buildKnowledgeSuggestions(message);
+  const suggestedTemplates = smalltalk ? [] : await buildTemplateSuggestions(message);
   const faqMatch = matchFaq(message);
   if (faqMatch) {
     const faqUser = await getSessionUser();
     const faqUserId = faqUser?.id ?? "guest";
     const faqRole = faqUser?.role ?? "guest";
     const aiSettings = await getAiSettings().catch(() => DEFAULT_AI_SETTINGS);
+    const faqFacts =
+      faqUser && faqUser.id ? await buildAssistantFacts(faqUser.id) : null;
     const rawHintMode =
       body.hint?.mode === "guest" || body.hint?.mode === "resident" || body.hint?.mode === "staff"
         ? body.hint.mode
@@ -940,11 +1129,13 @@ export async function POST(request: Request) {
       thumb: null,
       error: null,
     });
-    return NextResponse.json({
-      ok: true,
+    return NextResponse.json({ ok: true,
       ...applyAiSettings(hinted, aiSettings),
       source,
       cached: cachedFlag,
+      facts: faqFacts,
+      suggestedKnowledge,
+      suggestedTemplates,
     });
   }
 
@@ -973,6 +1164,9 @@ export async function POST(request: Request) {
           ? "normal"
           : "short";
   const hint: AssistantHint = { mode: hintMode, verbosity: hintVerbosity };
+  if (sessionUser?.id) {
+    facts = await buildAssistantFacts(sessionUser.id);
+  }
 
   if (!assistantEnabled) {
     const usageMode = getUsageMode({ role, isStaff: staffRoles.has(role), allowPersonal: false });
@@ -1002,7 +1196,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (isGreeting(message)) {
+  if (isSmalltalk(message)) {
     const allowPersonal = Boolean(
       flags &&
         isFeatureEnabled(flags, "ai_personal_enabled") &&
@@ -1014,6 +1208,13 @@ export async function POST(request: Request) {
       allowPersonal,
     });
     const greetingActions: AssistantAction[] = [];
+    const generalActions: AssistantAction[] = [
+      { type: "link", label: "Взносы", href: "/fees" },
+      { type: "link", label: "Электроэнергия", href: "/electricity" },
+      { type: "link", label: "Долги", href: "/cabinet/billing" },
+      { type: "link", label: "Документы", href: "/docs" },
+      { type: "link", label: "Доступ", href: "/access" },
+    ];
     if (role === "guest") {
       greetingActions.push(
         { type: "link", label: "Войти", href: "/login" },
@@ -1021,61 +1222,53 @@ export async function POST(request: Request) {
       );
     } else {
       greetingActions.push(
-        { type: "link", label: "Финансы", href: "/cabinet?section=finance" },
+        { type: "link", label: "Финансы", href: "/cabinet/billing" },
         { type: "link", label: "Электроэнергия", href: "/cabinet?section=electricity" },
       );
     }
-    greetingActions.push(
-      { type: "link", label: "Документы", href: "/docs" },
-      { type: "link", label: "Контакты", href: "/contacts" },
-    );
-    const greetingAnswer = await callOpenAI({
-      apiKey: openAiKey,
-      system: buildSystemPrompt(
-        "Сформируй дружелюбное приветствие и кратко перечисли, с чем ты помогаешь (взносы, электроэнергия, документы, обращения).",
-      ),
-      user: message,
-      temperature: resolveTemperature(aiSettings),
-    });
-    const greeting = applyAiSettings(
-      applyResponseHints(
-        {
-          topic: "public-help",
-          answer: greetingAnswer,
-          links: [],
-          contextCards: [],
-          actions: greetingActions,
-          drafts: [],
-        },
-        hint,
-      ),
-      aiSettings,
-    );
+    const safeGreeting =
+      "Привет! Я помогу с взносами, электроэнергией, документами и обращениями. Что нужно подсказать?";
+    const greeting: AssistantPayload = {
+      topic: "public-help",
+      answer: safeGreeting,
+      links: [],
+      contextCards: [],
+      actions: mergeActions(greetingActions, generalActions),
+      drafts: [],
+      facts: null,
+    };
     source = "assistant";
     cachedFlag = false;
     success = true;
-    await logAiUsage({
-      userId,
-      role,
-      source,
-      cached: cachedFlag,
-      ts: new Date().toISOString(),
-      success: true,
-      tokens: null,
-      pathHint,
-      topic: "public-help",
-      mode: usageMode,
-      outOfScope: false,
-      latencyMs: Date.now() - requestStart,
-      messageLen,
-      thumb: null,
-      error: null,
-    });
-    return NextResponse.json({
-      ok: true,
+    try {
+      await logAiUsage({
+        userId,
+        role,
+        source,
+        cached: cachedFlag,
+        ts: new Date().toISOString(),
+        success: true,
+        tokens: null,
+        pathHint,
+        topic: "public-help",
+        mode: usageMode,
+        outOfScope: false,
+        latencyMs: Date.now() - requestStart,
+        messageLen,
+        thumb: null,
+        error: null,
+      });
+    } catch {
+      // ignore logging failures
+    }
+    return NextResponse.json({ ok: true,
       ...greeting,
       cached: cachedFlag,
       source,
+      facts: null,
+      suggestedKnowledge: [],
+      suggestedTemplates: [],
+      isSmalltalk: true,
     });
   }
 
@@ -1111,11 +1304,13 @@ export async function POST(request: Request) {
       thumb: null,
       error: null,
     });
-    return NextResponse.json({
-      ok: true,
+    return NextResponse.json({ ok: true,
       ...refusal,
       cached: cachedFlag,
       source,
+      facts,
+      suggestedKnowledge,
+      suggestedTemplates,
     });
   }
 
@@ -1183,11 +1378,13 @@ export async function POST(request: Request) {
       cachedFlag = true;
       success = true;
       logTopic = cached.topic;
-      return NextResponse.json({
-        ok: true,
+      return NextResponse.json({ ok: true,
         ...applyAiSettings(applyResponseHints(cached, hint), aiSettings),
         cached: cachedFlag,
         source,
+        suggestedKnowledge,
+        suggestedTemplates,
+        facts: cached.facts ?? facts,
       });
     }
 
@@ -1279,6 +1476,9 @@ export async function POST(request: Request) {
       user: userPrompt,
       temperature: resolveTemperature(aiSettings),
     });
+    if (!answer.trim()) {
+      answer = "Я на связи. Уточните, пожалуйста, вопрос.";
+    }
 
     const messagePreview = message.slice(0, 120);
 
@@ -1309,40 +1509,65 @@ export async function POST(request: Request) {
       href: item.href,
     }));
     const roleActions = isNavQuery || isShortHint ? buildRoleActions(role) : [];
+    const factsActions = buildActionsFromFacts(facts);
     const combinedActions = mergeActions(
       mergeActions(
-        mergeActions(knowledgeActions, docActions),
-        navigationActions,
+        mergeActions(
+          mergeActions(knowledgeActions, docActions),
+          navigationActions,
+        ),
+        roleActions,
       ),
-      roleActions,
+      factsActions,
     );
-    const payload: AssistantPayload = applyAiSettings(
-      applyResponseHints(
-        {
-          topic,
-          answer: trimAnswer(answer),
-          links,
-          contextCards,
-          actions: mergeActions(actions, combinedActions),
-          drafts,
-        },
-        hint,
+    const payload: AssistantPayload = {
+      ...applyAiSettings(
+        applyResponseHints(
+          {
+            topic,
+            answer: trimAnswer(answer),
+            links,
+            contextCards,
+            actions: mergeActions(actions, combinedActions),
+            drafts,
+          },
+          hint,
+        ),
+        aiSettings,
       ),
-      aiSettings,
-    );
+      facts,
+    };
     await cacheSet(cacheKey, payload);
     source = "assistant";
     cachedFlag = false;
-    return NextResponse.json({
-      ok: true,
+    return NextResponse.json({ ok: true,
       ...payload,
       cached: cachedFlag,
       source,
+      suggestedKnowledge,
+      suggestedTemplates,
+      facts,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    errorMessage = message;
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    const safeMessage = error instanceof Error ? error.message : "Unknown error";
+    errorMessage = safeMessage;
+    console.error("assistant route error", error);
+    let code = "assistant_failed";
+    let status = 500;
+    if (error instanceof OpenAIResponseError) {
+      if (error.status === 401) code = "OPENAI_401";
+      else if (error.status === 429) {
+        code = "OPENAI_429";
+        status = 429;
+      } else {
+        code = "OPENAI_ERROR";
+        status = 502;
+      }
+      if (error.status === 401) {
+        status = 401;
+      }
+    }
+    return NextResponse.json({ error: code, hint: safeMessage }, { status });
   } finally {
     await logAiUsage({
       userId,

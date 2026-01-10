@@ -25,6 +25,7 @@ import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { getVerificationStatus } from "@/lib/verificationStatus";
 import CopyToClipboard from "@/components/CopyToClipboard";
+import { redirectToCabinetStep } from "@/lib/cabinetRedirect";
 
 const logCabinetError = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown error";
@@ -175,6 +176,8 @@ export default async function CabinetPage({
     const view = store.get("admin_view")?.value || "admin";
     if (view !== "user") redirect("/admin");
   }
+
+  await redirectToCabinetStep(user.id ?? "");
 
   const nowIso = new Date().toISOString();
   const dataErrors: string[] = [];

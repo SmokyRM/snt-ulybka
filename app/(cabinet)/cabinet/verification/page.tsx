@@ -29,6 +29,10 @@ export default async function VerificationPage() {
     verificationsSent === 0 &&
     verificationsApproved === 0;
 
+  if ((status as string) === "verified") {
+    redirect("/cabinet");
+  }
+
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-2xl space-y-6">

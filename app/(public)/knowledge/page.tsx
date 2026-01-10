@@ -1,5 +1,5 @@
 import KnowledgeIndex from "@/components/knowledge/KnowledgeIndex";
-import { listKnowledgeArticles } from "@/lib/knowledgeStore";
+import { getAllArticles } from "@/lib/knowledge";
 
 export const metadata = {
   title: "База знаний — СНТ «Улыбка»",
@@ -10,7 +10,7 @@ export const metadata = {
 };
 
 export default async function KnowledgePage() {
-  const articles = (await listKnowledgeArticles()).filter((item) => item.published !== false);
+  const articles = await getAllArticles();
   const categories = Array.from(
     new Set(articles.map((item) => item.category)),
   );

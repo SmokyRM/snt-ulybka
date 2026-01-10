@@ -2,27 +2,27 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { KnowledgeArticle } from "@/lib/knowledge";
+import type { Template } from "@/lib/templates";
 
 type Props = {
-  articles: KnowledgeArticle[];
+  templates: Template[];
   categories: string[];
 };
 
-export default function KnowledgeIndex({ articles, categories }: Props) {
+export default function TemplatesIndex({ templates, categories }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Все");
 
   const filtered = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
-    return articles.filter((item) => {
-      const matchesCategory = category === "Все" || item.category === category;
-      if (!matchesCategory) return false;
+    return templates.filter((item) => {
+      const matchCat = category === "Все" || item.category === category;
+      if (!matchCat) return false;
       if (!trimmed) return true;
       const haystack = `${item.title} ${item.summary} ${item.tags.join(" ")}`.toLowerCase();
       return haystack.includes(trimmed);
     });
-  }, [articles, category, query]);
+  }, [templates, category, query]);
 
   return (
     <div className="space-y-6">
@@ -32,7 +32,7 @@ export default function KnowledgeIndex({ articles, categories }: Props) {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Например: доступ, взносы, показания"
+            placeholder="Например: справка, обращение"
             className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm"
           />
         </label>
@@ -61,7 +61,7 @@ export default function KnowledgeIndex({ articles, categories }: Props) {
           {filtered.map((item) => (
             <Link
               key={item.slug}
-              href={`/knowledge/${item.slug}`}
+              href={`/templates/${item.slug}`}
               className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-[#5E704F]/40 hover:shadow-md"
             >
               <div className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">
@@ -71,7 +71,10 @@ export default function KnowledgeIndex({ articles, categories }: Props) {
               <p className="mt-1 text-sm text-zinc-600">{item.summary}</p>
               <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-500">
                 {item.tags.map((tag) => (
-                  <span key={`${item.slug}-${tag}`} className="rounded-full border border-zinc-200 px-2 py-0.5">
+                  <span
+                    key={`${item.slug}-${tag}`}
+                    className="rounded-full border border-zinc-200 px-2 py-0.5"
+                  >
                     {tag}
                   </span>
                 ))}

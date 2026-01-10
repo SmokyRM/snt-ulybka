@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 import { listDocuments } from "@/lib/documentsStore";
-import { getKnowledgeArticle } from "@/lib/knowledgeStore";
+import { getArticleBySlug } from "@/lib/knowledge";
 
 type Params = {
   params: { slug: string };
@@ -59,8 +59,8 @@ export default async function KnowledgeArticlePage({ params }: Params) {
     user?.role === "admin" || user?.role === "board" || user?.role === "user"
       ? user.role
       : "guest";
-  const article = await getKnowledgeArticle(params.slug);
-  if (!article || article.published === false) notFound();
+  const article = await getArticleBySlug(params.slug);
+  if (!article) notFound();
   const allDocs = await listDocuments();
   const availableDocs = allDocs.filter(
     (doc) => article.documentSlugs.includes(doc.slug) && doc.audience.includes(role),
