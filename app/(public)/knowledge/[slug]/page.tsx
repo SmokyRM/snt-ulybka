@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 import { listDocuments } from "@/lib/documentsStore";
 import { getArticleBySlug } from "@/lib/knowledge";
@@ -59,15 +58,50 @@ export default async function KnowledgeArticlePage({ params }: Params) {
     user?.role === "admin" || user?.role === "board" || user?.role === "user"
       ? user.role
       : "guest";
-  const article = await getArticleBySlug(params.slug);
-  if (!article) notFound();
-  const allDocs = await listDocuments();
+  let article = null;
+  try {
+    article = await getArticleBySlug(params.slug);
+  } catch (error) {
+    console.error("[knowledge] article load failed", error);
+  }
+  let allDocs: Awaited<ReturnType<typeof listDocuments>> = [];
+  try {
+    allDocs = await listDocuments();
+  } catch (error) {
+    console.error("[knowledge] documents load failed", error);
+  }
+
+  if (!article) {
+    return (
+      <main
+        className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6"
+        data-testid="knowledge-article-fallback"
+      >
+        <div className="mx-auto w-full max-w-3xl space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 shadow-sm">
+          <div className="text-lg font-semibold text-zinc-900">Статья временно недоступна</div>
+          <p>Не удалось открыть материал. Попробуйте позже или вернитесь к списку.</p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link href="/knowledge" className="rounded-full border border-zinc-200 px-4 py-2 text-[#5E704F]">
+              ← К списку статей
+            </Link>
+            <Link href="/" className="rounded-full border border-zinc-200 px-4 py-2 text-[#5E704F]">
+              На главную
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const availableDocs = allDocs.filter(
     (doc) => article.documentSlugs.includes(doc.slug) && doc.audience.includes(role),
   );
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
+    <main
+      className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6"
+      data-testid="knowledge-article-root"
+    >
       <div className="mx-auto w-full max-w-3xl space-y-6">
         <nav className="text-xs text-zinc-500">
           <Link href="/knowledge" className="hover:text-[#5E704F] hover:underline">

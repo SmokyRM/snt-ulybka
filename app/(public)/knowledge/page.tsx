@@ -10,13 +10,21 @@ export const metadata = {
 };
 
 export default async function KnowledgePage() {
-  const articles = await getAllArticles();
+  let articles: Awaited<ReturnType<typeof getAllArticles>> = [];
+  try {
+    articles = await getAllArticles();
+  } catch (error) {
+    console.error("[knowledge] list load failed", error);
+  }
   const categories = Array.from(
     new Set(articles.map((item) => item.category)),
   );
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
+    <main
+      className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6"
+      data-testid="knowledge-root"
+    >
       <div className="mx-auto w-full max-w-5xl space-y-8">
         <header className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">

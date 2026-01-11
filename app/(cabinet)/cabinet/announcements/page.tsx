@@ -16,10 +16,18 @@ export default async function AnnouncementsPage() {
     redirect("/login?next=/cabinet/announcements");
   }
   const { hasDebt } = await getCabinetContext(session.id ?? "");
-  const items = await listPublishedForAudience(hasDebt);
+  let items: Awaited<ReturnType<typeof listPublishedForAudience>> = [];
+  try {
+    items = await listPublishedForAudience(hasDebt);
+  } catch (error) {
+    console.error("[cabinet/announcements] failed to load", error);
+  }
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
+    <main
+      className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6"
+      data-testid="cabinet-announcements-root"
+    >
       <div className="mx-auto w-full max-w-4xl space-y-6">
         <header className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">Объявления</p>
@@ -30,7 +38,10 @@ export default async function AnnouncementsPage() {
         </header>
 
         {items.length === 0 ? (
-          <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div
+            className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
+            data-testid="cabinet-announcements-empty"
+          >
             <div className="text-base font-semibold text-zinc-900">Пока нет объявлений</div>
             <p className="text-sm text-zinc-700">Свежие новости публикуем в официальных каналах:</p>
             <div className="flex flex-wrap gap-2 text-sm font-semibold text-[#5E704F]">

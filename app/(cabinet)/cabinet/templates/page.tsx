@@ -39,7 +39,10 @@ export default async function TemplatesPage() {
   }));
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
+    <main
+      className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6"
+      data-testid="cabinet-templates-root"
+    >
       <div className="mx-auto w-full max-w-4xl space-y-6">
         <header className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-[#5E704F]">

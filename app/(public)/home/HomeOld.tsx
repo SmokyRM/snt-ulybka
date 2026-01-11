@@ -30,12 +30,14 @@ export default function HomeOld({ content }: HomeOldProps) {
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
+              data-testid="home-cta-login"
               href="/login"
               className="rounded-full bg-[#5E704F] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
             >
               Войти
             </Link>
             <Link
+              data-testid="home-cta-get-access"
               href="#get-access"
               className="rounded-full border border-[#5E704F] px-6 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#eef2eb]"
             >
