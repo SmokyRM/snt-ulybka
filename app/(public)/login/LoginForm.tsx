@@ -94,7 +94,12 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           После входа вернём вас на страницу: <span className="font-semibold">{sanitizedNext}</span>
         </p>
       )}
-      <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
+      <form
+        className="mt-6 space-y-4"
+        onSubmit={handleSubmit}
+        noValidate
+        data-testid="login-form"
+      >
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-800">Код доступа</label>
           <input
@@ -135,7 +140,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         >
           {loading ? "Вход..." : "Войти"}
         </button>
-        <div className="min-h-[76px]">
+        <div className="min-h-[76px]" data-testid="login-error-block">
           {error && (
             <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
               <div>{error}</div>

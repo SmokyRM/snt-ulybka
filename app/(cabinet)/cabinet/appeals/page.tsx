@@ -35,7 +35,10 @@ export default async function AppealsPage({ searchParams }: Props) {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6">
+    <main
+      className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6"
+      data-testid="cabinet-appeals-root"
+    >
       <div className="mx-auto w-full max-w-4xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -83,6 +86,7 @@ export default async function AppealsPage({ searchParams }: Props) {
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/cabinet/appeals/new"
+                data-testid="cabinet-appeals-empty-cta"
                 className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
               >
                 Создать обращение

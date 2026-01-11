@@ -41,7 +41,10 @@ export default async function NewAppealPage({ searchParams }: Props) {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6">
+    <main
+      className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6"
+      data-testid="cabinet-appeals-new-form"
+    >
       <div className="mx-auto w-full max-w-3xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
