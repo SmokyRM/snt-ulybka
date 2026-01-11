@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { isAdminPath, isUserPath } from "@/config/routesAccess";
 
 const SESSION_COOKIE = "snt_session";
+const QA_COOKIE = "qaScenario";
 
 type SessionRole = "user" | "admin" | "board" | "accountant" | "operator";
 
@@ -32,7 +33,25 @@ export function middleware(request: NextRequest) {
     const { pathname, search } = request.nextUrl;
     const isApiAdmin = pathname.startsWith("/api/admin");
     const { role, hasSession } = readSessionRole(request);
+    const isDev = process.env.NODE_ENV !== "production";
+    const qaParam = isDev ? request.nextUrl.searchParams.get("qa") : null;
+    const allowedQa =
+      qaParam === "guest" || qaParam === "resident_ok" || qaParam === "resident_debtor" || qaParam === "admin";
 
+    const response = NextResponse.next();
+    if (isDev && (allowedQa || qaParam === "clear")) {
+      if (qaParam === "clear") {
+        response.cookies.set(QA_COOKIE, "", { path: "/", maxAge: 0 });
+      } else if (qaParam) {
+        response.cookies.set(QA_COOKIE, qaParam, {
+          path: "/",
+          httpOnly: false,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 60 * 60 * 24 * 7,
+        });
+      }
+    }
     if (isAdminPath(pathname) || isApiAdmin) {
       if (process.env.NODE_ENV !== "production") {
         console.log(`[middleware] admin guard role=${role ?? "none"} path=${pathname}`);
@@ -70,7 +89,7 @@ export function middleware(request: NextRequest) {
       }
     }
 
-    return NextResponse.next();
+    return response;
   } catch (error) {
     console.error("proxy error", error);
     return NextResponse.next();

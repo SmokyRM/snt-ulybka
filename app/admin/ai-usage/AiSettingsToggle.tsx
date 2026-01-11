@@ -124,55 +124,57 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
 
   return (
     <div className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-      <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-        <h3 className="text-sm font-semibold text-zinc-900">Виджет на сайте</h3>
-        <SettingRow
-          title="Показывать виджет «Помощник» на публичных страницах"
-          description="Показывает или скрывает кнопку помощника на публичных страницах."
-          control={
-            <button
-              type="button"
-              onClick={() => applyUpdate({ ai_widget_enabled: !widgetEnabled })}
-              disabled={pending}
-              className={toggleClass(widgetEnabled)}
-            >
-              <span>{widgetEnabled ? "Включен" : "Выключен"}</span>
-              <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
-                <span
-                  className={`h-3 w-3 rounded-full transition ${
-                    widgetEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
-                  }`}
-                />
-              </span>
-            </button>
-          }
-        />
-      </section>
+      <div className="grid gap-4 md:grid-cols-2">
+        <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          <h3 className="text-sm font-semibold text-zinc-900">Виджет на сайте</h3>
+          <SettingRow
+            title="Показывать виджет «Помощник» на публичных страницах"
+            description="Показывает или скрывает кнопку помощника на публичных страницах."
+            control={
+              <button
+                type="button"
+                onClick={() => applyUpdate({ ai_widget_enabled: !widgetEnabled })}
+                disabled={pending}
+                className={toggleClass(widgetEnabled)}
+              >
+                <span>{widgetEnabled ? "Включен" : "Выключен"}</span>
+                <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
+                  <span
+                    className={`h-3 w-3 rounded-full transition ${
+                      widgetEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
+                    }`}
+                  />
+                </span>
+              </button>
+            }
+          />
+        </section>
 
-      <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-        <h3 className="text-sm font-semibold text-zinc-900">Персональные ответы</h3>
-        <SettingRow
-          title="Расширенный ИИ (личные данные жителей)"
-          description="Даёт доступ к данным по участку только пользователям со статусом verified."
-          control={
-            <button
-              type="button"
-              onClick={() => applyUpdate({ ai_personal_enabled: !personalEnabled })}
-              disabled={pending}
-              className={toggleClass(personalEnabled)}
-            >
-              <span>{personalEnabled ? "Включен" : "Выключен"}</span>
-              <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
-                <span
-                  className={`h-3 w-3 rounded-full transition ${
-                    personalEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
-                  }`}
-                />
-              </span>
-            </button>
-          }
-        />
-      </section>
+        <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          <h3 className="text-sm font-semibold text-zinc-900">Персональные ответы</h3>
+          <SettingRow
+            title="Расширенный ИИ (личные данные жителей)"
+            description="Даёт доступ к данным по участку только пользователям со статусом verified."
+            control={
+              <button
+                type="button"
+                onClick={() => applyUpdate({ ai_personal_enabled: !personalEnabled })}
+                disabled={pending}
+                className={toggleClass(personalEnabled)}
+              >
+                <span>{personalEnabled ? "Включен" : "Выключен"}</span>
+                <span className="inline-flex h-4 w-7 items-center rounded-full bg-white/70 p-0.5">
+                  <span
+                    className={`h-3 w-3 rounded-full transition ${
+                      personalEnabled ? "translate-x-3 bg-emerald-500" : "translate-x-0 bg-zinc-400"
+                    }`}
+                  />
+                </span>
+              </button>
+            }
+          />
+        </section>
+      </div>
 
       <section className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
         <div className="flex items-center justify-between gap-3">

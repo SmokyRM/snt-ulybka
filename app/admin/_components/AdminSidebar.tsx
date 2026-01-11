@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAdminDirty } from "../AdminDirtyProvider";
 import { useAdminNavigationProgress } from "../AdminNavigationProgress";
 import { sidebarStore, type SidebarState } from "./sidebarStore";
+import { qaEnabled } from "@/lib/qaScenario";
 
 const baseSections = [
   {
@@ -211,10 +212,11 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
     })
     .filter((section) => section.links.length > 0);
 
-  if (isDev && isAdmin) {
+  if (qaEnabled() && (role === "admin" || role === "board")) {
     sections[0].links.push({
-      href: "/admin/dev/seed",
-      label: "Тестовые данные",
+      href: "/admin/qa",
+      label: "QA",
+      hint: "dev",
     });
   }
 

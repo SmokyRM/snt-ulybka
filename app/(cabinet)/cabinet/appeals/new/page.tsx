@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { APPEAL_TOPICS, checkAppealRateLimit, createAppeal } from "@/lib/appeals";
 import { getSessionUser } from "@/lib/session.server";
+import NewAppealFormClient from "../NewAppealFormClient";
 
 type Props = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -54,57 +55,28 @@ export default async function NewAppealPage({ searchParams }: Props) {
             ← Мои обращения
           </Link>
         </div>
+        <div className="flex flex-wrap gap-2 text-sm font-semibold text-[#5E704F]">
+          <Link href="/cabinet" className="hover:underline">
+            ← В кабинет
+          </Link>
+          <Link href="/" className="hover:underline">
+            На главную
+          </Link>
+        </div>
 
-        <form action={createAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          {error ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {error === "rate"
-                ? "Слишком много обращений. Попробуйте позже."
-                : error === "validation"
-                  ? "Сообщение должно быть от 10 до 4000 символов."
-                  : error === "topic"
-                    ? "Выберите допустимую тему."
-                    : "Не удалось отправить обращение."}
-            </div>
-          ) : null}
-          <label className="block text-sm font-semibold text-zinc-800">
-            Тема
-            <select
-              name="topic"
-              className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
-              defaultValue={APPEAL_TOPICS[0]}
-              required
-            >
-              {APPEAL_TOPICS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-semibold text-zinc-800">
-            Сообщение
-            <textarea
-              name="message"
-              defaultValue={prefill}
-              rows={6}
-              className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
-              placeholder="Кратко опишите вопрос. Если есть срок или сумма — укажите."
-              required
-            />
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              className="rounded-full bg-[#5E704F] px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
-            >
-              Отправить обращение
-            </button>
-            <p className="text-xs text-zinc-500">
-              Ответ придёт в личный кабинет. Мы не публикуем обращения.
-            </p>
+        {error ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {error === "rate"
+              ? "Слишком много обращений. Попробуйте позже."
+              : error === "validation"
+                ? "Сообщение должно быть от 10 до 4000 символов."
+                : error === "topic"
+                  ? "Выберите допустимую тему."
+                  : "Не удалось отправить обращение."}
           </div>
-        </form>
+        ) : null}
+
+        <NewAppealFormClient action={createAction} prefill={prefill} topics={APPEAL_TOPICS} />
       </div>
     </main>
   );

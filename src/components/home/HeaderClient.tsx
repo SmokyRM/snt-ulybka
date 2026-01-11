@@ -15,7 +15,6 @@ type HeaderClientProps = {
 };
 
 const navItems = [
-  { label: "Новости", href: "/news" },
   { label: "База знаний", href: "/knowledge" },
   { label: "Документы", href: "/documents" },
   { label: "Электроэнергия", href: "/electricity" },
@@ -240,16 +239,12 @@ export function HeaderClient({
                     ) : null}
                   </div>
                   <hr className="my-2 border-zinc-100" />
-                  <div
-                    className="px-2 pb-1"
-                    onMouseDown={() => setAccountOpen(false)}
-                    onClick={() => setAccountOpen(false)}
-                    role="menuitem"
-                  >
+                  <div className="px-2 pb-1" role="menuitem">
                     <LogoutButton
                       redirectTo="/"
                       className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-50"
                       busyLabel="Выходим..."
+                      onAfterLogout={() => setAccountOpen(false)}
                     />
                   </div>
                 </div>,

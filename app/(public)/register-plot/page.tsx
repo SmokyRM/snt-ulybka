@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { getSessionClient } from "@/lib/session";
 
@@ -131,6 +132,14 @@ export default function RegisterPlotPage() {
           Укажите данные участка и свои контакты. После проверки администратор
           подтвердит доступ.
         </p>
+        <div className="mt-3 flex flex-wrap gap-3 text-sm font-semibold text-[#5E704F]">
+          <Link href="/cabinet" className="hover:underline">
+            ← В кабинет
+          </Link>
+          <Link href="/" className="hover:underline">
+            На главную
+          </Link>
+        </div>
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -190,10 +199,13 @@ export default function RegisterPlotPage() {
               <input
                 name="phone"
                 required
+                minLength={5}
                 value={form.phone}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
+                placeholder="+7 900 000-00-00"
               />
+              <p className="text-xs text-zinc-500">Укажите номер, чтобы мы смогли связаться. Минимум 5 символов.</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-800">

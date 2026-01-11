@@ -9,6 +9,7 @@ type LogoutButtonProps = {
   redirectTo?: string;
   label?: string;
   busyLabel?: string;
+  onAfterLogout?: () => void;
 };
 
 export const LogoutButton = ({
@@ -16,6 +17,7 @@ export const LogoutButton = ({
   redirectTo = "/",
   label = "Выйти",
   busyLabel = "Выходим...",
+  onAfterLogout,
 }: LogoutButtonProps) => {
   const router = useAppRouter();
   const { stop } = useRouteLoader();
@@ -32,6 +34,7 @@ export const LogoutButton = ({
       stop();
       router.replace(redirectTo);
       router.refresh();
+      onAfterLogout?.();
       setLoading(false);
     }
   };

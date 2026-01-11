@@ -5,7 +5,7 @@ import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
 import { RetryButton } from "./RetryButton";
 import { startTestScenario } from "./impersonationActions";
-import AnalyticsBlockClient from "./AnalyticsBlockClient";
+import AnalyticsBlockClient from "@/components/admin/AnalyticsBlockClient";
 import type { ReactNode } from "react";
 import { getAdminDashboardData, type DashboardData } from "@/lib/adminDashboard";
 import { getCollectionsAnalytics, type CollectionPoint } from "@/lib/analytics";
@@ -46,8 +46,6 @@ export default async function AdminDashboard() {
   if (!hasAdminAccess(user)) {
     redirect("/login?next=/admin");
   }
-  const showTestScenarios = process.env.NODE_ENV !== "production" && hasAdminAccess(user);
-
   const dashboardBlock = await loadBlock<DashboardData>("dashboard", async () => getAdminDashboardData());
   const analyticsBlock = await loadBlock("analytics", async () => getAnalyticsPoints());
   const homeViewsBlock = await loadBlock("home_views", getHomeViews);
@@ -94,44 +92,6 @@ export default async function AdminDashboard() {
               <RetryButton />
             </div>
           ))}
-        </div>
-      )}
-
-      {showTestScenarios && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
-          <div className="font-semibold text-emerald-900">Тестовые сценарии</div>
-          <p className="mt-1 text-xs text-emerald-700">
-            Создаёт/обновляет тестовые данные, не влияет на реальные записи.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <form action={startTestScenario}>
-              <input type="hidden" name="scenario" value="empty" />
-              <button
-                type="submit"
-                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
-              >
-                Открыть кабинет: первый вход
-              </button>
-            </form>
-            <form action={startTestScenario}>
-              <input type="hidden" name="scenario" value="pending" />
-              <button
-                type="submit"
-                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
-              >
-                Профиль заполнен, членство не подтверждено
-              </button>
-            </form>
-            <form action={startTestScenario}>
-              <input type="hidden" name="scenario" value="verified" />
-              <button
-                type="submit"
-                className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold text-emerald-800 hover:border-emerald-400"
-              >
-                Подтверждено + участок привязан
-              </button>
-            </form>
-          </div>
         </div>
       )}
 

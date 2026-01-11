@@ -75,8 +75,31 @@ export default async function AppealsPage({ searchParams }: Props) {
         ) : null}
 
         {appeals.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
-            Обращений пока нет. Нажмите «Новое обращение», чтобы написать правлению.
+          <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm">
+            <div className="text-base font-semibold text-zinc-900">Обращений пока нет</div>
+            <p className="text-zinc-700">
+              Напишите вопрос правлению, если что-то непонятно. Ответ придёт сюда.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/cabinet/appeals/new"
+                className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
+              >
+                Создать обращение
+              </Link>
+              <Link
+                href="/cabinet"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+              >
+                В кабинет
+              </Link>
+              <Link
+                href="/"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+              >
+                На главную
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

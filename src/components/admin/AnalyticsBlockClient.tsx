@@ -10,7 +10,11 @@ type AnalyticsPoint = {
 };
 
 function Placeholder() {
-  return <div className="rounded border border-dashed border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">Нет данных</div>;
+  return (
+    <div className="rounded border border-dashed border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+      Нет данных
+    </div>
+  );
 }
 
 export default function AnalyticsBlockClient({ points }: { points: AnalyticsPoint[] }) {

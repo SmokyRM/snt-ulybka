@@ -173,14 +173,11 @@ export default function AssistantWidget({
   const [loadingTopic, setLoadingTopic] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [insertedId, setInsertedId] = useState<string | null>(null);
-  const [chipsExpanded, setChipsExpanded] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(true);
   const [aiStyle, setAiStyle] = useState<"short" | "normal" | "detailed">("normal");
   const [aiShowSources, setAiShowSources] = useState(false);
   const [widgetSize, setWidgetSize] = useState<{ width: number; height: number } | null>(null);
   const [isMobileWidth, setIsMobileWidth] = useState(false);
   const [onboardingSeen, setOnboardingSeen] = useState<boolean>(false);
-  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
   const [expandedAnswers, setExpandedAnswers] = useState<Set<string>>(new Set());
   const [helpExpanded, setHelpExpanded] = useState(false);
@@ -201,7 +198,6 @@ export default function AssistantWidget({
   const lastHintModeRef = useRef<"guest" | "resident" | "staff">("guest");
   const historyKey =
     variant === "admin" ? "assistant.history.admin" : "assistant.history.public";
-  const aiEnabledKey = "assistant_ai_enabled";
   const aiStyleKey = "assistant_ai_style";
   const aiSourcesKey = "assistant_ai_sources";
   const sizeStorageKey = "assistantWidgetSize:v1";
@@ -219,19 +215,6 @@ export default function AssistantWidget({
     startScale: number;
   } | null>(null);
 
-  const aiExampleChips = useMemo(
-    () => [
-      "Где реквизиты?",
-      "Как оплатить взносы?",
-      "Как передать показания?",
-      "Как получить доступ?",
-      "Как подать обращение?",
-    ],
-    [],
-  );
-  const primaryChips = aiExampleChips.slice(0, 4);
-  const visibleChips = chipsExpanded ? aiExampleChips : primaryChips;
-  const hasMoreChips = aiExampleChips.length > primaryChips.length;
   const helpTiles = useMemo(
     () => [
       { label: "Доступ", prompt: "Как получить доступ?" },
@@ -301,25 +284,20 @@ export default function AssistantWidget({
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (aiSettingsLoadedRef.current) return;
-    const rawEnabled = window.localStorage.getItem(aiEnabledKey);
     const rawStyle = window.localStorage.getItem(aiStyleKey);
     const rawSources = window.localStorage.getItem(aiSourcesKey);
-    const nextEnabled =
-      rawEnabled === "true" ? true : rawEnabled === "false" ? false : true;
     const nextStyle =
       rawStyle === "short" || rawStyle === "normal" || rawStyle === "detailed"
         ? rawStyle
         : "normal";
     const nextSources =
       rawSources === "true" ? true : rawSources === "false" ? false : false;
-    setAiEnabled(nextEnabled);
     setAiStyle(nextStyle);
     setAiShowSources(nextSources);
-    window.localStorage.setItem(aiEnabledKey, String(nextEnabled));
     window.localStorage.setItem(aiStyleKey, nextStyle);
     window.localStorage.setItem(aiSourcesKey, String(nextSources));
     aiSettingsLoadedRef.current = true;
-  }, [aiEnabledKey, aiSourcesKey, aiStyleKey]);
+  }, [aiSourcesKey, aiStyleKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -493,10 +471,9 @@ export default function AssistantWidget({
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!aiSettingsLoadedRef.current) return;
-    window.localStorage.setItem(aiEnabledKey, String(aiEnabled));
     window.localStorage.setItem(aiStyleKey, aiStyle);
     window.localStorage.setItem(aiSourcesKey, String(aiShowSources));
-  }, [aiEnabled, aiEnabledKey, aiShowSources, aiSourcesKey, aiStyle, aiStyleKey]);
+  }, [aiShowSources, aiSourcesKey, aiStyle, aiStyleKey]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -563,7 +540,6 @@ export default function AssistantWidget({
     setLoading(false);
     setCopiedId(null);
     setInsertedId(null);
-    setChipsExpanded(false);
     setActiveTab("help");
     setLastPrompt(null);
     setLoadingTopic(null);
@@ -610,13 +586,14 @@ export default function AssistantWidget({
     if (!listRef.current) return;
     const last = messages[messages.length - 1];
     if (!last || last.role !== "assistant") return;
-    if (!atBottomRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
-    setChipsExpanded(false);
-  }, [activeTab]);
+    if (!listRef.current) return;
+    if (!lastTopicAnswer) return;
+    listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [lastTopicAnswer]);
 
   const requireAuth = () => true;
 
@@ -626,10 +603,7 @@ export default function AssistantWidget({
     const hintMode = lastHintModeRef.current;
     const hintVerbosity =
       hintMode === "staff" ? "long" : hintMode === "resident" ? "normal" : "short";
-    const aiPayload =
-      isAiTab && aiEnabled
-        ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources }
-        : {};
+  const aiPayload = isAiTab ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources } : {};
     setLoading(true);
     setError(null);
     setBanner(null);
@@ -758,10 +732,7 @@ export default function AssistantWidget({
       variant === "admin" ? "staff" : isVerified ? "resident" : "guest";
     const hintVerbosity =
       variant === "admin" ? "long" : isVerified ? "normal" : "short";
-    const aiPayload =
-      isAiTab && aiEnabled
-        ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources }
-        : {};
+    const aiPayload = isAiTab ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources } : {};
     lastUserPromptRef.current = trimmed;
     lastHintModeRef.current = hintMode;
     setLoading(true);
@@ -965,9 +936,11 @@ export default function AssistantWidget({
       : isVerified === true
         ? "Персонально: вкл"
         : "Персонально: после подтверждения";
-  const showStatusLine = userRole === "admin" || userRole === "board";
+  const showStatusLine = userRole === "admin" || process.env.NODE_ENV !== "production";
   const statusLine = `Режим: ${roleLabel} · ${personalStatus}`;
-  const inputPlaceholder = "Спросите про оплату, доступ, документы…";
+  const inputPlaceholder = isAiTab
+    ? "Напишите вопрос (Enter — отправить, Shift+Enter — перенос)"
+    : "Спросите про оплату, доступ, документы…";
   const canInsertDraft =
     variant === "admin" && pathname.startsWith("/admin/notifications/debtors");
   const tabDescription = isHelpTab
@@ -983,8 +956,14 @@ export default function AssistantWidget({
   const contactEmail = OFFICIAL_CHANNELS.email || PUBLIC_CONTENT_DEFAULTS.contacts.email;
   const contactPhone = PUBLIC_CONTENT_DEFAULTS.contacts.phone;
   const contactTelegram = OFFICIAL_CHANNELS.telegram || PUBLIC_CONTENT_DEFAULTS.contacts.telegram;
-  const isFakePhone =
-    !contactPhone || /0000000/.test(contactPhone) || /\+7\s*\(000\)/.test(contactPhone);
+  const isFakePhone = (() => {
+    if (!contactPhone) return true;
+    const digits = contactPhone.replace(/\D+/g, "");
+    if (!digits) return true;
+    if (/^0+$/.test(digits)) return true;
+    if (/0000000/.test(contactPhone) || /\+7\s*\(000\)/.test(contactPhone)) return true;
+    return false;
+  })();
   const lastAssistantId = useMemo(() => {
     const last = [...messages].reverse().find((item) => item.role === "assistant");
     return last?.id ?? null;
@@ -1117,18 +1096,27 @@ export default function AssistantWidget({
       style={appliedSize}
     >
       <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white px-4 pt-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2">
-            {!isMobileWidth ? (
-              <div
-                role="presentation"
-                onMouseDown={startScaleDrag}
-                className="flex h-8 min-w-[28px] cursor-ew-resize select-none items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-[11px] font-semibold text-zinc-600"
-                title="Тяните, чтобы увеличить или уменьшить масштаб"
-              >
-                ⇆
-              </div>
-            ) : null}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              {!isMobileWidth ? (
+                <div
+                  role="presentation"
+                  onMouseDown={startScaleDrag}
+                  className="flex h-8 w-8 cursor-ew-resize select-none items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-[10px] font-semibold text-zinc-600 shadow-inner"
+                  title="Тяните, чтобы увеличить или уменьшить масштаб"
+                  aria-label="Управление масштабом"
+                >
+                  <span
+                    className="block h-6 w-6"
+                    style={{
+                      backgroundImage:
+                        "repeating-linear-gradient(135deg, #d4d4d8 0, #d4d4d8 2px, transparent 2px, transparent 4px)",
+                      backgroundPosition: "center",
+                      backgroundRepeat: "no-repeat",
+                    }}
+                  />
+                </div>
+              ) : null}
             <div>
               <p className="text-sm font-semibold text-zinc-900">
                 Помощник СНТ «Улыбка»
@@ -1351,17 +1339,29 @@ export default function AssistantWidget({
         {isHelpTab ? (
           <div className="mb-3 space-y-3 text-sm text-zinc-700">
             <div className="grid grid-cols-2 gap-2">
-              {helpPrimary.map((tile) => (
-                <button
-                  key={tile.label}
-                  type="button"
-                  onClick={() => handleQuickSend(tile.prompt, tile.label)}
-                  disabled={loading}
-                  className="min-h-[44px] rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-left text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {tile.label}
-                </button>
-              ))}
+              {helpPrimary.map((tile) => {
+                const isTileLoading = loading && loadingTopic === tile.label;
+                return (
+                  <button
+                    key={tile.label}
+                    type="button"
+                    onClick={() => handleQuickSend(tile.prompt, tile.label)}
+                    disabled={loading}
+                    className={`min-h-[44px] rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
+                      isTileLoading
+                        ? "border-[#5E704F] bg-[#5E704F]/5 text-[#5E704F]"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-[#5E704F] hover:text-[#5E704F]"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      {tile.label}
+                      {isTileLoading ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#5E704F]/60 border-t-transparent" />
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             {helpMore.length > 0 ? (
               <div className="space-y-2">
@@ -1374,17 +1374,29 @@ export default function AssistantWidget({
                 </button>
                 {helpExpanded ? (
                   <div className="grid grid-cols-2 gap-2">
-                    {helpMore.map((tile) => (
-                      <button
-                        key={tile.label}
-                        type="button"
-                        onClick={() => handleQuickSend(tile.prompt, tile.label)}
-                        disabled={loading}
-                        className="min-h-[44px] rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-left text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {tile.label}
-                      </button>
-                    ))}
+                    {helpMore.map((tile) => {
+                      const isTileLoading = loading && loadingTopic === tile.label;
+                      return (
+                        <button
+                          key={tile.label}
+                          type="button"
+                          onClick={() => handleQuickSend(tile.prompt, tile.label)}
+                          disabled={loading}
+                          className={`min-h-[44px] rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
+                            isTileLoading
+                              ? "border-[#5E704F] bg-[#5E704F]/5 text-[#5E704F]"
+                              : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-[#5E704F] hover:text-[#5E704F]"
+                          } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            {tile.label}
+                            {isTileLoading ? (
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#5E704F]/60 border-t-transparent" />
+                            ) : null}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -1393,20 +1405,7 @@ export default function AssistantWidget({
         ) : null}
         {!isContactsTab && !isHelpTab ? (
           <>
-            {!aiEnabled ? (
-              <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-                <p>Помощник выключен. Включите, чтобы задавать вопросы.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAiEnabled(true)}
-                    className="rounded-full bg-[#5E704F] px-3 py-1 text-xs font-semibold text-white"
-                  >
-                    Включить помощника
-                  </button>
-                </div>
-              </div>
-            ) : isAiTab && isGuest ? (
+            {isAiTab && isGuest ? (
               <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                 <p>
                   Помощник отвечает на общие вопросы по СНТ и сайту. Персональные ответы по участку — после
@@ -1805,101 +1804,36 @@ export default function AssistantWidget({
                         {isLastAssistant &&
                         item.suggestedKnowledge &&
                         item.suggestedKnowledge.length > 0 ? (
-                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                            <div className="flex items-center justify-between text-sm font-semibold text-zinc-800">
-                              <span className="flex items-center gap-1">📘 Материалы</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpandedSuggestions((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(item.id)) next.delete(item.id);
-                                    else next.add(item.id);
-                                    return next;
-                                  });
-                                }}
-                                className="flex items-center gap-1 rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F] hover:bg-white"
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {item.suggestedKnowledge.slice(0, 3).map((sugg) => (
+                              <a
+                                key={`${item.id}-sugg-k-${sugg.slug}`}
+                                href={`/knowledge/${sugg.slug}`}
+                                className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
                               >
-                                {expandedSuggestions.has(item.id)
-                                  ? "Свернуть ▴"
-                                  : `Подробнее (${item.suggestedKnowledge.length} материалов) ▾`}
-                              </button>
-                            </div>
-                            {expandedSuggestions.has(item.id)
-                              ? item.suggestedKnowledge.slice(0, 2).map((sugg) => (
-                                  <a
-                                    key={`${item.id}-sugg-k-${sugg.slug}`}
-                                    href={`/knowledge/${sugg.slug}`}
-                                    className="mt-2 inline-flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                                  >
-                                    <span>{sugg.title}</span>
-                                    <span className="text-[11px] text-zinc-500">{sugg.category}</span>
-                                  </a>
-                                ))
-                              : null}
+                                {sugg.title}
+                              </a>
+                            ))}
                           </div>
                         ) : null}
                         {isLastAssistant &&
                         item.suggestedTemplates &&
                         item.suggestedTemplates.length > 0 ? (
-                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                            <div className="flex items-center justify-between text-sm font-semibold text-zinc-800">
-                              <span className="flex items-center gap-1">📄 Документы</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpandedSuggestions((prev) => {
-                                    const next = new Set(prev);
-                                    const key = `${item.id}-tpl`;
-                                    if (next.has(key)) next.delete(key);
-                                    else next.add(key);
-                                    return next;
-                                  });
-                                }}
-                                className="flex items-center gap-1 rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F] hover:bg-white"
-                              >
-                                {expandedSuggestions.has(`${item.id}-tpl`)
-                                  ? "Свернуть ▴"
-                                  : `Документы (${item.suggestedTemplates.length} шаблонов) ▾`}
-                              </button>
-                            </div>
-                            {expandedSuggestions.has(`${item.id}-tpl`)
-                              ? item.suggestedTemplates.slice(0, 2).map((sugg) => {
-                                  const href = isGuest
-                                    ? `/templates/${sugg.slug}`
-                                    : `/cabinet/templates/${sugg.slug}`;
-                                  return (
-                                    <a
-                                      key={`${item.id}-sugg-t-${sugg.slug}`}
-                                      href={href}
-                                      className="mt-2 inline-flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                                    >
-                                      <span>{sugg.title}</span>
-                                      <span className="text-[11px] text-zinc-500">Открыть</span>
-                                    </a>
-                                  );
-                                })
-                              : null}
-                          </div>
-                        ) : null}
-                        {item.actions &&
-                        item.actions.some((action) => action.href?.startsWith("/knowledge/")) ? (
-                          <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-                            <div className="text-xs font-semibold text-zinc-800">
-                              Материал из базы знаний
-                            </div>
-                            {item.actions
-                              .filter((action) => action.href?.startsWith("/knowledge/"))
-                              .slice(0, 1)
-                              .map((action, idx) => (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {item.suggestedTemplates.slice(0, 2).map((sugg) => {
+                              const href = isGuest
+                                ? `/templates/${sugg.slug}`
+                                : `/cabinet/templates/${sugg.slug}`;
+                              return (
                                 <a
-                                  key={`${item.id}-knowledge-${idx}`}
-                                  href={action.href}
-                                  className="rounded-full border border-[#5E704F] px-3 py-1 text-xs font-semibold text-[#5E704F] hover:bg-[#5E704F]/10"
+                                  key={`${item.id}-sugg-t-${sugg.slug}`}
+                                  href={href}
+                                  className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
                                 >
-                                  Открыть раздел
+                                  {sugg.title}
                                 </a>
-                              ))}
+                              );
+                            })}
                           </div>
                         ) : null}
                         <button
@@ -2001,30 +1935,8 @@ export default function AssistantWidget({
         </div>
       </div>
 
-      {isAiTab && !(isAiTab && isGuest) && !(isAiTab && !aiEnabled) ? (
+      {isAiTab && !(isAiTab && isGuest) ? (
         <div className="sticky bottom-0 bg-white px-4 pb-4 pt-3">
-          <div className={`flex flex-wrap gap-2 ${chipsExpanded ? "" : "max-h-14 overflow-hidden"}`}>
-            {visibleChips.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => handleQuickSend(prompt)}
-                disabled={loading}
-                className="min-h-[44px] rounded-full border border-zinc-200 px-4 py-2 text-sm text-zinc-700 transition hover:border-[#5E704F] hover:text-[#5E704F] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {prompt}
-              </button>
-            ))}
-            {hasMoreChips ? (
-              <button
-                type="button"
-                onClick={() => setChipsExpanded((prev) => !prev)}
-                className="min-h-[44px] rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[#5E704F] hover:text-[#5E704F]"
-              >
-                {chipsExpanded ? "Скрыть" : "Ещё темы"}
-              </button>
-            ) : null}
-          </div>
           <form onSubmit={handleSubmit} className="mt-3 space-y-3">
             <textarea
               ref={inputRef}

@@ -11,7 +11,7 @@ export default function Footer() {
         )}, ${new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(
           updatedSource,
         )}`
-      : "—";
+      : null;
   return (
     <footer className="border-t border-[#5E704F]/15 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 text-sm text-zinc-600 sm:px-6">
@@ -23,12 +23,14 @@ export default function Footer() {
             <div className="text-xs text-zinc-600">
               © {year} Официальный сайт СНТ «Улыбка», г. Снежинск
             </div>
-            <Link
-              href="/updates"
-              className="text-xs text-zinc-500 transition hover:text-zinc-600 hover:underline"
-            >
-              Обновлено: {updatedLabel}
-            </Link>
+            {updatedLabel ? (
+              <Link
+                href="/updates"
+                className="text-xs text-zinc-500 transition hover:text-zinc-600 hover:underline"
+              >
+                Обновлено: {updatedLabel}
+              </Link>
+            ) : null}
           </div>
           <div className="space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">

@@ -120,32 +120,46 @@ export type TemplateContext = {
   fullName: string;
   plotNumbers: string;
   cadastralNumbers: string;
+  plotNumber: string;
   phone: string;
   email: string;
   date: string;
+  today: string;
+  sntName: string;
 };
 
 export const getTemplateContext = (): TemplateContext => {
-  const today = new Date().toISOString().slice(0, 10);
+  const iso = new Date();
+  const today = iso.toISOString().slice(0, 10);
+  const formatted =
+    iso instanceof Date && !Number.isNaN(iso.getTime())
+      ? new Intl.DateTimeFormat("ru-RU").format(iso)
+      : today;
   return {
     fullName: fallback,
     plotNumbers: fallback,
     cadastralNumbers: fallback,
+    plotNumber: fallback,
     phone: fallback,
     email: fallback,
-    date: today,
+    date: formatted,
+    today: formatted,
+    sntName: "СНТ «Улыбка»",
   };
 };
 
 export const renderTemplate = (content: string): string => {
-  const today = new Date().toISOString().slice(0, 10);
+  const ctx = getTemplateContext();
   return content
-    .replace(/{{\s*fullName\s*}}/g, fallback)
-    .replace(/{{\s*plotNumbers\s*}}/g, fallback)
-    .replace(/{{\s*cadastralNumbers\s*}}/g, fallback)
-    .replace(/{{\s*phone\s*}}/g, fallback)
-    .replace(/{{\s*email\s*}}/g, fallback)
-    .replace(/{{\s*date\s*}}/g, today);
+    .replace(/{{\s*fullName\s*}}/g, ctx.fullName)
+    .replace(/{{\s*plotNumbers\s*}}/g, ctx.plotNumbers)
+    .replace(/{{\s*plotNumber\s*}}/g, ctx.plotNumber)
+    .replace(/{{\s*cadastralNumbers\s*}}/g, ctx.cadastralNumbers)
+    .replace(/{{\s*phone\s*}}/g, ctx.phone)
+    .replace(/{{\s*email\s*}}/g, ctx.email)
+    .replace(/{{\s*date\s*}}/g, ctx.date)
+    .replace(/{{\s*today\s*}}/g, ctx.today)
+    .replace(/{{\s*sntName\s*}}/g, ctx.sntName);
 };
 
 export const fillTemplate = (content: string, ctx?: Partial<TemplateContext>) => {
@@ -154,18 +168,32 @@ export const fillTemplate = (content: string, ctx?: Partial<TemplateContext>) =>
         fullName: ctx.fullName ?? fallback,
         plotNumbers: ctx.plotNumbers ?? fallback,
         cadastralNumbers: ctx.cadastralNumbers ?? fallback,
+        plotNumber: ctx.plotNumber ?? fallback,
         phone: ctx.phone ?? fallback,
         email: ctx.email ?? fallback,
-        date: ctx.date ?? new Date().toISOString().slice(0, 10),
+        date:
+          ctx.date ??
+          new Intl.DateTimeFormat("ru-RU").format(
+            new Date(ctx.today ?? new Date().toISOString().slice(0, 10)),
+          ),
+        today:
+          ctx.today ??
+          new Intl.DateTimeFormat("ru-RU").format(
+            new Date(ctx.date ?? new Date().toISOString().slice(0, 10)),
+          ),
+        sntName: ctx.sntName ?? "СНТ «Улыбка»",
       }
     : getTemplateContext();
   return content
     .replace(/{{\s*fullName\s*}}/g, base.fullName)
     .replace(/{{\s*plotNumbers\s*}}/g, base.plotNumbers)
+    .replace(/{{\s*plotNumber\s*}}/g, base.plotNumber)
     .replace(/{{\s*cadastralNumbers\s*}}/g, base.cadastralNumbers)
     .replace(/{{\s*phone\s*}}/g, base.phone)
     .replace(/{{\s*email\s*}}/g, base.email)
-    .replace(/{{\s*date\s*}}/g, base.date);
+    .replace(/{{\s*date\s*}}/g, base.date)
+    .replace(/{{\s*today\s*}}/g, base.today)
+    .replace(/{{\s*sntName\s*}}/g, base.sntName);
 };
 
 type PlotLite = { plotId?: string; plotNumber?: string | null; displayName?: string | null; cadastral?: string | null };
@@ -175,8 +203,9 @@ export const buildTemplateContext = (
   profile: ProfileLite | null,
   plots: PlotLite[],
   plotId?: string | null,
-): TemplateContext => {
+  ): TemplateContext => {
   const today = new Date().toISOString().slice(0, 10);
+  const firstPlot = plots.find((p) => (plotId && plotId !== "all" ? p.plotId === plotId : true));
   const targetPlots =
     plotId && plotId !== "all"
       ? plots.filter((p) => p.plotId === plotId)
@@ -195,6 +224,12 @@ export const buildTemplateContext = (
     email: profile?.email || fallback,
     plotNumbers: plotNumbers || fallback,
     cadastralNumbers: cadastralNumbers || fallback,
+    plotNumber:
+      (plotId && plotId !== "all"
+        ? targetPlots[0]?.plotNumber || targetPlots[0]?.displayName
+        : firstPlot?.plotNumber || firstPlot?.displayName) || fallback,
     date: today,
+    today: new Intl.DateTimeFormat("ru-RU").format(new Date(today)),
+    sntName: "СНТ «Улыбка»",
   };
 };
