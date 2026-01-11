@@ -5,6 +5,13 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    files: ["app/(cabinet)/cabinet/page.tsx"],
+    rules: {
+      "no-shadow": ["error", { builtinGlobals: false, hoist: "functions" }],
+      "no-redeclare": "error",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

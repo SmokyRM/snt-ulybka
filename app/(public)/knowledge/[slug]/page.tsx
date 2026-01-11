@@ -69,12 +69,19 @@ export default async function KnowledgeArticlePage({ params }: Params) {
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-3xl space-y-6">
-        <div className="text-xs text-zinc-500">
+        <nav className="text-xs text-zinc-500">
           <Link href="/knowledge" className="hover:text-[#5E704F] hover:underline">
             База знаний
           </Link>{" "}
-          → {article.title}
-        </div>
+          →{" "}
+          <Link
+            href={`/knowledge?category=${encodeURIComponent(article.category)}`}
+            className="hover:text-[#5E704F] hover:underline"
+          >
+            {article.category}
+          </Link>{" "}
+          → <span className="text-zinc-700">{article.title}</span>
+        </nav>
 
         <header className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">
@@ -90,6 +97,12 @@ export default async function KnowledgeArticlePage({ params }: Params) {
         <article className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           {renderContent(article.content)}
         </article>
+        <Link
+          href="/knowledge"
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:border-[#5E704F]"
+        >
+          ← К списку статей
+        </Link>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-zinc-900">Документы по теме</h2>

@@ -87,12 +87,6 @@ export default function AboutPage() {
               Документы
             </AppLink>
             <AppLink
-              href="/news"
-              className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
-            >
-              Новости
-            </AppLink>
-            <AppLink
               href="/access"
               className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
             >

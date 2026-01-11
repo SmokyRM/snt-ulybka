@@ -23,7 +23,7 @@ export default function HomeOld({ content }: HomeOldProps) {
       <section className="mx-auto w-full max-w-5xl space-y-12 px-4 sm:space-y-[72px] sm:px-6">
         <div className="rounded-3xl border border-[#5E704F]/20 bg-white/90 p-6 shadow-sm sm:p-10">
           <h1 className="text-3xl font-semibold leading-tight text-zinc-900 sm:text-4xl">
-            Личный кабинет жителей СНТ «Улыбка»
+            Кабинет жителя СНТ «Улыбка»
           </h1>
           <p className="mt-3 max-w-3xl text-base text-zinc-700">
             Участок, взносы и электроэнергия — всё в одном месте.
@@ -35,13 +35,13 @@ export default function HomeOld({ content }: HomeOldProps) {
             >
               Войти
             </Link>
+            <Link
+              href="#get-access"
+              className="rounded-full border border-[#5E704F] px-6 py-2.5 text-sm font-semibold text-[#5E704F] transition-colors hover:bg-[#eef2eb]"
+            >
+              Как получить доступ
+            </Link>
           </div>
-          <Link
-            href="#get-access"
-            className="mt-3 inline-block text-sm font-semibold text-[#5E704F] underline"
-          >
-            Впервые? → Как получить доступ
-          </Link>
         </div>
 
         <section className="space-y-6">
@@ -49,6 +49,9 @@ export default function HomeOld({ content }: HomeOldProps) {
             <h2 className="text-lg font-semibold text-zinc-900">Зачем нужна регистрация</h2>
             <p className="mt-1 text-xs text-zinc-600">
               Чтобы все данные по участку были под рукой — без звонков и бумажек.
+            </p>
+            <p className="mt-1 text-xs text-zinc-700">
+              Доступ могут получить собственники и арендаторы участков СНТ «Улыбка».
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
@@ -84,9 +87,8 @@ export default function HomeOld({ content }: HomeOldProps) {
             <h2 className="text-lg font-semibold text-zinc-900">Как получить доступ</h2>
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-zinc-700">
               <li>Нажмите «Войти» и укажите email или телефон.</li>
-              <li>Укажите участок (пример: «Берёзовая, 12» или кадастровый номер).</li>
-              <li>Прикрепите документ, если попросим (выписка/договор).</li>
-              <li>Правление проверит заявку за 1–2 дня — после этого откроется доступ.</li>
+              <li>Укажите участок или кадастровый номер, если он есть.</li>
+              <li>Правление проверит заявку за 1–2 дня и откроет доступ.</li>
             </ol>
             <p className="mt-3 text-xs text-zinc-600">
               Нет кода или не знаете номер участка?{" "}

@@ -9,6 +9,7 @@ import AdminNavigationProgressProvider from "./AdminNavigationProgress";
 import AdminViewAsUserButton from "./AdminViewAsUserButton";
 import AssistantWidget from "@/components/AssistantWidget";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
+import QaFloatingIndicator from "./_components/QaFloatingIndicator";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -77,6 +78,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             aiPersonalEnabled={flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false}
           />
         ) : null}
+        <QaFloatingIndicator role={user?.role ?? null} />
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>
   );

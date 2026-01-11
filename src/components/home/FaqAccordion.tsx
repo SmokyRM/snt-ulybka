@@ -8,7 +8,7 @@ type Props = {
 };
 
 export default function FaqAccordion({ items }: Props) {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openIndex, setOpenIndex] = useState<number | null>(items.length > 0 ? 0 : null);
   const baseId = useId();
 
   if (items.length === 0) {

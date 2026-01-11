@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   if (!template) {
     return NextResponse.json({ error: "template not found" }, { status: 404 });
   }
-  const ctx = await getTemplateContext();
+  const ctx = getTemplateContext();
   const filled = fillTemplate(template.content, ctx);
   const pdf = buildPdf(filled);
   return new NextResponse(pdf, {
@@ -57,4 +57,30 @@ export async function GET(request: Request) {
       "Content-Disposition": `attachment; filename="${slug}.pdf"`,
     },
   });
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.text !== "string" || !body.text.trim()) {
+      return NextResponse.json({ error: "text is required" }, { status: 400 });
+    }
+    const title =
+      typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Шаблон";
+    const pdf = buildPdf(body.text);
+    const safeDate = new Intl.DateTimeFormat("ru-RU")
+      .format(new Date())
+      .replace(/[^\d.]/g, "")
+      .replace(/\.+$/, "");
+    const filename = `${title} - ${safeDate || "document"}.pdf`;
+    return new NextResponse(pdf, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "failed_to_generate_pdf" }, { status: 500 });
+  }
 }

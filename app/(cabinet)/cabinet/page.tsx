@@ -9,7 +9,6 @@ import {
   getUserPlots,
 } from "@/lib/plots";
 import { createAppeal, getUserAppeals } from "@/lib/appeals";
-import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 import { getUserElectricity, getUserElectricityHistory, submitReading } from "@/lib/electricity";
 import { getUserEvents, markAllRead, markEventRead } from "@/lib/userEvents";
 import { getPaymentDetails } from "@/lib/paymentDetails";
@@ -21,11 +20,14 @@ import { getLatestMembershipRequestForUser, getMembershipStatus } from "@/lib/me
 import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { getUserPreferences } from "@/lib/userPreferences";
 import { getSntSettings } from "@/lib/sntSettings";
+import { listPublishedForAudience } from "@/lib/announcementsStore";
 import { CabinetShell, type SectionKey } from "./CabinetShell";
 import { PaymentPurposeClient } from "./PaymentPurposeClient";
 import { getVerificationStatus } from "@/lib/verificationStatus";
 import CopyToClipboard from "@/components/CopyToClipboard";
 import { redirectToCabinetStep } from "@/lib/cabinetRedirect";
+import RecentAnnouncements from "@/components/RecentAnnouncements";
+import { getCabinetContext } from "@/lib/cabinetContext";
 
 const logCabinetError = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown error";
@@ -245,12 +247,15 @@ export default async function CabinetPage({
 
   const appeals = await safeFetch("appeals", [], () => getUserAppeals(userId), dataErrors);
   const unreadAppealsCount = appeals.filter((a) => a.unreadByUser).length;
-  const finance = await safeFetch(
-    "financeInfo",
-    { membershipDebt: null, electricityDebt: null, status: "unknown" },
-    () => getUserFinanceInfo(userId),
+  const financeFallback = { membershipDebt: null, electricityDebt: null, status: "unknown" as const };
+  const cabinetContext = await safeFetch(
+    "cabinetContext",
+    { hasDebt: false, finance: financeFallback },
+    () => getCabinetContext(userId),
     dataErrors,
   );
+  const finance = cabinetContext.finance;
+  const { hasDebt } = cabinetContext;
   const electricity = await safeFetch(
     "electricity",
     null,
@@ -301,6 +306,12 @@ export default async function CabinetPage({
   );
   const charges = await safeFetch("charges", [], () => getUserCharges(userId), dataErrors);
   const decisions = await safeFetch("decisions", [], () => getDecisions(), dataErrors);
+  const announcements = await safeFetch(
+    "announcements",
+    [],
+    () => listPublishedForAudience(hasDebt),
+    dataErrors,
+  );
   const decisionMap = new Map(decisions.map((d) => [d.id, d]));
   const userPlotMap = new Map(userPlots.map((p) => [p.plotId, p]));
   const settings = getSntSettings();
@@ -310,8 +321,6 @@ export default async function CabinetPage({
 
   const { electricityPaymentDeadlineDay } = settings.value;
   const hasAnyFinanceData = finance.membershipDebt !== null || finance.electricityDebt !== null;
-  const hasDebt =
-    (finance.membershipDebt ?? 0) > 0 || (finance.electricityDebt ?? 0) > 0;
   const hasCharges = charges.length > 0;
   const hasPayables = hasDebt || hasCharges;
   const financeHistoryError = dataErrors.includes("financeHistory");
@@ -338,6 +347,7 @@ export default async function CabinetPage({
       ? new Date(electricity.lastReadingDate)
       : null;
   const readingPeriodLabel = formatMonthYear(lastReadingDate ?? new Date());
+  const announcementsPreview = announcements.slice(0, 3);
   const lastReadingDateLabel = lastReadingDate ? lastReadingDate.toLocaleString("ru-RU") : "—";
   const readingStatusLabel = electricity?.lastReading != null ? "Переданы" : "Не переданы";
   const readingDeadlineText = `до ${electricityPaymentDeadlineDay} числа`;
@@ -522,6 +532,19 @@ export default async function CabinetPage({
           >
             🔒 Безопасность и данные
           </Link>
+
+          <RecentAnnouncements
+            items={announcementsPreview.map((a) => ({
+              id: a.id,
+              title: a.title,
+              body: a.body,
+              isImportant: a.isImportant,
+              publishedAt: a.publishedAt,
+            }))}
+            linkHref="/cabinet/announcements"
+            telegramHref={OFFICIAL_CHANNELS.telegram}
+            vkHref={OFFICIAL_CHANNELS.vk}
+          />
 
           {isConfirmed ? (
             <div className="grid gap-3 sm:grid-cols-3">

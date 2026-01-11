@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import CopyToClipboard from "@/components/CopyToClipboard";
 import { getSessionUser } from "@/lib/session.server";
 import { getUserPlots, getUserOwnershipVerifications } from "@/lib/plots";
 import { getVerificationStatus } from "@/lib/verificationStatus";
-import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 import { getPaymentDetails } from "@/lib/paymentDetails";
+import { getCabinetContext } from "@/lib/cabinetContext";
 
 export const metadata = {
   title: "Оплата и долги — Личный кабинет",
@@ -38,17 +38,17 @@ export default async function BillingPage() {
   }
 
   const userId = user.id ?? "";
-  const [plots, verifications, finance, paymentDetails] = await Promise.all([
+  const [{ finance, hasDebt }, plots, verifications, paymentDetails] = await Promise.all([
+    getCabinetContext(userId),
     getUserPlots(userId),
     getUserOwnershipVerifications(userId),
-    getUserFinanceInfo(userId),
     getPaymentDetails(),
   ]);
   const { status } = getVerificationStatus(plots, verifications);
   const statusLabel = statusLabels[status] ?? "—";
   const hasMembershipDebt = (finance.membershipDebt ?? 0) > 0;
   const hasElectricityDebt = (finance.electricityDebt ?? 0) > 0;
-  const hasDebt = hasMembershipDebt || hasElectricityDebt;
+  const debtFlag = hasDebt;
 
   const requisitesText = [
     paymentDetails.recipientName ? `Получатель: ${paymentDetails.recipientName}` : "",
@@ -88,8 +88,8 @@ export default async function BillingPage() {
             <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
               <div className="text-xs text-zinc-500">Задолженность</div>
               <div className="text-sm font-semibold text-zinc-900">
-                {hasDebt ? "Есть" : "Нет"}
-                {hasDebt ? (
+                {debtFlag ? "Есть" : "Нет"}
+                {debtFlag ? (
                   <span className="ml-2 text-xs font-normal text-zinc-600">
                     {[
                       hasMembershipDebt ? "взносы" : null,
