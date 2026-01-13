@@ -15,10 +15,7 @@ test.describe("Office appeals comments", () => {
 
   test("accountant is forbidden to see appeals", async ({ page }) => {
     const accountantPass = process.env.AUTH_PASS_ACCOUNTANT;
-    if (!accountantPass) {
-      test.skip();
-      return;
-    }
+    test.skip(!accountantPass, "AUTH_PASS_ACCOUNTANT is not set");
     await loginStaff(page, "accountant", "/office");
     await page.goto(`${base}/office/appeals`);
     await expect(page).toHaveURL(/forbidden/);
