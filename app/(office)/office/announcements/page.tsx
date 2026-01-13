@@ -79,8 +79,15 @@ export default async function OfficeAnnouncementsPage({
 
       <div className="space-y-2">
         {items.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-600">
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-600" data-testid="office-announcements-empty">
             Объявлений пока нет.
+            <Link
+              href="/office/announcements/new"
+              data-testid="office-announcements-empty-cta"
+              className="ml-2 text-[#5E704F] hover:underline"
+            >
+              Создать объявление
+            </Link>
           </div>
         ) : (
           items.map((item) => (

@@ -110,7 +110,9 @@ export default async function OfficeAppealsPage({ searchParams }: { searchParams
           <div>Дата</div>
         </div>
         {items.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-zinc-600" data-testid="office-appeals-empty">Заявок пока нет.</div>
+          <div className="px-4 py-6 text-sm text-zinc-600" data-testid="office-appeals-empty">
+            Заявок пока нет.
+          </div>
         ) : (
           items.map((item) => (
             <Link

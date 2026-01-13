@@ -2,6 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
+
+export const dynamic = "force-dynamic";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
 import {
@@ -1165,14 +1167,16 @@ export default async function CabinetPage({
   })();
 
   return (
-    <CabinetShell
-      sections={sections}
-      quickActions={quickActions}
-      initialActive={initialSection}
-      isImpersonating={Boolean(user.isImpersonating)}
-      role={user.role}
-      userName={profile.fullName ?? null}
-      plotsCount={plotsCount}
-    />
+    <div data-testid="cabinet-root">
+      <CabinetShell
+        sections={sections}
+        quickActions={quickActions}
+        initialActive={initialSection}
+        isImpersonating={Boolean(user.isImpersonating)}
+        role={user.role}
+        userName={profile.fullName ?? null}
+        plotsCount={plotsCount}
+      />
+    </div>
   );
 }

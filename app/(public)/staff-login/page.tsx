@@ -1,5 +1,7 @@
 import StaffLoginForm from "./StaffLoginForm";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Вход для сотрудников — СНТ «Улыбка»",
   alternates: { canonical: "/staff-login" },

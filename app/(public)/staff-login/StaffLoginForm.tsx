@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { sanitizeNext } from "@/lib/sanitizeNext";
+import { getSafeRedirectUrl } from "@/lib/safeRedirect";
 
 const normalizeLogin = (value: string) => {
   const v = value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -12,13 +13,6 @@ const normalizeLogin = (value: string) => {
   if (v === "бухгалтер" || v === "accountant" || v === "бух") return "accountant";
   if (v === "секретарь" || v === "secretary" || v === "сек") return "secretary";
   return v;
-};
-
-const isPathAllowedForRole = (role: string, path: string | null | undefined) => {
-  if (!path) return false;
-  if (role === "admin") return path.startsWith("/admin");
-  if (role === "chairman" || role === "accountant" || role === "secretary") return path.startsWith("/office");
-  return false;
 };
 
 export default function StaffLoginForm({ next }: { next: string }) {
@@ -52,13 +46,8 @@ export default function StaffLoginForm({ next }: { next: string }) {
         setError(msg);
         return;
       }
-      const redirect =
-        data?.redirectUrl ||
-        (data?.role === "admin"
-          ? "/admin"
-          : sanitizedNext && isPathAllowedForRole(data?.role, sanitizedNext)
-            ? sanitizedNext
-            : "/office");
+      const role = (data?.role as "admin" | "chairman" | "accountant" | "secretary") ?? "chairman";
+      const redirect = data?.redirectUrl || getSafeRedirectUrl(role, sanitizedNext);
       router.push(redirect);
     } catch {
       setError("Ошибка входа. Попробуйте позже.");
@@ -114,7 +103,7 @@ export default function StaffLoginForm({ next }: { next: string }) {
         </label>
         {error ? (
           <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-testid="staff-login-error">
-            {error}
+            <div data-testid="staff-login-error-text">{error}</div>
           </div>
         ) : null}
         <button

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import { type Role } from "@/lib/permissions";
 
+export const dynamic = "force-dynamic";
+
 const cards: Array<{
   label: string;
   href: string;
@@ -51,7 +53,7 @@ export default async function OfficeIndex() {
   const visible = cards.filter((card) => card.allowed(role));
 
   return (
-    <div className="space-y-4" data-testid="office-root">
+    <div className="space-y-4" data-testid="office-dashboard-root">
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900">Офис СНТ</h1>
         <p className="text-sm text-zinc-600">Рабочие разделы для правления и бухгалтерии</p>
