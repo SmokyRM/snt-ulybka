@@ -1,4 +1,4 @@
-import { getSessionUser, hasImportAccess, isAdmin } from "@/lib/session.server";
+import { getEffectiveSessionUser, getSessionUser, isAdmin } from "@/lib/session.server";
 import { redirect } from "next/navigation";
 import AdminSidebar from "./_components/AdminSidebar";
 import { serverFetchJson } from "@/lib/serverFetch";
@@ -10,14 +10,30 @@ import AdminViewAsUserButton from "./AdminViewAsUserButton";
 import AssistantWidget from "@/components/AssistantWidget";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import QaFloatingIndicator from "./_components/QaFloatingIndicator";
+import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
+import AdminQaBanner from "./_components/AdminQaBanner";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
-  const admin = isAdmin(user);
-  const hasAccess = hasImportAccess(user);
-  if (!hasAccess) {
+  if (!user) {
     redirect("/login?next=/admin");
   }
+  if (user.role !== "admin") {
+    redirect("/forbidden");
+  }
+  const effectiveUser = await getEffectiveSessionUser();
+  const qaScenario = await getQaScenarioFromCookies();
+  const effectiveRole: "admin" | "board" | "user" | "accountant" | "operator" | "resident" | "chairman" | "secretary" =
+    (effectiveUser?.role as
+      | "admin"
+      | "board"
+      | "user"
+      | "accountant"
+      | "operator"
+      | "resident"
+      | "chairman"
+      | "secretary") ?? user.role;
+  const admin = isAdmin(user);
   const isDev = process.env.NODE_ENV !== "production";
   const flags = await getFeatureFlags().catch(() => null);
   const widgetEnabled = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
@@ -35,7 +51,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <AdminDirtyProvider>
       <AdminNavigationProgressProvider>
         <div className="flex min-h-screen bg-[#F8F1E9] text-zinc-900">
-          <AdminSidebar isAdmin={admin} isDev={isDev} role={user?.role ?? "user"} />
+          <AdminSidebar isAdmin={effectiveRole === "admin"} isDev={isDev} role={effectiveRole} />
           <div className="flex-1">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white px-6 py-4">
               <div className="space-y-1">
@@ -62,23 +78,24 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 ) : null}
                 <AdminSiteLink />
               </div>
+              {qaScenario ? <AdminQaBanner scenario={qaScenario} /> : null}
           </header>
             <main className="px-6 py-6">{children}</main>
           </div>
         </div>
-        {hasAccess && showAssistant ? (
+        {showAssistant ? (
           <AssistantWidget
             variant="admin"
             initialAuth={Boolean(user)}
             initialRole={
-              user?.role === "admin" || user?.role === "board" || user?.role === "user"
-                ? user.role
+              effectiveRole === "admin" || effectiveRole === "board" || effectiveRole === "user"
+                ? effectiveRole
                 : null
             }
             aiPersonalEnabled={flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false}
           />
         ) : null}
-        <QaFloatingIndicator role={user?.role ?? null} />
+        <QaFloatingIndicator role={effectiveRole ?? null} />
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>
   );

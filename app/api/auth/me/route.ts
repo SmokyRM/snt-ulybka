@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
+import { getEffectiveSessionUser } from "@/lib/session.server";
 
 export async function GET() {
-  const user = await getSessionUser();
+  const user = await getEffectiveSessionUser();
   if (!user) {
     return NextResponse.json({ error: "Нет сессии" }, { status: 401 });
   }

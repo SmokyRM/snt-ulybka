@@ -1,5 +1,8 @@
 "use client";
 
+/**
+ * QA components must stay admin-only to avoid RSC bundling leaks.
+ */
 import { useState } from "react";
 
 const SESSION_KEYS = ["prefillAppealText", "appeal.prefill.text"];

@@ -16,7 +16,22 @@ type LoginFormProps = {
   nextParam?: string;
 };
 
-type LoginRole = "user" | "admin" | "board" | "accountant" | "operator";
+type LoginRole = "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
+
+const defaultPathForRole = (role: LoginRole) => {
+  if (role === "admin") return "/admin";
+  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") return "/office";
+  return "/cabinet";
+};
+
+const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) => {
+  if (!path) return false;
+  if (role === "admin") return path.startsWith("/admin");
+  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") {
+    return path.startsWith("/office");
+  }
+  return path.startsWith("/cabinet");
+};
 
 export default function LoginForm({ nextParam }: LoginFormProps) {
   const router = useAppRouter();
@@ -38,7 +53,8 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     const session = getSessionClient();
     if (isSubmittingRef.current) return;
     if (!session?.role) return;
-    const target = sanitizedNext ?? "/cabinet";
+    const role = (session.role as LoginRole) ?? "user";
+    const target = isPathAllowedForRole(role, sanitizedNext) ? sanitizedNext : defaultPathForRole(role);
     queueMicrotask(() => {
       router.replace(target);
       router.refresh();
@@ -67,7 +83,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         return;
       }
       const role: LoginRole = (data.role as LoginRole) ?? "user";
-      const target = sanitizedNext ?? (role === "admin" ? "/admin" : "/cabinet");
+      const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
       router.replace(target);
       router.refresh();
     } catch {
@@ -87,7 +103,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         </AppLink>
       </div>
       <p className="mt-2 text-sm text-zinc-600">
-        Введите код доступа, полученный от правления. После входа вы перейдёте в личный кабинет.
+        Введите код доступа, полученный от правления.
       </p>
       {sanitizedNext && (
         <p className="mt-2 text-xs text-zinc-600">
@@ -105,7 +121,6 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           <input
             type="password"
             inputMode="text"
-            required
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Введите код"
@@ -156,6 +171,14 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           )}
         </div>
       </form>
+      <div className="text-sm text-[#5E704F]">
+        <Link
+          href={sanitizedNext ? `/staff-login?next=${encodeURIComponent(sanitizedNext)}` : "/staff-login"}
+          className="font-semibold hover:underline"
+        >
+          Я сотрудник → Войти для сотрудников
+        </Link>
+      </div>
     </>
   );
 }

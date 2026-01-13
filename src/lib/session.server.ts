@@ -1,12 +1,22 @@
 import { cookies } from "next/headers";
 import { findUserByContact, findUserById } from "@/lib/mockDb";
+import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
+import type { QaScenario } from "./qaScenario";
 
 const SESSION_COOKIE = "snt_session";
 
-export type SessionRole = "user" | "admin" | "board" | "accountant" | "operator";
+export type SessionRole =
+  | "user"
+  | "admin"
+  | "board"
+  | "accountant"
+  | "operator"
+  | "resident"
+  | "chairman"
+  | "secretary";
 
 export interface SessionUser {
-  id?: string;
+  id: string;
   contact?: string;
   email?: string;
   phone?: string;
@@ -15,6 +25,9 @@ export interface SessionUser {
   status?: string;
   isImpersonating?: boolean;
   impersonatorAdminId?: string | null;
+  realRole?: SessionRole;
+  isQaOverride?: boolean;
+  qaScenario?: QaScenario | null;
 }
 
 interface SessionPayload {
@@ -35,7 +48,11 @@ const parseCookie = (value: string | undefined): SessionPayload | null => {
 };
 
 const normalizeRole = (value: unknown): SessionRole => {
+  if (value === "resident_debtor") return "resident";
   switch (value) {
+    case "resident":
+    case "chairman":
+    case "secretary":
     case "admin":
     case "board":
     case "accountant":
@@ -84,11 +101,12 @@ export const updateSessionPayload = async (patch: Partial<SessionPayload>) => {
 
 export const getSessionUser = async (): Promise<SessionUser | null> => {
   const payload = await getSessionPayload();
-  if (!payload) return null;
+  if (!payload || !payload.userId) return null;
   if (payload.role === "admin" && payload.impersonateUserId) {
     const impersonated = findUserById(payload.impersonateUserId);
+    if (!impersonated) return null;
     return {
-      id: impersonated?.id ?? payload.impersonateUserId,
+      id: impersonated.id,
       contact: impersonated?.email ?? impersonated?.phone,
       email: impersonated?.email,
       phone: impersonated?.phone,
@@ -99,14 +117,13 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
       impersonatorAdminId: payload.impersonatorAdminId ?? payload.userId ?? null,
     };
   }
-  const userRecord =
-    (payload.userId && findUserById(payload.userId)) ||
-    (payload.contact && findUserByContact(payload.contact)) ||
-    null;
+  const userRecord = payload.userId ? findUserById(payload.userId) : null;
+  if (!userRecord) return null;
   const roleFromPayload = payload.role;
   const role: SessionUser["role"] = normalizeRole(roleFromPayload ?? userRecord?.role);
+  const resolvedId = userRecord.id;
   return {
-    id: userRecord?.id ?? payload.userId,
+    id: resolvedId,
     contact: payload.contact ?? userRecord?.email ?? userRecord?.phone,
     email: userRecord?.email,
     phone: userRecord?.phone,
@@ -115,6 +132,34 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
     status: userRecord?.status,
     isImpersonating: false,
     impersonatorAdminId: null,
+    realRole: role,
+    isQaOverride: false,
+    qaScenario: null,
+  };
+};
+
+export const getEffectiveSessionUser = async (): Promise<SessionUser | null> => {
+  const qa = await getQaScenarioFromCookies();
+  const real = await getSessionUser();
+  if (qa === "guest") {
+    return null;
+  }
+  if (!qa || !real) {
+    return real;
+  }
+  const qaRole: SessionRole | null =
+    qa === "resident_ok" || qa === "resident_debtor"
+      ? "resident"
+      : qa === "chairman" || qa === "accountant" || qa === "secretary" || qa === "admin" || qa === "resident"
+        ? qa
+        : null;
+  if (!qaRole) return real;
+  return {
+    ...real,
+    role: qaRole,
+    isQaOverride: true,
+    realRole: real.role,
+    qaScenario: qa,
   };
 };
 

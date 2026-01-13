@@ -1,4 +1,11 @@
-export type QaScenario = "guest" | "resident_ok" | "resident_debtor" | "admin";
+export type QaScenario =
+  | "guest"
+  | "resident_ok"
+  | "resident_debtor"
+  | "admin"
+  | "chairman"
+  | "accountant"
+  | "secretary";
 
 const QA_COOKIE = "qaScenario";
 

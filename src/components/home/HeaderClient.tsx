@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -9,7 +9,7 @@ import { siteCity, siteName } from "@/config/site";
 import { createPortal } from "react-dom";
 
 type HeaderClientProps = {
-  role?: "user" | "admin" | "board" | "accountant" | "operator" | null;
+  role?: "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary" | null;
   onboardingStatus?: "complete" | "draft" | "pending" | "rejected" | null;
   verificationStatus?: "draft" | "pending" | "rejected" | "verified" | null;
 };
@@ -39,6 +39,7 @@ export function HeaderClient({
   const pathname = usePathname();
   const isAdmin = role === "admin";
   const isAuthenticated = Boolean(role);
+  const isStaff = role === "chairman" || role === "accountant" || role === "secretary" || role === "board";
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountWrapRef = useRef<HTMLDivElement | null>(null);
@@ -50,8 +51,8 @@ export function HeaderClient({
     left: 0,
   });
   const mounted = typeof document !== "undefined";
-  const accountMenuId = useId();
-  const accountButtonId = useId();
+  const accountMenuId = "account-menu-content";
+  const accountButtonId = "account-menu-trigger";
   const needsOnboarding = isAuthenticated && onboardingStatus && onboardingStatus !== "complete";
   const statusKey =
     verificationStatus && verificationStatus !== "verified"
@@ -144,6 +145,30 @@ export function HeaderClient({
     };
   }, [accountOpen, handleReposition, updateAccountMenuPosition]);
 
+  const primaryNav = (() => {
+    if (!isAuthenticated) return null;
+    if (isAdmin) return { href: "/admin", label: "В админку" };
+    if (isStaff) return { href: "/office", label: "В офис" };
+    return { href: "/cabinet", label: "В кабинет" };
+  })();
+
+  const guestLoginButtons = (
+    <div className="flex flex-wrap items-center gap-2">
+      <AppLink
+        href="/login"
+        className="flex-shrink-0 rounded-full border border-white/30 bg-white px-5 py-2 text-sm font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
+      >
+        Жителям
+      </AppLink>
+      <AppLink
+        href="/staff-login"
+        className="flex-shrink-0 rounded-full border border-white/50 bg-transparent px-5 py-2 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/10"
+      >
+        Сотрудникам
+      </AppLink>
+    </div>
+  );
+
   const action = () => {
     if (isAuthenticated) {
       return (
@@ -219,22 +244,14 @@ export function HeaderClient({
                         Статус: {statusBadge.label}
                       </AppLink>
                     ) : null}
-                    <AppLink
-                      href="/cabinet"
-                      role="menuitem"
-                      onClick={() => setAccountOpen(false)}
-                      className="rounded-lg px-3 py-2 text-sm text-zinc-800 transition hover:bg-zinc-50"
-                    >
-                      Личный кабинет
-                    </AppLink>
-                    {isAdmin && pathname.startsWith("/cabinet") ? (
+                    {primaryNav ? (
                       <AppLink
-                        href="/admin"
+                        href={primaryNav.href}
                         role="menuitem"
                         onClick={() => setAccountOpen(false)}
                         className="rounded-lg px-3 py-2 text-sm text-zinc-800 transition hover:bg-zinc-50"
                       >
-                        В админку
+                        {primaryNav.label}
                       </AppLink>
                     ) : null}
                   </div>
@@ -254,14 +271,7 @@ export function HeaderClient({
         </div>
       );
     }
-    return (
-      <AppLink
-        href="/login"
-        className="flex-shrink-0 rounded-full border border-white/30 bg-white px-5 py-2 text-sm font-semibold text-[#2F3827] transition-colors hover:bg-white/90"
-      >
-        Войти
-      </AppLink>
-    );
+    return guestLoginButtons;
   };
 
   return (

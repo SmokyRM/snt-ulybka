@@ -18,7 +18,7 @@ const readScenario = (): QaScenario | null => {
 };
 
 type Props = {
-  role?: "admin" | "board" | "chair" | "accountant" | "operator" | "user" | null;
+  role?: "admin" | "board" | "chair" | "accountant" | "operator" | "user" | "resident" | "chairman" | "secretary" | null;
 };
 
 export default function QaFloatingIndicator({ role }: Props) {
@@ -43,7 +43,13 @@ export default function QaFloatingIndicator({ role }: Props) {
   if (!qaEnabled()) return null;
   if (!scenario) return null;
   const allowedRole =
-    role === "admin" || role === "board" || role === "chair" || role === "accountant" || role === "operator";
+    role === "admin" ||
+    role === "board" ||
+    role === "chair" ||
+    role === "chairman" ||
+    role === "secretary" ||
+    role === "accountant" ||
+    role === "operator";
   if (!allowedRole && role) return null;
   if (typeof window !== "undefined" && !window.location.pathname.startsWith("/admin")) {
     return null;

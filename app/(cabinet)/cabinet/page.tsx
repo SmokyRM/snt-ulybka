@@ -333,6 +333,7 @@ export default async function CabinetPage({
   const latestRejectedNote = latest?.status === "rejected" ? latest.reviewNote : null;
   const hasPlots = userPlots.length > 0;
   const isConfirmed = status === "verified";
+  const hasVerifiedPlots = verificationsApproved > 0;
   const isBlocked = membership.status === "non-member" && status === "rejected";
   const contactEmail = PUBLIC_CONTENT_DEFAULTS.contacts.email;
   const contactLinks = [
@@ -421,6 +422,34 @@ export default async function CabinetPage({
               </div>
             </div>
           ) : null}
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-800 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Участки и подтверждение
+            </div>
+            <p className="mt-2 text-sm text-zinc-700">
+              Проверьте статус привязки участка или отправьте заявку на подтверждение.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href="/cabinet/verification"
+                className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#4d5d41]"
+              >
+                Подтверждение участка
+              </Link>
+              <Link
+                href="/cabinet/link-plot"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-[#5E704F] transition hover:border-[#5E704F]"
+              >
+                Привязать участок
+              </Link>
+            </div>
+            {hasVerifiedPlots ? (
+              <div className="mt-2 text-xs text-zinc-600">
+                Подтверждено участков: {verificationsApproved}. Если добавляете новый участок, отправьте заявку.
+              </div>
+            ) : null}
+          </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-800 shadow-sm">
             <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Доступ</div>

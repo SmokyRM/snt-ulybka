@@ -1,15 +1,10 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import QaCleanerClient from "@/components/qa/QaCleanerClient";
 import { getSessionUser } from "@/lib/session.server";
-import { qaEnabled, type QaScenario } from "@/lib/qaScenario";
-import {
-  getQaScenarioFromCookies,
-  writeQaScenarioCookie,
-} from "@/lib/qaScenario.server";
-
-const qaOptions: QaScenario[] = ["guest", "resident_ok", "resident_debtor", "admin"];
+import { qaEnabled } from "@/lib/qaScenario";
+import { getQaScenarioFromCookies, writeQaScenarioCookie } from "@/lib/qaScenario.server";
+import QaClearButton from "../_components/QaClearButton";
 
 export const metadata = {
   title: "QA-инструменты — СНТ «Улыбка»",
@@ -27,16 +22,6 @@ export default async function QaPage() {
 
   const cookieStore = await cookies();
   const current = await getQaScenarioFromCookies(cookieStore);
-
-  async function setScenario(formData: FormData) {
-    "use server";
-    const value = (formData.get("scenario") as string | null) as QaScenario | null;
-    if (value && qaOptions.includes(value)) {
-      await writeQaScenarioCookie(value);
-    } else {
-      await writeQaScenarioCookie(null);
-    }
-  }
 
   async function clearScenario() {
     "use server";
@@ -79,54 +64,84 @@ export default async function QaPage() {
           <div className="text-xs text-zinc-500">Текущий сценарий: {current ?? "не задан"}</div>
         </header>
 
+
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Открыть в новом окне</div>
+          <div className="text-sm font-semibold text-zinc-900">Роль офиса (QA)</div>
           <div className="flex flex-wrap gap-2 text-sm">
             <Link
-              href="/cabinet?qa=resident_ok"
+              href="/office?qa=chairman"
               target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-office-chairman"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Житель (без долга)
+              Председатель
             </Link>
             <Link
-              href="/cabinet?qa=resident_debtor"
+              href="/office?qa=accountant"
               target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-office-accountant"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Житель (должник)
+              Бухгалтер
             </Link>
             <Link
-              href="/cabinet/announcements"
+              href="/office?qa=secretary"
               target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-office-secretary"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Объявления
+              Секретарь
             </Link>
+            <form action={clearScenario}>
+              <button
+                type="submit"
+                data-testid="qa-reset-admin"
+                className="rounded-full border border-amber-300 px-4 py-2 font-semibold text-amber-900 hover:border-amber-400"
+              >
+                Сбросить (админ)
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold text-zinc-900">Открыть</div>
+          <div className="flex flex-wrap gap-2 text-sm">
             <Link
-              href="/cabinet/templates"
+              href="/office"
               target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-office"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Шаблоны
+              Офис
             </Link>
             <Link
-              href="/?qa=guest"
+              href="/cabinet"
               target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-cabinet"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Кабинет
+            </Link>
+            <Link
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-guest"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
               Гость (главная)
             </Link>
             <Link
-              href="/login"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Логин
-            </Link>
-            <Link
               href="/admin"
               target="_blank"
+              rel="noopener noreferrer"
+              data-testid="qa-open-admin"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
               Админка
@@ -135,38 +150,10 @@ export default async function QaPage() {
         </section>
 
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Выбрать сценарий</div>
-          <form action={setScenario} className="flex flex-wrap items-center gap-3 text-sm">
-            <select
-              name="scenario"
-              defaultValue={current ?? ""}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-            >
-              <option value="">— Не задан —</option>
-              <option value="guest">Гость</option>
-              <option value="resident_ok">Житель без долга</option>
-              <option value="resident_debtor">Житель с долгом</option>
-              <option value="admin">Админ</option>
-            </select>
-            <button
-              type="submit"
-              className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
-            >
-              Сохранить
-            </button>
-          </form>
-          <form action={clearScenario} className="text-sm">
-            <button
-              type="submit"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:border-[#5E704F] hover:text-[#5E704F]"
-            >
-              Очистить тестовые состояния
-            </button>
-          </form>
-          <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-3">
-            <QaCleanerClient />
-          </div>
+          <div className="text-sm font-semibold text-zinc-900">Сервис</div>
+          <QaClearButton />
         </section>
+
       </div>
     </main>
   );

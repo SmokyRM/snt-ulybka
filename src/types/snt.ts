@@ -26,7 +26,15 @@ export interface Plot {
   ownerUserId?: string | null;
 }
 
-export type UserRole = "user" | "board" | "admin" | "accountant" | "operator";
+export type UserRole =
+  | "user"
+  | "board"
+  | "admin"
+  | "accountant"
+  | "operator"
+  | "resident"
+  | "chairman"
+  | "secretary";
 export type UserStatus = "pending" | "verified" | "rejected";
 
 export interface User {
