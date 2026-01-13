@@ -42,7 +42,7 @@ export default async function AdminAppealsPage({ searchParams }: Props) {
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+      <div className="mx-auto w-full max-w-5xl space-y-6" data-testid="admin-appeals-root">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Обращения жителей</h1>
           <div className="text-sm text-zinc-700">Всего: {appeals.length}</div>
@@ -92,7 +92,7 @@ export default async function AdminAppealsPage({ searchParams }: Props) {
 
         <div className="space-y-4">
           {filtered.length === 0 && (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm" data-testid="admin-appeals-empty">
               Обращений по заданным параметрам нет.
             </div>
           )}

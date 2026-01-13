@@ -16,7 +16,7 @@ export default async function CabinetAnnouncementsPage() {
       </div>
       <div className="space-y-3">
         {items.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-600">
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-600" data-testid="cabinet-announcements-empty">
             Объявлений пока нет.
           </div>
         ) : (

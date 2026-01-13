@@ -13,4 +13,5 @@ test("staff login shows error on invalid credentials", async ({ page }) => {
   await page.getByTestId("staff-login-password").fill("wrong-pass");
   await page.getByTestId("staff-login-submit").click();
   await expect(page.getByTestId("staff-login-error")).toBeVisible();
+  await expect(page.getByTestId("staff-login-error-text")).toBeVisible();
 });

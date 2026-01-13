@@ -76,15 +76,12 @@ export async function POST(request: Request) {
     const userId = ROLE_USER_IDS[role];
     upsertUserById({ id: userId, role });
     const payload = JSON.stringify({ role, userId });
+    const { getSafeRedirectUrl } = await import("@/lib/safeRedirect");
+    const redirectUrl = getSafeRedirectUrl(role, sanitizedNext);
     const response = NextResponse.json({
       ok: true,
       role,
-      redirectUrl:
-        sanitizedNext && (role === "admin" ? sanitizedNext.startsWith("/admin") : sanitizedNext.startsWith("/office"))
-          ? sanitizedNext
-          : role === "admin"
-            ? "/admin"
-            : "/office",
+      redirectUrl,
     });
     response.cookies.set(SESSION_COOKIE, payload, {
       httpOnly: true,

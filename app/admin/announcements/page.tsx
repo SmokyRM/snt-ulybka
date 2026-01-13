@@ -58,7 +58,7 @@ export default async function AdminAnnouncementsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+      <div className="mx-auto w-full max-w-5xl space-y-6" data-testid="admin-announcements-root">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">
@@ -123,7 +123,12 @@ export default async function AdminAnnouncementsPage() {
         </form>
 
         <div className="space-y-3">
-          {announcements.map((item) => (
+          {announcements.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm" data-testid="admin-announcements-empty">
+              Объявлений пока нет.
+            </div>
+          ) : (
+            announcements.map((item) => (
             <div
               key={item.id}
               className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
@@ -168,7 +173,8 @@ export default async function AdminAnnouncementsPage() {
                 </button>
               </form>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </main>

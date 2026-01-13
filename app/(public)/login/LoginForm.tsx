@@ -18,20 +18,7 @@ type LoginFormProps = {
 
 type LoginRole = "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
 
-const defaultPathForRole = (role: LoginRole) => {
-  if (role === "admin") return "/admin";
-  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") return "/office";
-  return "/cabinet";
-};
-
-const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) => {
-  if (!path) return false;
-  if (role === "admin") return path.startsWith("/admin");
-  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") {
-    return path.startsWith("/office");
-  }
-  return path.startsWith("/cabinet");
-};
+import { getSafeRedirectUrl } from "@/lib/safeRedirect";
 
 export default function LoginForm({ nextParam }: LoginFormProps) {
   const router = useAppRouter();
@@ -54,7 +41,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     if (isSubmittingRef.current) return;
     if (!session?.role) return;
     const role = (session.role as LoginRole) ?? "user";
-    const target = isPathAllowedForRole(role, sanitizedNext) ? sanitizedNext : defaultPathForRole(role);
+    const target = getSafeRedirectUrl(role, sanitizedNext);
     queueMicrotask(() => {
       router.replace(target);
       router.refresh();
@@ -83,7 +70,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         return;
       }
       const role: LoginRole = (data.role as LoginRole) ?? "user";
-      const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
+      const target = getSafeRedirectUrl(role, sanitizedNext);
       router.replace(target);
       router.refresh();
     } catch {
@@ -163,7 +150,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         <div className="min-h-[76px]" data-testid="login-error-block">
           {error && (
             <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-              <div>{error}</div>
+              <div data-testid="login-error-text">{error}</div>
               <div className="flex flex-wrap gap-3 text-xs font-semibold text-[#5E704F]">
                 <Link href="/#get-access" className="hover:underline">
                   Как получить доступ

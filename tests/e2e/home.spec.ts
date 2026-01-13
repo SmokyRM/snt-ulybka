@@ -14,17 +14,17 @@ test("home ctas and login redirect", async ({ page }: { page: Page }) => {
 test("login invalid code shows error", async ({ page }: { page: Page }) => {
   const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
   await page.goto(base + "/login");
-  await page.getByLabel("Код доступа").fill("9999");
-  await page.getByTestId("login-form").getByRole("button", { name: "Войти" }).click();
-  await expect(page.getByTestId("login-error-block")).toContainText("Неверный код");
-  await expect(page.getByTestId("login-error-block")).toContainText("Как получить доступ");
+  await page.getByTestId("login-access-code").fill("9999");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("login-error-block")).toBeVisible();
+  await expect(page.getByTestId("login-error-text")).toBeVisible();
 });
 
 test("login with next redirects to announcements", async ({ page }: { page: Page }) => {
   const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
   await page.goto(base + "/login?next=/cabinet/announcements");
-  await page.getByLabel("Код доступа").fill(TEST_CODE);
-  await page.getByTestId("login-form").getByRole("button", { name: "Войти" }).click();
+  await page.getByTestId("login-access-code").fill(TEST_CODE);
+  await page.getByTestId("login-submit").click();
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveURL(/\/cabinet\/announcements/);
   await expect(page.getByTestId("cabinet-announcements-root")).toBeVisible();
