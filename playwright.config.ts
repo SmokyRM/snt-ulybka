@@ -14,13 +14,13 @@ export default defineConfig({
   projects: [
     {
       name: "setup",
-      testMatch: /auth\\.setup\\.ts/,
+      testMatch: /auth\.setup\.ts/,
     },
     {
       name: "chromium",
       use: { storageState: "playwright/.auth/state.json" },
       dependencies: ["setup"],
-      testMatch: /.*\\.spec\\.ts/,
+      testMatch: /.*\.spec\.ts/,
     },
   ],
 });
