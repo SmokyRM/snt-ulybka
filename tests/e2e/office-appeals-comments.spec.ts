@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { loginStaff } from "./helpers/auth";
+import { loginStaff, getStaffCreds } from "./helpers/auth";
 
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
@@ -14,8 +14,10 @@ test.describe("Office appeals comments", () => {
   });
 
   test("accountant is forbidden to see appeals", async ({ page }) => {
-    const loggedIn = await loginStaff(page, "accountant", "/office");
-    test.skip(!loggedIn, "AUTH_USER_ACCOUNTANT and AUTH_PASS_ACCOUNTANT are not set");
+    const creds = getStaffCreds("accountant");
+    const isCI = process.env.CI === "true";
+    test.skip(!creds && !isCI, "AUTH_USER_ACCOUNTANT and AUTH_PASS_ACCOUNTANT are not set");
+    await loginStaff(page, "accountant", "/office");
     await page.goto(`${base}/office/appeals`);
     await expect(page).toHaveURL(/forbidden/);
   });
