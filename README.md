@@ -65,6 +65,48 @@ npm run deploy
 - Релиз в прод: merge `dev` → `main` и push `main` (можно через `npm run deploy`, который сделает merge/push и проверки локально).
 - Проверить задеплоенный SHA и окружение можно на странице `/admin/build-info`.
 
+## E2E тесты
+
+Для запуска E2E тестов нужно сначала установить браузеры Playwright:
+
+```bash
+npm install
+npx playwright install --with-deps
+```
+
+Затем можно запускать тесты:
+
+```bash
+npm run test:e2e        # Запуск всех тестов
+npm run test:e2e:ui     # Запуск с UI (интерактивный режим)
+```
+
+### Переменные окружения
+
+Базовые переменные (опционально, есть значения по умолчанию):
+- `PLAYWRIGHT_BASE_URL` — URL приложения (по умолчанию `http://localhost:3000`)
+- `TEST_ACCESS_CODE` — код доступа для тестового входа жителя (по умолчанию `1111`)
+- `TEST_ADMIN_CODE` — код доступа для тестового входа администратора (по умолчанию `1233`)
+
+**Для тестов с staff ролями (chairman/secretary/accountant) требуются креды:**
+
+```bash
+# Пример запуска с переменными окружения:
+AUTH_USER_CHAIRMAN=председатель \
+AUTH_PASS_CHAIRMAN=your_password \
+AUTH_USER_SECRETARY=секретарь \
+AUTH_PASS_SECRETARY=your_password \
+AUTH_USER_ACCOUNTANT=бухгалтер \
+AUTH_PASS_ACCOUNTANT=your_password \
+npx playwright test
+```
+
+Или создайте `.env.local` (не коммитится в git) с этими переменными. См. `.env.example` для примера.
+
+**Важно:**
+- Локально: если креды не заданы, тесты для accountant будут пропущены (skipped)
+- В CI: если креды не заданы, тесты упадут с ошибкой — это гарантирует, что все тесты выполняются в CI окружении
+
 ## Assistant API (MVP)
 POST `/api/assistant` возвращает справку по ключевым словам и контексту страницы.
 

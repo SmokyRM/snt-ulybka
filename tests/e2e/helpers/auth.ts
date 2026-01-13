@@ -18,18 +18,34 @@ type StaffCreds = {
   password: string;
 };
 
-function getStaffCreds(role: StaffRole): StaffCreds {
+export function getStaffCreds(role: StaffRole): StaffCreds | null {
   const usernameEnv = `AUTH_USER_${role.toUpperCase()}` as const;
   const passwordEnv = `AUTH_PASS_${role.toUpperCase()}` as const;
-  const username = process.env[usernameEnv] || role;
-  const password = process.env[passwordEnv] || "";
+  const username = process.env[usernameEnv];
+  const password = process.env[passwordEnv];
+  if (!username || !password) {
+    return null;
+  }
   return { username, password };
 }
 
-export async function loginStaff(page: Page, role: StaffRole, next: string = "/office") {
+export async function loginStaff(page: Page, role: StaffRole, next: string = "/office"): Promise<boolean> {
   const creds = getStaffCreds(role);
-  if (!creds.password) {
-    throw new Error(`AUTH_PASS_${role.toUpperCase()} is not set. Cannot login as ${role}.`);
+  if (!creds) {
+    const isCI = process.env.CI === "true";
+    if (isCI) {
+      const missing = [];
+      if (!process.env[`AUTH_USER_${role.toUpperCase()}`]) {
+        missing.push(`AUTH_USER_${role.toUpperCase()}`);
+      }
+      if (!process.env[`AUTH_PASS_${role.toUpperCase()}`]) {
+        missing.push(`AUTH_PASS_${role.toUpperCase()}`);
+      }
+      throw new Error(
+        `Missing required environment variables for ${role} login in CI: ${missing.join(", ")}. Set these variables in CI environment.`,
+      );
+    }
+    return false;
   }
   await page.goto(`${baseURL}/staff-login?next=${encodeURIComponent(next)}`);
   await page.getByTestId("staff-login-username").fill(creds.username);
@@ -37,4 +53,5 @@ export async function loginStaff(page: Page, role: StaffRole, next: string = "/o
   await page.getByTestId("staff-login-submit").click();
   const urlPattern = next === "/office" ? /\/office(\/|$)/ : new RegExp(next.replace("/", "\\/") + "(\\/|$)", "i");
   await page.waitForURL(urlPattern, { timeout: 15000 });
+  return true;
 }

@@ -20,9 +20,8 @@ test.describe("Office access", () => {
   });
 
   test("accountant cannot open announcements", async ({ page }) => {
-    const accountantPass = process.env.AUTH_PASS_ACCOUNTANT;
-    test.skip(!accountantPass, "AUTH_PASS_ACCOUNTANT is not set");
-    await loginStaff(page, "accountant", "/office");
+    const loggedIn = await loginStaff(page, "accountant", "/office");
+    test.skip(!loggedIn, "AUTH_USER_ACCOUNTANT and AUTH_PASS_ACCOUNTANT are not set");
     await page.goto(`${base}/office/announcements`);
     await expect(page).toHaveURL(/forbidden/);
   });

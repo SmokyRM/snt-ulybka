@@ -13,13 +13,13 @@ test.describe("Office appeals search by plot", () => {
     let hasItems = false;
     let isEmpty = false;
     try {
-      await expect(itemsLocator.first()).toBeVisible({ timeout: 1000 });
+      await expect(itemsLocator.first()).toBeVisible();
       hasItems = true;
     } catch {
       // ignore
     }
     try {
-      await expect(emptyLocator).toBeVisible({ timeout: 1000 });
+      await expect(emptyLocator).toBeVisible();
       isEmpty = true;
     } catch {
       // ignore
@@ -30,9 +30,8 @@ test.describe("Office appeals search by plot", () => {
   });
 
   test("accountant is forbidden", async ({ page }) => {
-    const accountantPass = process.env.AUTH_PASS_ACCOUNTANT;
-    test.skip(!accountantPass, "AUTH_PASS_ACCOUNTANT is not set");
-    await loginStaff(page, "accountant", "/office");
+    const loggedIn = await loginStaff(page, "accountant", "/office");
+    test.skip(!loggedIn, "AUTH_USER_ACCOUNTANT and AUTH_PASS_ACCOUNTANT are not set");
     await page.goto(`${base}/office/appeals`);
     await expect(page).toHaveURL(/forbidden/);
   });

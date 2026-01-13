@@ -20,7 +20,7 @@ test.describe("Cabinet pages stay logged in", () => {
     const emptyCta = page.getByTestId("cabinet-appeals-empty-cta");
     let newCtaVisible = false;
     try {
-      await expect(newCta).toBeVisible({ timeout: 1000 });
+      await expect(newCta).toBeVisible();
       newCtaVisible = true;
     } catch {
       // ignore
