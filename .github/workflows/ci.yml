@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint -- --quiet
+
+      - name: Run typecheck
+        run: npm run typecheck -- --pretty false
+
+      - name: Build application
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Next.js server
+        run: |
+          npm start > /tmp/nextjs.log 2>&1 &
+          echo $! > /tmp/nextjs.pid
+        env:
+          PORT: 3000
+
+      - name: Wait for server to be ready
+        run: npx wait-on http://127.0.0.1:3000/login --timeout 60000
+
+      - name: Run E2E smoke tests
+        run: npx playwright test tests/e2e/smoke.spec.ts
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          TEST_ACCESS_CODE: ${{ secrets.TEST_ACCESS_CODE }}
+          TEST_ADMIN_CODE: ${{ secrets.TEST_ADMIN_CODE }}
+          AUTH_USER_CHAIRMAN: ${{ secrets.AUTH_USER_CHAIRMAN }}
+          AUTH_PASS_CHAIRMAN: ${{ secrets.AUTH_PASS_CHAIRMAN }}
+          AUTH_USER_SECRETARY: ${{ secrets.AUTH_USER_SECRETARY }}
+          AUTH_PASS_SECRETARY: ${{ secrets.AUTH_PASS_SECRETARY }}
+          AUTH_USER_ACCOUNTANT: ${{ secrets.AUTH_USER_ACCOUNTANT }}
+          AUTH_PASS_ACCOUNTANT: ${{ secrets.AUTH_PASS_ACCOUNTANT }}
+          CI: "true"
+
+      - name: Stop Next.js server
+        if: always()
+        run: |
+          if [ -f /tmp/nextjs.pid ]; then
+            kill $(cat /tmp/nextjs.pid) || true
+            rm /tmp/nextjs.pid
+          fi
+          pkill -f "next start" || true
