@@ -117,13 +117,17 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         data-testid="login-form"
       >
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-800">Код доступа</label>
+          <label htmlFor="access-code" className="text-sm font-medium text-zinc-800">
+            Код доступа
+          </label>
           <input
+            id="access-code"
             type="password"
             inputMode="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Введите код"
+            data-testid="login-access-code"
             className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
           />
         </div>
@@ -151,6 +155,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         <button
           type="submit"
           disabled={loading}
+          data-testid="login-submit"
           className="w-full rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Вход..." : "Войти"}
