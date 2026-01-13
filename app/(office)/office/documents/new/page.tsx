@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createDocument } from "@/lib/documents.store";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
-import { saveFile } from "@/lib/fileVault.server";
+import { saveFile } from "@/lib/fileVault.actions";
 
 async function createAction(formData: FormData) {
   "use server";
