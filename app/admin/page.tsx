@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+
+export const dynamic = "force-dynamic";
 import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
 import { RetryButton } from "./RetryButton";
@@ -72,7 +74,7 @@ export default async function AdminDashboard() {
   ].filter(Boolean) as Array<{ label: string; message: string }>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="admin-root">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Админ-панель</h1>
         <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
