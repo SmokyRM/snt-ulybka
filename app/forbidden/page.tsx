@@ -1,15 +1,19 @@
 import Link from "next/link";
+<<<<<<< HEAD
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import { sanitizeNext } from "@/lib/sanitizeNext";
 import ForbiddenQaResetButton from "./ForbiddenQaResetButton";
 
 export const dynamic = "force-dynamic";
+=======
+>>>>>>> 737c5be (codex snapshot)
 
 export const metadata = {
   title: "Нет доступа — СНТ «Улыбка»",
   alternates: { canonical: "/forbidden" },
 };
 
+<<<<<<< HEAD
 const getReasonText = (reason: string | null | undefined, role: string | null | undefined): string | null => {
   if (reason) {
     const reasons: Record<string, string> = {
@@ -52,6 +56,9 @@ export default async function ForbiddenPage({
   const reasonText = getReasonText(reasonParam, role);
   const isDev = process.env.NODE_ENV !== "production";
 
+=======
+export default function ForbiddenPage() {
+>>>>>>> 737c5be (codex snapshot)
   return (
     <main
       className="flex min-h-screen items-center justify-center bg-[#F8F1E9] px-4 py-10 text-zinc-900"
@@ -59,6 +66,7 @@ export default async function ForbiddenPage({
     >
       <div className="max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
         <h1 className="text-2xl font-semibold text-zinc-900">Нет доступа</h1>
+<<<<<<< HEAD
         {reasonText ? (
           <p className="mt-2 text-sm text-zinc-600">{reasonText}</p>
         ) : (
@@ -99,6 +107,17 @@ export default async function ForbiddenPage({
             </div>
           ) : null}
         </div>
+=======
+        <p className="mt-2 text-sm text-zinc-600">
+          У вас нет прав для просмотра этой страницы.
+        </p>
+        <Link
+          href="/"
+          className="mt-4 inline-flex items-center justify-center rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41]"
+        >
+          На главную
+        </Link>
+>>>>>>> 737c5be (codex snapshot)
       </div>
     </main>
   );

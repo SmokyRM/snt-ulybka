@@ -2,13 +2,21 @@ import { redirect } from "next/navigation";
 import Header from "@/components/home/Header";
 import Link from "next/link";
 import AssistantWidget from "@/components/AssistantWidget";
+<<<<<<< HEAD
 import { getEffectiveSessionUser, type SessionRole } from "@/lib/session.server";
+=======
+import { getSessionUser, type SessionRole } from "@/lib/session.server";
+>>>>>>> 737c5be (codex snapshot)
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import { RoleIndicator } from "../_components/RoleIndicator";
 import { canAccess } from "@/lib/rbac";
 import GlobalLogoutButton from "../_components/GlobalLogoutButton";
 
+const isResidentRole = (role: SessionRole | undefined | null) =>
+  role === "resident" || role === "user";
+
 export default async function CabinetLayout({ children }: { children: React.ReactNode }) {
+<<<<<<< HEAD
   const user = await getEffectiveSessionUser();
   if (!user) {
     redirect("/login?next=/cabinet");
@@ -26,6 +34,15 @@ export default async function CabinetLayout({ children }: { children: React.Reac
   const hasResidentId = Boolean(residentId);
   const isStaffLike =
     user.role === "admin" || user.role === "chairman" || user.role === "accountant" || user.role === "secretary";
+=======
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login?next=/cabinet");
+  }
+  if (!isResidentRole(user.role)) {
+    redirect("/forbidden");
+  }
+>>>>>>> 737c5be (codex snapshot)
 
   const flags = await getFeatureFlags().catch(() => null);
   const showWidget = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
@@ -37,6 +54,7 @@ export default async function CabinetLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-screen bg-[#F8F1E9]" data-testid="cabinet-root">
       <Header />
+<<<<<<< HEAD
       <div className="border-b border-zinc-200 bg-white px-4 py-2 text-xs text-zinc-600 sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between">
           <div className="flex items-center gap-3">
@@ -106,6 +124,8 @@ export default async function CabinetLayout({ children }: { children: React.Reac
           </div>
         </div>
       ) : null}
+=======
+>>>>>>> 737c5be (codex snapshot)
       {children}
       {showWidget ? (
         <AssistantWidget

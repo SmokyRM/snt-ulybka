@@ -12,9 +12,12 @@ import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import QaFloatingIndicator from "./_components/QaFloatingIndicator";
 import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import AdminQaBanner from "./_components/AdminQaBanner";
+<<<<<<< HEAD
 import { canAccess, type Role as RbacRole } from "@/lib/rbac";
 import Link from "next/link";
 import GlobalLogoutButton from "../_components/GlobalLogoutButton";
+=======
+>>>>>>> 737c5be (codex snapshot)
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();

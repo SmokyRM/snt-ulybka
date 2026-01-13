@@ -33,7 +33,11 @@ const normalizeLogin = (
   value: string | null | undefined
 ): "admin" | "resident" | "chairman" | "accountant" | "secretary" | null => {
   if (!value) return null;
+<<<<<<< HEAD
   const v = value.trim().toLowerCase().replace(/\s+/g, " ");
+=======
+  const v = value.trim().toLowerCase();
+>>>>>>> 737c5be (codex snapshot)
   if (v === "admin" || v === "админ") return "admin";
   if (v === "resident" || v === "житель") return "resident";
   if (v === "chairman" || v === "председатель" || v === "пред") return "chairman";
@@ -49,16 +53,69 @@ const safeEquals = (a: string, b: string) => {
   return timingSafeEqual(aBuf, bBuf);
 };
 
+<<<<<<< HEAD
+=======
+const mapStaffRoleRu = (
+  value: string | null | undefined
+): { role: "admin" | "chairman" | "accountant" | "secretary"; env: string } | null => {
+  if (!value) return null;
+  const v = value.trim().toLowerCase();
+  if (v === "админ" || v === "admin") return { role: "admin", env: "AUTH_PASS_ADMIN" };
+  if (v === "председатель" || v === "chairman") return { role: "chairman", env: "AUTH_PASS_CHAIRMAN" };
+  if (v === "бухгалтер" || v === "accountant") return { role: "accountant", env: "AUTH_PASS_ACCOUNTANT" };
+  if (v === "секретарь" || v === "secretary") return { role: "secretary", env: "AUTH_PASS_SECRETARY" };
+  return null;
+};
+
+>>>>>>> 737c5be (codex snapshot)
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const code = (body.code as string | undefined)?.trim();
   const loginRaw = (body.login as string | undefined)?.trim();
   const login = normalizeLogin(loginRaw);
   const password = (body.password as string | undefined) ?? "";
+<<<<<<< HEAD
+=======
+  const mode = (body.mode as string | undefined)?.trim();
+>>>>>>> 737c5be (codex snapshot)
   const url = new URL(request.url);
   const nextRaw = url.searchParams.get("next") || (body.next as string | undefined) || "";
   const sanitizedNext = sanitizeNext(nextRaw);
 
+<<<<<<< HEAD
+=======
+  // Staff login (separate form)
+  if (mode === "staff") {
+    const roleRu = (body.roleRu as string | undefined)?.trim();
+    const staff = mapStaffRoleRu(roleRu);
+    const pass = (body.password as string | undefined) ?? "";
+    if (!staff || !pass) {
+      return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
+    }
+    const envPass = (process.env[staff.env] ?? "").trim();
+    if (!envPass || !safeEquals(envPass, pass)) {
+      return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
+    }
+    const role = staff.role;
+    const userId = ROLE_USER_IDS[role];
+    upsertUserById({ id: userId, role });
+    const payload = JSON.stringify({ role, userId });
+    const response = NextResponse.json({
+      ok: true,
+      role,
+      redirectUrl: role === "admin" ? "/admin" : "/office",
+    });
+    response.cookies.set(SESSION_COOKIE, payload, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    return response;
+  }
+
+>>>>>>> 737c5be (codex snapshot)
   // Credential-based login (staff roles)
   if (login || password) {
     if (!login || !password) {
@@ -76,6 +133,7 @@ export async function POST(request: Request) {
     const userId = ROLE_USER_IDS[role];
     upsertUserById({ id: userId, role });
     const payload = JSON.stringify({ role, userId });
+<<<<<<< HEAD
     const { getSafeRedirectUrl } = await import("@/lib/safeRedirect");
     const redirectUrl = getSafeRedirectUrl(role, sanitizedNext);
     const response = NextResponse.json({
@@ -83,6 +141,9 @@ export async function POST(request: Request) {
       role,
       redirectUrl,
     });
+=======
+    const response = NextResponse.json({ ok: true, role });
+>>>>>>> 737c5be (codex snapshot)
     response.cookies.set(SESSION_COOKIE, payload, {
       httpOnly: true,
       sameSite: "lax",

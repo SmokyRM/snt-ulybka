@@ -18,7 +18,24 @@ type LoginFormProps = {
 
 type LoginRole = "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
 
+<<<<<<< HEAD
 import { getSafeRedirectUrl } from "@/lib/safeRedirect";
+=======
+const defaultPathForRole = (role: LoginRole) => {
+  if (role === "admin") return "/admin";
+  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") return "/office";
+  return "/cabinet";
+};
+
+const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) => {
+  if (!path) return false;
+  if (role === "admin") return path.startsWith("/admin");
+  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") {
+    return path.startsWith("/office");
+  }
+  return path.startsWith("/cabinet");
+};
+>>>>>>> 737c5be (codex snapshot)
 
 export default function LoginForm({ nextParam }: LoginFormProps) {
   const router = useAppRouter();
@@ -41,7 +58,11 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     if (isSubmittingRef.current) return;
     if (!session?.role) return;
     const role = (session.role as LoginRole) ?? "user";
+<<<<<<< HEAD
     const target = getSafeRedirectUrl(role, sanitizedNext);
+=======
+    const target = isPathAllowedForRole(role, sanitizedNext) ? sanitizedNext : defaultPathForRole(role);
+>>>>>>> 737c5be (codex snapshot)
     queueMicrotask(() => {
       router.replace(target);
       router.refresh();
@@ -70,7 +91,11 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         return;
       }
       const role: LoginRole = (data.role as LoginRole) ?? "user";
+<<<<<<< HEAD
       const target = getSafeRedirectUrl(role, sanitizedNext);
+=======
+      const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
+>>>>>>> 737c5be (codex snapshot)
       router.replace(target);
       router.refresh();
     } catch {

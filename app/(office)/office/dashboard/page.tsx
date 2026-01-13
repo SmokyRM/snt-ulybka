@@ -36,7 +36,10 @@ export default async function OfficeDashboardPage() {
             <Link
               key={tile.href}
               href={tile.href}
+<<<<<<< HEAD
               data-testid={`office-dashboard-tile-${tile.href.replace("/office/", "")}`}
+=======
+>>>>>>> 737c5be (codex snapshot)
               className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm transition hover:border-[#5E704F]"
             >
               <div className="text-lg font-semibold text-zinc-900">{tile.label}</div>

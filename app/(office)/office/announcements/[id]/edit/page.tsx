@@ -1,7 +1,12 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+<<<<<<< HEAD
 import { getEffectiveSessionUser } from "@/lib/session.server";
+=======
+import { getSessionUser } from "@/lib/session.server";
+import { can, type Role } from "@/lib/permissions";
+>>>>>>> 737c5be (codex snapshot)
 import { getOfficeAnnouncement, updateOfficeAnnouncement } from "@/lib/office/announcements.store";
 
 export default async function OfficeAnnouncementEditPage({
@@ -9,6 +14,7 @@ export default async function OfficeAnnouncementEditPage({
 }: {
   params: { id: string };
 }) {
+<<<<<<< HEAD
   const session = await getEffectiveSessionUser();
   if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
   const rawRole = session.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
@@ -28,6 +34,14 @@ export default async function OfficeAnnouncementEditPage({
   if (!canAccess(normalizedRole, "office.announcements.write")) {
     const reason = getForbiddenReason(normalizedRole, "office.announcements.write");
     redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}/edit`)}`);
+=======
+  const session = await getSessionUser();
+  if (!session) redirect(`/login?next=/office/announcements/${params.id}/edit`);
+  const role = (session.role as Role | undefined) ?? "resident";
+  const normalizedRole = role === "admin" ? "chairman" : role;
+  if (!can(normalizedRole, "office.announcements.manage")) {
+    redirect("/forbidden");
+>>>>>>> 737c5be (codex snapshot)
   }
 
   const announcement = getOfficeAnnouncement(params.id);

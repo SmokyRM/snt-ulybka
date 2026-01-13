@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
@@ -81,4 +82,10 @@ export default async function OfficeIndex() {
       </div>
     </div>
   );
+=======
+import { redirect } from "next/navigation";
+
+export default function OfficeIndex() {
+  redirect("/office/dashboard");
+>>>>>>> 737c5be (codex snapshot)
 }

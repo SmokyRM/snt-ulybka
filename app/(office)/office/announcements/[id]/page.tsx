@@ -1,7 +1,12 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+<<<<<<< HEAD
 import { getEffectiveSessionUser } from "@/lib/session.server";
+=======
+import { getSessionUser } from "@/lib/session.server";
+import { can, type Role } from "@/lib/permissions";
+>>>>>>> 737c5be (codex snapshot)
 import {
   getOfficeAnnouncement,
   setOfficeAnnouncementStatus,
@@ -12,6 +17,7 @@ export default async function OfficeAnnouncementDetailPage({
 }: {
   params: { id: string };
 }) {
+<<<<<<< HEAD
   const session = await getEffectiveSessionUser();
   if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}`);
   const rawRole = session.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
@@ -39,6 +45,16 @@ export default async function OfficeAnnouncementDetailPage({
   const canRead = canAccess(normalizedRole, "office.announcements.read");
   const canWrite = canAccess(normalizedRole, "office.announcements.write");
 
+=======
+  const session = await getSessionUser();
+  if (!session) redirect(`/login?next=/office/announcements/${params.id}`);
+  const role = (session.role as Role | undefined) ?? "resident";
+  const normalizedRole = role === "admin" ? "chairman" : role;
+  if (!can(normalizedRole, "office.announcements.manage")) {
+    redirect("/forbidden");
+  }
+
+>>>>>>> 737c5be (codex snapshot)
   const announcement = getOfficeAnnouncement(params.id);
   if (!announcement) notFound();
   const existing = announcement;
@@ -95,6 +111,7 @@ export default async function OfficeAnnouncementDetailPage({
           </div>
         </div>
       </div>
+<<<<<<< HEAD
       {canRead && !canWrite ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-announcement-readonly-hint">
           Только просмотр
@@ -132,6 +149,38 @@ export default async function OfficeAnnouncementDetailPage({
           )}
         </div>
       ) : null}
+=======
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/office/announcements/${existing.id}/edit`}
+          className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+          data-testid="announcement-edit"
+        >
+          Редактировать
+        </Link>
+        {existing.status === "published" ? (
+          <form action={unpublish}>
+            <button
+              type="submit"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+              data-testid="announcement-unpublish"
+            >
+              В черновик
+            </button>
+          </form>
+        ) : (
+          <form action={publish}>
+            <button
+              type="submit"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+              data-testid="announcement-publish"
+            >
+              Опубликовать
+            </button>
+          </form>
+        )}
+      </div>
+>>>>>>> 737c5be (codex snapshot)
     </div>
   );
 }

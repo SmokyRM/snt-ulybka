@@ -5,8 +5,53 @@ import { getSessionUser } from "@/lib/session.server";
 
 export default async function CabinetAppealsPage() {
   const user = await getSessionUser();
+<<<<<<< HEAD
   if (!user) redirect("/login?next=/cabinet/appeals");
   const items = listAppeals({ authorId: user.id });
+=======
+  if (!user) {
+    redirect("/login?next=/cabinet/appeals");
+  }
+  if (!user.id) {
+    return (
+      <main
+        className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6"
+        data-testid="cabinet-appeals-root"
+      >
+        <div className="mx-auto w-full max-w-3xl space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm">
+          <div className="text-base font-semibold">Не удалось определить пользователя</div>
+          <p>Обновите страницу или войдите заново.</p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/login?next=/cabinet/appeals"
+              className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4b5b40]"
+            >
+              Войти снова
+            </Link>
+            <Link
+              href="/cabinet"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              В кабинет
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+  const userId = user.id;
+  const appeals = await getUserAppeals(user.id);
+  const params = (await Promise.resolve(searchParams)) ?? {};
+  const submittedId = typeof params.submitted === "string" ? params.submitted : null;
+  const unreadCount = appeals.filter((a) => a.unreadByUser).length;
+
+  async function markAsReadAction(formData: FormData) {
+    "use server";
+    const appealId = (formData.get("id") as string | null) ?? "";
+    await markAppealRead(appealId, userId);
+    redirect("/cabinet/appeals");
+  }
+>>>>>>> 737c5be (codex snapshot)
 
   return (
     <div className="space-y-4" data-testid="cabinet-appeals-root">

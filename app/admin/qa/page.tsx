@@ -1,12 +1,28 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+<<<<<<< HEAD
+=======
+import QaCleanerClient from "../_components/QaCleanerClient";
+>>>>>>> 737c5be (codex snapshot)
 import { getSessionUser } from "@/lib/session.server";
 import { qaEnabled } from "@/lib/qaScenario";
 import { getQaScenarioFromCookies, writeQaScenarioCookie } from "@/lib/qaScenario.server";
 import QaClearButton from "../_components/QaClearButton";
 
+<<<<<<< HEAD
 const ADMIN_VIEW_COOKIE = "admin_view";
+=======
+const qaOptions: QaScenario[] = [
+  "guest",
+  "resident_ok",
+  "resident_debtor",
+  "admin",
+  "chairman",
+  "accountant",
+  "secretary",
+];
+>>>>>>> 737c5be (codex snapshot)
 
 export const metadata = {
   title: "QA-инструменты — СНТ «Улыбка»",
@@ -137,7 +153,18 @@ export default async function QaPage() {
               Офис
             </Link>
             <Link
+<<<<<<< HEAD
               href="/cabinet"
+=======
+              href="/office"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Офис
+            </Link>
+            <Link
+              href="/?qa=guest"
+>>>>>>> 737c5be (codex snapshot)
               target="_blank"
               rel="noopener noreferrer"
               data-testid="qa-open-cabinet"
@@ -167,8 +194,127 @@ export default async function QaPage() {
         </section>
 
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+<<<<<<< HEAD
           <div className="text-sm font-semibold text-zinc-900">Сервис</div>
           <QaClearButton />
+=======
+          <div className="text-sm font-semibold text-zinc-900">Открыть офис как роль</div>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link
+              href="/office?qa=chairman"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Председатель
+            </Link>
+            <Link
+              href="/office?qa=accountant"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Бухгалтер
+            </Link>
+            <Link
+              href="/office?qa=secretary"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Секретарь
+            </Link>
+            <form action={clearScenario}>
+              <button
+                type="submit"
+                className="rounded-full border border-amber-300 px-4 py-2 font-semibold text-amber-900 hover:border-amber-400"
+              >
+                Вернуться в админ-режим
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold text-zinc-900">Быстрый вход (prefill)</div>
+          <p className="text-xs text-zinc-600">
+            Открывает страницу логина с заполненным полем логина. Пароль нужно ввести вручную.
+          </p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link
+              href="/login?as=chairman"
+              target="_blank"
+              data-testid="qa-login-chairman"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Войти как Председатель
+            </Link>
+            <Link
+              href="/login?as=accountant"
+              target="_blank"
+              data-testid="qa-login-accountant"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Войти как Бухгалтер
+            </Link>
+            <Link
+              href="/login?as=secretary"
+              target="_blank"
+              data-testid="qa-login-secretary"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Войти как Секретарь
+            </Link>
+            <Link
+              href="/login?as=resident"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Войти как Житель
+            </Link>
+            <Link
+              href="/login?as=admin"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Войти как Админ
+            </Link>
+          </div>
+        </section>
+
+        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold text-zinc-900">Выбрать сценарий</div>
+          <form action={setScenario} className="flex flex-wrap items-center gap-3 text-sm">
+            <select
+              name="scenario"
+              defaultValue={current ?? ""}
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+            >
+              <option value="">— Не задан —</option>
+              <option value="guest">Гость</option>
+              <option value="resident_ok">Житель без долга</option>
+              <option value="resident_debtor">Житель с долгом</option>
+              <option value="admin">Админ</option>
+              <option value="chairman">Председатель</option>
+              <option value="accountant">Бухгалтер</option>
+              <option value="secretary">Секретарь</option>
+            </select>
+            <button
+              type="submit"
+              className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
+            >
+              Сохранить
+            </button>
+          </form>
+          <form action={clearScenario} className="text-sm">
+            <button
+              type="submit"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:border-[#5E704F] hover:text-[#5E704F]"
+            >
+              Очистить тестовые состояния
+            </button>
+          </form>
+          <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-3">
+            <QaCleanerClient />
+          </div>
+>>>>>>> 737c5be (codex snapshot)
         </section>
 
       </div>

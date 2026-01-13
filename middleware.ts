@@ -71,6 +71,15 @@ function applyQaCookie(response: NextResponse, qaParam: string | null): void {
 export function middleware(request: NextRequest) {
   try {
     const { pathname, search } = request.nextUrl;
+<<<<<<< HEAD
+=======
+    const isAdminPath = pathname.startsWith("/admin");
+    const isCabinetPath = pathname.startsWith("/cabinet");
+    const isOfficePath = pathname.startsWith("/office");
+    const isApiAdmin = pathname.startsWith("/api/admin");
+    const { hasSession } = readSessionRole(request);
+    const { role } = readSessionRole(request);
+>>>>>>> 737c5be (codex snapshot)
     const isDev = process.env.NODE_ENV !== "production";
     const qaParam = isDev ? request.nextUrl.searchParams.get("qa") : null;
     const allowedQa =
@@ -95,6 +104,7 @@ export function middleware(request: NextRequest) {
       applyQaCookie(response, qaParam);
       return response;
     }
+<<<<<<< HEAD
 
     const isAdminPath = pathname.startsWith("/admin");
     const isCabinetPath = pathname.startsWith("/cabinet");
@@ -125,6 +135,20 @@ export function middleware(request: NextRequest) {
       // Treat QA override as a form of auth in dev; only redirect when neither
       // real session nor QA role are present.
       if (!hasAuth) {
+=======
+    const qaCookie = isDev ? request.cookies.get(QA_COOKIE)?.value : null;
+    const effectiveRole: SessionRole | null =
+      qaCookie === "guest"
+        ? null
+        : qaCookie === "resident_ok" || qaCookie === "resident_debtor" || qaCookie === "resident"
+          ? "resident"
+          : qaCookie === "chairman" || qaCookie === "accountant" || qaCookie === "secretary" || qaCookie === "admin"
+            ? (qaCookie as SessionRole)
+            : role;
+
+    if (isAdminPath || isCabinetPath || isOfficePath || isApiAdmin) {
+      if (!hasSession) {
+>>>>>>> 737c5be (codex snapshot)
         if (isApiAdmin) {
           return NextResponse.json({ error: "unauthorized" }, { status: 401 });
         }
@@ -146,6 +170,7 @@ export function middleware(request: NextRequest) {
         if (!pathname.startsWith("/login")) {
           url.searchParams.set("next", `${pathname}${search}`);
         }
+<<<<<<< HEAD
         const redirectResponse = NextResponse.redirect(url);
         // Apply QA cookie to redirect if qaParam was present in query
         if (qaParam && (allowedQa || qaParam === "clear")) {
@@ -188,6 +213,34 @@ export function middleware(request: NextRequest) {
       }
     }
 
+=======
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // Admin guard
+    if (isAdminPath || isApiAdmin) {
+      const isAdminRole = role === "admin";
+      if (!isAdminRole) {
+        if (isApiAdmin) {
+          return NextResponse.json({ error: "forbidden" }, { status: 403 });
+        }
+        const url = new URL("/forbidden", request.url);
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // Office guard
+    if (isOfficePath) {
+      const checkRole = effectiveRole ?? role;
+      const isStaff = checkRole === "chairman" || checkRole === "accountant" || checkRole === "secretary";
+      if (!isStaff) {
+        const url = new URL("/forbidden", request.url);
+        return NextResponse.redirect(url);
+      }
+    }
+
+>>>>>>> 737c5be (codex snapshot)
     // Cabinet guard
     if (isCabinetPath) {
       const checkRole = effectiveRole ?? role;
@@ -195,12 +248,16 @@ export function middleware(request: NextRequest) {
         checkRole === "resident" || checkRole === "resident_debtor" || checkRole === "user" || checkRole === "admin";
       if (!isResident) {
         const url = new URL("/forbidden", request.url);
+<<<<<<< HEAD
         const redirectResponse = NextResponse.redirect(url);
         // Apply QA cookie to redirect if qaParam was present in query
         if (qaParam && (allowedQa || qaParam === "clear")) {
           applyQaCookie(redirectResponse, qaParam);
         }
         return redirectResponse;
+=======
+        return NextResponse.redirect(url);
+>>>>>>> 737c5be (codex snapshot)
       }
     }
 

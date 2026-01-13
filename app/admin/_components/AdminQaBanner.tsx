@@ -18,6 +18,7 @@ export default function AdminQaBanner({ scenario }: Props) {
   const handleClear = async () => {
     try {
       setLoading(true);
+<<<<<<< HEAD
       // Use reset endpoint to clear all QA-related cookies
       await fetch("/api/admin/qa/reset", { method: "POST" });
       // Clear any localStorage/sessionStorage QA keys
@@ -41,6 +42,12 @@ export default function AdminQaBanner({ scenario }: Props) {
       setLoading(false);
       // Hard reload to ensure all state is cleared and banners disappear
       window.location.assign("/admin/qa");
+=======
+      await fetch("/api/admin/qa/clear", { method: "POST" });
+    } finally {
+      setLoading(false);
+      router.refresh();
+>>>>>>> 737c5be (codex snapshot)
     }
   };
 
