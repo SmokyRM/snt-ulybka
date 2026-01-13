@@ -80,7 +80,19 @@ export function listAppeals(params: ListParams = {}): Appeal[] {
 }
 
 export function getAppeal(id: string): Appeal | null {
-  return db.find((item) => item.id === id) ?? null;
+  const found = db.find((item) => item.id === id);
+  if (found) return found;
+  // Если не найден, но это seed ID - гарантируем что seed данные есть
+  const seedItem = seed.find((item) => item.id === id);
+  if (seedItem) {
+    // Восстанавливаем seed элемент если он был потерян
+    const existing = db.find((item) => item.id === id);
+    if (!existing) {
+      db.push({ ...seedItem });
+      return { ...seedItem };
+    }
+  }
+  return null;
 }
 
 export function updateAppealStatus(id: string, status: AppealStatus): Appeal | null {
