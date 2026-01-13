@@ -16,9 +16,7 @@ export default async function KnowledgePage() {
   } catch (error) {
     console.error("[knowledge] list load failed", error);
   }
-  const categories = Array.from(
-    new Set(articles.map((item) => item.category)),
-  );
+  const categories = Array.from(new Set(articles.map((item) => item.category)));
 
   return (
     <main

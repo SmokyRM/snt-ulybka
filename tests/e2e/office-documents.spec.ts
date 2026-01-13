@@ -1,0 +1,17 @@
+import { test, expect } from "@playwright/test";
+
+const staffPassword = process.env.AUTH_PASS_ACCOUNTANT;
+
+test("office documents accessible for staff or shows staff-login", async ({ page }) => {
+  if (staffPassword) {
+    await page.goto("/staff-login");
+    await page.getByTestId("staff-login-username").fill("бухгалтер");
+    await page.getByTestId("staff-login-password").fill(staffPassword);
+    await page.getByTestId("staff-login-submit").click();
+    await page.goto("/office/documents");
+    await expect(page.getByTestId("office-documents-root")).toBeVisible();
+  } else {
+    await page.goto("/office/documents");
+    await expect(page.getByTestId("staff-login-root")).toBeVisible();
+  }
+});

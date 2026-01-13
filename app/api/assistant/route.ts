@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/session.server";
 import { logAdminAction } from "@/lib/audit";
 import {
@@ -27,7 +27,11 @@ import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
 
 type AssistantBody = {
   message: string;
-  pageContext?: { path?: string };
+  pageContext?: {
+    path?: string;
+    zone?: "public" | "cabinet" | "office" | "admin";
+    module?: string;
+  };
   role?: string;
   hint?: {
     mode?: "guest" | "resident" | "staff";
@@ -57,12 +61,27 @@ type ContextCard = {
   href?: string;
   status?: ContextCardStatus;
 };
-type AssistantAction = {
-  type: "link" | "copy";
-  label: string;
-  href?: string;
-  text?: string;
-};
+type AssistantAction =
+  | {
+      id: string;
+      kind: "navigate";
+      label: string;
+      href: string;
+      testId?: string;
+    }
+  | {
+      id: string;
+      kind: "inline";
+      label: string;
+      payload: { type: "requisites"; data?: Record<string, string> | null; text?: string };
+      testId?: string;
+    }
+  | {
+      type: "link" | "copy";
+      label: string;
+      href?: string;
+      text?: string;
+    };
 type AssistantDraft = {
   id: string;
   title: string;
@@ -127,12 +146,25 @@ const KV_TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST
 type AssistantPayload = {
   topic: Topic;
   answer: string;
-  links: { label: string; href: string }[];
+  links: AssistantLink[];
   contextCards: ContextCard[];
   actions: AssistantAction[];
   drafts: AssistantDraft[];
   facts?: AssistantFacts | null;
+  suggestedKnowledge?: Array<{ slug: string; title: string; reason?: string }>;
+  suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
+  isSmalltalk?: boolean;
+  provider?: "openai" | "fallback";
+  engineSource?: "llm" | "kb" | "fallback";
+  intent?: string;
+  usedFallback?: boolean;
+  sourceHints?: string[];
+  latencyMs?: number;
+  requestId?: string;
+  zone?: "public" | "cabinet" | "office" | "admin";
+  module?: string;
 };
+type AssistantLink = { label: string; href: string };
 
 const topicFiles: Record<Topic, string> = {
   "public-help": "public-help.md",
@@ -476,11 +508,29 @@ const isNavigationQuery = (text: string) =>
     text,
   );
 
+const isFeeIntent = (text: string) =>
+  /(взнос|взносы|членск|целев|оплат[аи]|реквизит|долг|начислен)/i.test(text);
+
+const resolveFeeHref = (role: Role, moduleHint?: string, zone?: string) => {
+  if (moduleHint === "cabinet.fees") return "/cabinet/billing";
+  if (moduleHint === "admin.fees") return "/admin/billing";
+  if (moduleHint?.startsWith("office.") || zone === "office") return "/office/finance";
+  if (role === "admin" || role === "board" || role === "chair") return "/admin/billing";
+  return "/cabinet/billing";
+};
+
 const mergeActions = (base: AssistantAction[], extra: AssistantAction[]) => {
-  const seen = new Set(base.map((action) => `${action.type}:${action.href ?? action.label}`));
+  const actionKey = (action: AssistantAction) => {
+    if ("kind" in action) {
+      if (action.kind === "navigate") return `${action.kind}:${action.href}`;
+      return `${action.kind}:${action.payload.type}:${action.label}`;
+    }
+    return `${action.type}:${action.href ?? action.label}`;
+  };
+  const seen = new Set(base.map((action) => actionKey(action)));
   const next = [...base];
   extra.forEach((action) => {
-    const key = `${action.type}:${action.href ?? action.label}`;
+    const key = actionKey(action);
     if (seen.has(key)) return;
     seen.add(key);
     next.push(action);
@@ -491,26 +541,26 @@ const mergeActions = (base: AssistantAction[], extra: AssistantAction[]) => {
 const buildRoleActions = (role: Role): AssistantAction[] => {
   if (role === "user") {
     return [
-      { type: "link", label: "Финансы", href: "/cabinet?section=finance" },
-      { type: "link", label: "Электроэнергия", href: "/cabinet?section=electricity" },
-      { type: "link", label: "Написать обращение", href: "/cabinet?section=appeals" },
-      { type: "link", label: "Сформировать документ", href: "/cabinet/templates" },
+      { id: "role-finance", kind: "navigate", label: "Финансы", href: "/cabinet?section=finance" },
+      { id: "role-electricity", kind: "navigate", label: "Электроэнергия", href: "/cabinet?section=electricity" },
+      { id: "role-appeal", kind: "navigate", label: "Написать обращение", href: "/cabinet?section=appeals" },
+      { id: "role-template", kind: "navigate", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   if (role === "board") {
     return [
-      { type: "link", label: "Финансы (админ)", href: "/admin/billing" },
-      { type: "link", label: "Импорт", href: "/admin/imports/plots" },
-      { type: "link", label: "Должники", href: "/admin/debts" },
-      { type: "link", label: "Сформировать документ", href: "/cabinet/templates" },
+      { id: "role-billing", kind: "navigate", label: "Финансы (админ)", href: "/admin/billing" },
+      { id: "role-import", kind: "navigate", label: "Импорт", href: "/admin/imports/plots" },
+      { id: "role-debtors", kind: "navigate", label: "Должники", href: "/admin/debts" },
+      { id: "role-template", kind: "navigate", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   if (role === "admin" || role === "chair") {
     return [
-      { type: "link", label: "Финансы (админ)", href: "/admin/billing" },
-      { type: "link", label: "Должники", href: "/admin/debts" },
-      { type: "link", label: "Настройки ИИ", href: "/admin/ai-usage" },
-      { type: "link", label: "Сформировать документ", href: "/cabinet/templates" },
+      { id: "role-billing", kind: "navigate", label: "Финансы (админ)", href: "/admin/billing" },
+      { id: "role-debtors", kind: "navigate", label: "Должники", href: "/admin/debts" },
+      { id: "role-ai", kind: "navigate", label: "Настройки ИИ", href: "/admin/ai-usage" },
+      { id: "role-template", kind: "navigate", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   return [];
@@ -521,25 +571,58 @@ const buildActionsFromFacts = (facts: AssistantFacts | null): AssistantAction[] 
   const actions: AssistantAction[] = [];
   if (facts.verificationStatus === "pending") {
     actions.push({
-      type: "link",
+      id: "facts-status",
+      kind: "navigate",
       label: "Проверить статус",
       href: "/cabinet/verification/status?status=pending",
     });
   } else if (facts.verificationStatus === "rejected" || facts.verificationStatus === "draft") {
     actions.push({
-      type: "link",
+      id: "facts-verify",
+      kind: "navigate",
       label: "Подтверждение участка",
       href: "/cabinet/verification",
     });
   }
   if (facts.debtSummary?.hasDebt) {
     actions.push({
-      type: "link",
+      id: "facts-billing",
+      kind: "navigate",
       label: "Оплата и долги",
       href: "/cabinet/billing",
     });
   }
   return actions;
+};
+
+const buildModuleActions = (moduleHint: string | undefined, role: Role): AssistantAction[] => {
+  if (!moduleHint) return [];
+  if (moduleHint === "office.appeals") {
+    return [
+      { id: "module-appeals", kind: "navigate", label: "Открыть обращения", href: "/office/appeals" },
+      ...(role === "admin" || role === "board" || role === "chair"
+        ? [{ id: "module-registry", kind: "navigate", label: "Открыть реестр", href: "/office/registry" } satisfies AssistantAction]
+        : []),
+    ];
+  }
+  if (moduleHint === "office.finance") {
+    return [
+      { id: "module-finance", kind: "navigate", label: "Открыть финансы", href: "/office/finance" },
+      ...(role === "admin" || role === "board" || role === "chair"
+        ? [{ id: "module-registry", kind: "navigate", label: "Открыть реестр", href: "/office/registry" } satisfies AssistantAction]
+        : []),
+    ];
+  }
+  if (moduleHint === "office.registry") {
+    return [{ id: "module-registry", kind: "navigate", label: "Открыть реестр", href: "/office/registry" }];
+  }
+  if (moduleHint === "admin.fees") {
+    return [{ id: "module-admin-fees", kind: "navigate", label: "Открыть биллинг", href: "/admin/billing" }];
+  }
+  if (moduleHint === "cabinet.fees") {
+    return [{ id: "module-cabinet-fees", kind: "navigate", label: "Финансы в кабинете", href: "/cabinet/billing" }];
+  }
+  return [];
 };
 
 const buildDocActions = async (
@@ -998,6 +1081,7 @@ const buildDebtDrafts = ({
 export async function POST(request: Request) {
   const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   const requestStart = Date.now();
+  const requestId = randomUUID();
   let success = false;
   let errorMessage: string | null = null;
   let source: AiUsageSource = "assistant";
@@ -1011,6 +1095,8 @@ export async function POST(request: Request) {
   }
   const message = typeof body.message === "string" ? body.message : "";
   const pathHint = body.pageContext?.path ?? null;
+  const moduleHint = body.pageContext?.module;
+  const zoneHint = body.pageContext?.zone;
   const messageLen = message.trim().length;
   const smalltalk = isSmalltalk(message);
   if (!openaiKey) {
@@ -1106,6 +1192,15 @@ export async function POST(request: Request) {
         contextCards: [],
         actions: faqMatch.links.map((link) => ({ type: "link", label: link.label, href: link.href })),
         drafts: [],
+        provider: "fallback",
+        engineSource: "fallback",
+        usedFallback: true,
+        intent: rawTopic,
+        sourceHints: ["faq"],
+        latencyMs: Date.now() - requestStart,
+        requestId,
+        zone: body.pageContext?.zone,
+        module: body.pageContext?.module,
       },
       hint,
     );
@@ -1233,6 +1328,12 @@ export async function POST(request: Request) {
       actions: mergeActions(greetingActions, generalActions),
       drafts: [],
       facts: null,
+      provider: "fallback",
+      engineSource: "fallback",
+      usedFallback: true,
+      intent: rawTopic,
+      sourceHints: ["smalltalk"],
+      requestId,
     };
     source = "assistant";
     cachedFlag = false;
@@ -1258,7 +1359,8 @@ export async function POST(request: Request) {
     } catch {
       // ignore logging failures
     }
-    return NextResponse.json({ ok: true,
+    return NextResponse.json({
+      ok: true,
       ...greeting,
       cached: cachedFlag,
       source,
@@ -1266,6 +1368,174 @@ export async function POST(request: Request) {
       suggestedKnowledge: [],
       suggestedTemplates: [],
       isSmalltalk: true,
+      provider: "fallback",
+      latencyMs: Date.now() - requestStart,
+      requestId,
+      zone: body.pageContext?.zone,
+      module: body.pageContext?.module,
+    });
+  }
+
+  if (isFeeIntent(message)) {
+    const allowPersonal = Boolean(
+      flags &&
+        isFeatureEnabled(flags, "ai_personal_enabled") &&
+        sessionUser?.status === "verified",
+    );
+    const usageMode = getUsageMode({
+      role,
+      isStaff: staffRoles.has(role),
+      allowPersonal,
+    });
+    let answer = "";
+    let links: AssistantLink[] = [];
+    let actions: AssistantAction[] = [];
+    let requisitesText: string | null = null;
+    let requisitesData: Record<string, string> | null = null;
+    try {
+      const content = await getPublicContent();
+      requisitesData = {
+        Получатель: content.paymentDetails.receiver,
+        ИНН: content.paymentDetails.inn,
+        КПП: content.paymentDetails.kpp,
+        Банк: content.paymentDetails.bank,
+        "р/с": content.paymentDetails.account,
+        БИК: content.paymentDetails.bic,
+        "к/с": content.paymentDetails.corr,
+      };
+      requisitesText = Object.values(requisitesData)
+        .filter(Boolean)
+        .join("\n");
+    } catch {
+      requisitesText = null;
+      requisitesData = null;
+    }
+    try {
+      const tariff = getMembershipTariffSetting().value;
+      if (tariff) {
+        const tariffText = `Членский взнос сейчас ${tariff.toLocaleString("ru-RU")} ₽ в месяц.`;
+        const where = "Смотреть начисления и оплатить: раздел «Взносы и долги» или в кабинете → Финансы.";
+        const pay = "Оплата по реквизитам (Документы) или переводом в банке — укажите номер участка.";
+        answer = [tariffText, where, pay].join(" ");
+        links = [
+          { label: "Взносы", href: "/fees" },
+          { label: "Документы", href: "/docs" },
+        ];
+        actions = [
+          {
+            id: "fees-main",
+            kind: "navigate",
+            label: "Взносы и долги",
+            href: resolveFeeHref(role, moduleHint, zoneHint),
+            testId: "assistant-action-fees",
+          },
+          {
+            id: "fees-requisites",
+            kind: "inline",
+            label: "Показать реквизиты",
+            payload: { type: "requisites", data: requisitesData, text: requisitesText ?? undefined },
+            testId: "assistant-action-requisites",
+          },
+          {
+            id: "fees-docs",
+            kind: "navigate",
+            label: "Документы по взносам",
+            href: "/docs",
+            testId: "assistant-action-docs",
+          },
+        ];
+      } else {
+        answer = "Уточни, пожалуйста: членские или целевые? За какой год или период нужны суммы?";
+        links = [{ label: "Как оплатить", href: "/fees" }];
+        actions = [
+          {
+            id: "fees-docs-fallback",
+            kind: "navigate",
+            label: "Как оплатить",
+            href: "/fees",
+            testId: "assistant-action-docs",
+          },
+          {
+            id: "fees-requisites-missing",
+            kind: "inline",
+            label: "Показать реквизиты",
+            payload: { type: "requisites", data: requisitesData, text: requisitesText ?? "Реквизиты ещё не заполнены" },
+            testId: "assistant-action-requisites",
+          },
+        ];
+      }
+    } catch {
+      answer = "Уточни, пожалуйста: членские или целевые? За какой год или период нужны суммы?";
+      links = [{ label: "Как оплатить", href: "/fees" }];
+      actions = [
+        {
+          id: "fees-docs-error",
+          kind: "navigate",
+          label: "Как оплатить",
+          href: "/fees",
+          testId: "assistant-action-docs",
+        },
+        {
+          id: "fees-requisites-error",
+          kind: "inline",
+          label: "Показать реквизиты",
+          payload: { type: "requisites", data: requisitesData, text: requisitesText ?? "Реквизиты ещё не заполнены" },
+          testId: "assistant-action-requisites",
+        },
+      ];
+    }
+
+    const payload: AssistantPayload = {
+      topic: "public-help",
+      answer: trimAnswer(answer),
+      links,
+      contextCards: [],
+      actions,
+      drafts: [],
+      facts: facts ?? null,
+      suggestedKnowledge,
+      suggestedTemplates,
+      isSmalltalk: false,
+      provider: "fallback",
+      engineSource: "fallback",
+      usedFallback: true,
+      intent: rawTopic,
+      sourceHints: ["fallback", "fees"],
+      latencyMs: Date.now() - requestStart,
+      requestId,
+      zone: body.pageContext?.zone,
+      module: body.pageContext?.module,
+    };
+    source = "assistant";
+    cachedFlag = false;
+    success = true;
+    try {
+      await logAiUsage({
+        userId,
+        role,
+        source,
+        cached: cachedFlag,
+        ts: new Date().toISOString(),
+        success: true,
+        tokens: null,
+        pathHint,
+        topic: "public-help",
+        mode: usageMode,
+        outOfScope: false,
+        latencyMs: Date.now() - requestStart,
+        messageLen,
+        thumb: null,
+        error: null,
+      });
+    } catch {
+      // ignore logging failures
+    }
+    return NextResponse.json({
+      ok: true,
+      ...payload,
+      source,
+      cached: cachedFlag,
+      facts: facts ?? null,
     });
   }
 
@@ -1433,6 +1703,7 @@ export async function POST(request: Request) {
         permissions,
       });
     }
+    actions = mergeActions(actions, buildModuleActions(moduleHint, role));
     if (isStaff && (topic === "staff-debts" || topic === "staff-debtors")) {
       const period = getLastPeriod("membership_fee");
       if (period) {
@@ -1525,14 +1796,28 @@ export async function POST(request: Request) {
             answer: trimAnswer(answer),
             links,
             contextCards,
-            actions: mergeActions(actions, combinedActions),
-            drafts,
+      actions: mergeActions(actions, combinedActions),
+      drafts,
+      intent: topic,
+      usedFallback: false,
+      sourceHints: [
+        "llm",
+        ...(contextCards.length ? ["context"] : []),
+        ...(suggestedKnowledge.length ? ["knowledge"] : []),
+        ...(suggestedTemplates.length ? ["templates"] : []),
+      ],
+      engineSource: "llm",
           },
           hint,
         ),
         aiSettings,
       ),
       facts,
+      provider: "openai",
+      latencyMs: Date.now() - requestStart,
+      requestId,
+      zone: body.pageContext?.zone,
+      module: body.pageContext?.module,
     };
     await cacheSet(cacheKey, payload);
     source = "assistant";

@@ -1,0 +1,197 @@
+import { redirect } from "next/navigation";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import { can, type Role } from "@/lib/permissions";
+import { listRegistry, type OwnershipStatus } from "@/lib/residentsRegistry.store";
+import { verifyOwnershipAction, rejectOwnershipAction } from "./actions";
+
+type Props = {
+  searchParams?: {
+    street?: string;
+    status?: string;
+    q?: string;
+  };
+};
+
+const statusOptions = [
+  { value: "all", label: "Все" },
+  { value: "pending", label: "На проверке" },
+  { value: "verified", label: "Подтверждено" },
+  { value: "rejected", label: "Отклонено" },
+];
+
+export default async function OfficeRegistryPage({ searchParams }: Props) {
+  const user = await getEffectiveSessionUser();
+  if (!user) redirect("/staff-login?next=/office/registry");
+  const role = (user.role as Role | undefined) ?? "resident";
+  const canRead =
+    can(role === "admin" ? "chairman" : role, "office.registry.read") ||
+    can(role === "admin" ? "chairman" : role, "office.registry.manage");
+  if (!canRead) redirect("/forbidden");
+  const canManage = can(role === "admin" ? "chairman" : role, "office.registry.manage");
+
+  const street = searchParams?.street ? Number(searchParams.street) : undefined;
+  const statusParam = searchParams?.status ?? "all";
+  const q = searchParams?.q ?? "";
+
+  const rows = listRegistry({
+    street: street && !Number.isNaN(street) ? street : undefined,
+    status: statusParam === "all" ? "all" : (statusParam as OwnershipStatus),
+    q,
+  });
+
+  return (
+    <div className="space-y-4" data-testid="office-registry-root">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Реестр участков</h1>
+          <p className="text-sm text-zinc-600">Заявки на подтверждение участка и контакты</p>
+        </div>
+      </div>
+
+      <form className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:grid-cols-4 sm:items-end">
+        <label className="text-sm text-zinc-700">
+          <div className="text-xs font-semibold text-zinc-600">Улица</div>
+          <select
+            name="street"
+            defaultValue={street ?? ""}
+            data-testid="office-registry-filter-street"
+            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none"
+          >
+            <option value="">Все</option>
+            {Array.from({ length: 27 }).map((_, idx) => (
+              <option key={idx} value={idx + 1}>
+                Улица {idx + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-zinc-700">
+          <div className="text-xs font-semibold text-zinc-600">Статус</div>
+          <select
+            name="status"
+            defaultValue={statusParam}
+            data-testid="office-registry-filter-status"
+            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none"
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sm:col-span-2 text-sm text-zinc-700">
+          <div className="text-xs font-semibold text-zinc-600">Поиск</div>
+          <input
+            type="text"
+            name="q"
+            defaultValue={q}
+            data-testid="office-registry-search"
+            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none"
+            placeholder="ФИО, телефон или участок"
+          />
+        </label>
+        <div className="sm:col-span-4">
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4d5d41]"
+          >
+            Применить
+          </button>
+        </div>
+      </form>
+
+      <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+        <table className="min-w-full divide-y divide-zinc-200">
+          <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
+            <tr>
+              <th className="px-3 py-2">Участок</th>
+              <th className="px-3 py-2">ФИО</th>
+              <th className="px-3 py-2">Телефон</th>
+          <th className="px-3 py-2">Статус</th>
+          <th className="px-3 py-2 text-right">Действия</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-zinc-200">
+        {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-sm text-zinc-600">
+                  Заявки не найдены.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} data-testid={`office-registry-row-${row.id}`} className="text-sm text-zinc-800">
+                  <td className="px-3 py-2 font-semibold">
+                    Улица {row.streetNo}, участок {row.plotLabel}
+                  </td>
+                  <td className="px-3 py-2">{row.fio}</td>
+                  <td className="px-3 py-2">{row.phone}</td>
+                  <td className="px-3 py-2">
+                    <div className="space-y-1">
+                      <div>
+                        {row.status === "pending"
+                          ? "На проверке"
+                          : row.status === "verified"
+                            ? "Подтверждено"
+                            : row.status === "rejected"
+                              ? "Отклонено"
+                              : "Конфликт"}
+                      </div>
+                      {row.status === "conflict" ? (
+                        <div
+                          data-testid={`office-registry-conflict-${row.id}`}
+                          className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700"
+                        >
+                          Конфликт: уже закреплён
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {canManage && (row.status === "pending" || row.status === "conflict") ? (
+                      <div className="flex justify-end gap-2">
+                        <form action={verifyOwnershipAction}>
+                          <input type="hidden" name="id" value={row.id} />
+                          <button
+                            type="submit"
+                            data-testid={`office-registry-verify-${row.id}`}
+                            disabled={row.status === "conflict" && !(role === "admin" || role === "chairman")}
+                            title={
+                              row.status === "conflict" && !(role === "admin" || role === "chairman")
+                                ? "Подтверждать конфликт может только админ/председатель"
+                                : undefined
+                            }
+                            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${
+                              row.status === "conflict" && !(role === "admin" || role === "chairman")
+                                ? "cursor-not-allowed border-zinc-200 text-zinc-400"
+                                : "border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                            }`}
+                          >
+                            Подтвердить
+                          </button>
+                        </form>
+                        <form action={rejectOwnershipAction}>
+                          <input type="hidden" name="id" value={row.id} />
+                          <button
+                            type="submit"
+                            data-testid={`office-registry-reject-${row.id}`}
+                            className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:border-rose-300"
+                          >
+                            Отклонить
+                          </button>
+                        </form>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-500">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

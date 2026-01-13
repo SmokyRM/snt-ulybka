@@ -129,7 +129,7 @@ const baseSections = [
 type AdminSidebarProps = {
   isDev: boolean;
   isAdmin: boolean;
-  role: "user" | "admin" | "board" | "accountant" | "operator";
+  role: "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
 };
 
 export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps) {
@@ -150,10 +150,12 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
   const collapsed = effectiveState.collapsed;
   const openSections = effectiveState.sections;
 
-  const hasFinanceAccess = role === "admin" || role === "accountant" || role === "board";
-  const hasMembershipTariffAccess = role === "admin" || role === "board";
+  const hasFinanceAccess =
+    role === "admin" || role === "accountant" || role === "board" || role === "chairman";
+  const hasMembershipTariffAccess = role === "admin" || role === "board" || role === "chairman";
   const hasImportAccess =
-    role === "admin" || role === "accountant" || role === "operator" || role === "board";
+    role === "admin" || role === "accountant" || role === "operator" || role === "board" || role === "chairman";
+  const isAdminUi = role === "admin";
 
   const sections = baseSections
     .map((section) => ({
@@ -165,7 +167,7 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
         return {
           ...section,
           links: section.links.filter((link) => {
-            if (link.href === "/admin/plots") return isAdmin;
+            if (link.href === "/admin/plots") return isAdminUi;
             if (link.href === "/admin/imports/plots") return hasImportAccess;
             if (link.href === "/admin/ai-usage") return hasFinanceAccess;
             return true;
@@ -193,7 +195,7 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
       if (section.title === "Настройки сайта") {
         return {
           ...section,
-          links: section.links.filter(() => isAdmin),
+          links: section.links.filter(() => isAdminUi),
         };
       }
       if (section.title === "Помощь") {

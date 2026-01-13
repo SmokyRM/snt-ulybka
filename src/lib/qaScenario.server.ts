@@ -15,7 +15,10 @@ export const getQaScenarioFromCookies = async (
     value === "guest" ||
     value === "resident_ok" ||
     value === "resident_debtor" ||
-    value === "admin"
+    value === "admin" ||
+    value === "chairman" ||
+    value === "accountant" ||
+    value === "secretary"
   ) {
     return value;
   }

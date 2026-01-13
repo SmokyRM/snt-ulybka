@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
@@ -14,12 +15,27 @@ type ContextCard = {
   href?: string;
   status?: "success" | "warning" | "error" | "info";
 };
-type AssistantAction = {
-  type: "link" | "copy";
-  label: string;
-  href?: string;
-  text?: string;
-};
+type AssistantAction =
+  | {
+      type: "link" | "copy";
+      label: string;
+      href?: string;
+      text?: string;
+    }
+  | {
+      id: string;
+      kind: "navigate";
+      label: string;
+      href: string;
+      testId?: string;
+    }
+  | {
+      id: string;
+      kind: "inline";
+      label: string;
+      payload: { type: "requisites"; data?: Record<string, string> | null; text?: string };
+      testId?: string;
+    };
 type AssistantDraft = {
   id: string;
   title: string;
@@ -44,6 +60,7 @@ type AssistantMessage = {
   contextCards?: ContextCard[];
   actions?: AssistantAction[];
   drafts?: AssistantDraft[];
+  inlineType?: "requisites" | "deadend";
   source?: "faq" | "assistant" | "cache";
   cached?: boolean;
   outOfScope?: boolean;
@@ -52,6 +69,13 @@ type AssistantMessage = {
   suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
   facts?: AssistantFacts | null;
   isSmalltalk?: boolean;
+  provider?: "openai" | "fallback";
+  engineSource?: "llm" | "kb" | "fallback";
+  latencyMs?: number;
+  requestId?: string;
+  intent?: string;
+  usedFallback?: boolean;
+  sourceHints?: string[];
 };
 
 type AssistantWidgetProps = {
@@ -147,6 +171,20 @@ export default function AssistantWidget({
   const [isScrolling, setIsScrolling] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const zone = useMemo<"public" | "cabinet" | "office" | "admin">(() => {
+    if (pathname.startsWith("/admin")) return "admin";
+    if (pathname.startsWith("/office")) return "office";
+    if (pathname.startsWith("/cabinet")) return "cabinet";
+    return "public";
+  }, [pathname]);
+  const moduleHint = useMemo(() => {
+    if (pathname.startsWith("/office/appeals")) return "office.appeals";
+    if (pathname.startsWith("/office/finance")) return "office.finance";
+    if (pathname.startsWith("/office/registry")) return "office.registry";
+    if (pathname.startsWith("/admin/debts") || pathname.startsWith("/admin/billing")) return "admin.fees";
+    if (pathname.startsWith("/cabinet/billing")) return "cabinet.fees";
+    return undefined;
+  }, [pathname]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{
@@ -168,6 +206,11 @@ export default function AssistantWidget({
   const [userRole, setUserRole] = useState<"guest" | "user" | "board" | "admin">(
     initialRole ?? "guest",
   );
+  const showProviderBadge = useMemo(
+    () => process.env.NODE_ENV !== "production" || userRole === "admin",
+    [userRole],
+  );
+  const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"help" | "ai" | "contacts">("help");
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const [loadingTopic, setLoadingTopic] = useState<string | null>(null);
@@ -185,9 +228,15 @@ export default function AssistantWidget({
   const [lastTopicAnswer, setLastTopicAnswer] = useState<AssistantMessage | null>(null);
   const [unreadAppeals, setUnreadAppeals] = useState<number>(0);
   const [uiScale, setUiScale] = useState<number>(1);
+  const [loadingText, setLoadingText] = useState("Генерирую ответ…");
+  const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
+  const [deadEndShown, setDeadEndShown] = useState(false);
+  const [deadEndReason, setDeadEndReason] = useState<"thumbs" | "repeat" | null>(null);
+  const [historyKey, setHistoryKey] = useState<string | null>(null);
   const aiSettingsLoadedRef = useRef(false);
   const historyLoadedRef = useRef(false);
   const scrollTimeoutRef = useRef<number | null>(null);
+  const loadingTimersRef = useRef<number[]>([]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -196,14 +245,13 @@ export default function AssistantWidget({
   const lastSendRef = useRef(0);
   const lastUserPromptRef = useRef<string | null>(null);
   const lastHintModeRef = useRef<"guest" | "resident" | "staff">("guest");
-  const historyKey =
-    variant === "admin" ? "assistant.history.admin" : "assistant.history.public";
   const aiStyleKey = "assistant_ai_style";
   const aiSourcesKey = "assistant_ai_sources";
   const sizeStorageKey = "assistantWidgetSize:v1";
   const onboardingKey = "assistantOnboardingSeen:v1";
   const textSizeKey = "assistantTextSize:v1";
   const uiScaleKey = "assistantUiScale:v1";
+  const feedbackLoadedRef = useRef(false);
   const resizeSession = useRef<{
     startX: number;
     startY: number;
@@ -253,12 +301,28 @@ export default function AssistantWidget({
   const outOfScopeRedirectChips = [...clarificationChips, "Контакты"];
 
   useEffect(() => {
-    if (viewState !== "open" || historyLoadedRef.current) return;
+    const newKey = `assistant_history:${userId ?? "guest"}:${userRole ?? "guest"}:${zone}`;
+    setHistoryKey(newKey);
+    historyLoadedRef.current = false;
+  }, [userId, userRole, zone]);
+
+  useEffect(() => {
+    if (!historyKey) return;
+    historyLoadedRef.current = false;
+    setMessages([]);
+    setLastTopicAnswer(null);
+    feedbackLoadedRef.current = false;
+    setFeedback({});
+  }, [historyKey]);
+
+  useEffect(() => {
+    if (historyLoadedRef.current) return;
     if (typeof window === "undefined") return;
+    if (!historyKey) return;
     try {
       const raw = window.localStorage.getItem(historyKey);
       if (raw) {
-        const parsed = JSON.parse(raw) as AssistantMessage[];
+      const parsed = JSON.parse(raw) as AssistantMessage[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMessages(parsed);
         }
@@ -268,18 +332,80 @@ export default function AssistantWidget({
     } finally {
       historyLoadedRef.current = true;
     }
-  }, [historyKey, viewState]);
+  }, [historyKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!historyLoadedRef.current) return;
+    if (!historyKey) return;
     try {
-      const trimmed = messages.slice(-15);
+      const trimmed = messages.slice(-20);
       window.localStorage.setItem(historyKey, JSON.stringify(trimmed));
     } catch {
       // ignore storage errors
     }
   }, [historyKey, messages]);
+
+  useEffect(() => {
+    if (!historyKey) return;
+    if (feedbackLoadedRef.current) return;
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(`assistant_feedback:${historyKey}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, "up" | "down">;
+        if (parsed && typeof parsed === "object") {
+          setFeedback(parsed);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      feedbackLoadedRef.current = true;
+    }
+  }, [historyKey]);
+
+  useEffect(() => {
+    if (!historyKey) return;
+    if (!feedbackLoadedRef.current) return;
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(`assistant_feedback:${historyKey}`, JSON.stringify(feedback));
+    } catch {
+      // ignore
+    }
+  }, [feedback, historyKey]);
+
+  useEffect(() => {
+    if (!loading) {
+      loadingTimersRef.current.forEach((id) => window.clearTimeout(id));
+      loadingTimersRef.current = [];
+      setLoadingText("Генерирую ответ…");
+      return;
+    }
+    setLoadingText("Генерирую ответ…");
+    const timers: number[] = [];
+    timers.push(
+      window.setTimeout(() => {
+        setLoadingText("Думаю…");
+      }, 3000),
+    );
+    timers.push(
+      window.setTimeout(() => {
+        setLoadingText("Ищу в базе знаний…");
+      }, 7000),
+    );
+    timers.push(
+      window.setTimeout(() => {
+        setLoadingText("Формирую ответ… (это может занять немного времени)");
+      }, 15000),
+    );
+    loadingTimersRef.current = timers;
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+      loadingTimersRef.current = [];
+    };
+  }, [loading]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -510,10 +636,12 @@ export default function AssistantWidget({
             typeof data?.user?.status === "string" ? data.user.status : null;
           const role =
             typeof data?.user?.role === "string" ? data.user.role : null;
+          const id = typeof data?.user?.id === "string" ? data.user.id : null;
           setIsVerified(status ? status === "verified" : null);
           if (role === "admin" || role === "board" || role === "user" || role === "guest") {
             setUserRole(role);
           }
+          if (id) setUserId(id);
         } else {
           setIsVerified(null);
         }
@@ -545,7 +673,7 @@ export default function AssistantWidget({
     setLoadingTopic(null);
     lastTopicRef.current = null;
     historyLoadedRef.current = false;
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && historyKey) {
       window.localStorage.removeItem(historyKey);
     }
   }, [historyKey]);
@@ -585,13 +713,15 @@ export default function AssistantWidget({
   useEffect(() => {
     if (!listRef.current) return;
     const last = messages[messages.length - 1];
-    if (!last || last.role !== "assistant") return;
+    if (!last) return;
+    if (!isNearBottom()) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
     if (!listRef.current) return;
     if (!lastTopicAnswer) return;
+    if (!isNearBottom()) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [lastTopicAnswer]);
 
@@ -614,7 +744,7 @@ export default function AssistantWidget({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: prompt,
-          pageContext: { path: pathname },
+          pageContext: { path: pathname, zone, module: moduleHint },
           hint: { mode: hintMode, verbosity: hintVerbosity },
           ...aiPayload,
         }),
@@ -637,6 +767,13 @@ export default function AssistantWidget({
         suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
         facts?: AssistantFacts | null;
         isSmalltalk?: boolean;
+        provider?: "openai" | "fallback";
+        latencyMs?: number;
+        requestId?: string;
+        intent?: string;
+        usedFallback?: boolean;
+        sourceHints?: string[];
+        engineSource?: "llm" | "kb" | "fallback";
       }>(response);
       const hasApiError = Boolean(data.error || data.error_code);
       if (!response.ok || !data.ok || hasApiError) {
@@ -685,22 +822,44 @@ export default function AssistantWidget({
         }
         return;
       }
-      const assistantMessage: AssistantMessage = {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        text: data.answer ?? "",
-        links: data.links,
-        contextCards: data.contextCards,
-        actions: data.actions,
-        drafts: data.drafts,
-        source: data.source,
-        cached: data.cached,
-        outOfScope: data.outOfScope,
-        suggestedKnowledge: data.suggestedKnowledge,
-        suggestedTemplates: data.suggestedTemplates,
-        facts: data.facts,
-        isSmalltalk: data.isSmalltalk ?? false,
-      };
+      const hasHistory = messages.length > 0;
+      const askedScope =
+        /что.*(умеешь|можешь|отвечаешь)|о чем.*(отвечать|говоришь)/i.test(lastPrompt ?? "");
+      let answerText = data.answer ?? "";
+      let links = data.links;
+      const actions = data.actions;
+      let contextCards = data.contextCards;
+      if (data.topic === "public-help" && !data.isSmalltalk && hasHistory && !askedScope) {
+        answerText =
+          "Давайте по делу: подскажу по взносам, электроэнергии, документам и доступу. Сформулируйте вопрос — отвечу коротко.";
+        // Убираем лишний шум, оставляем компактные ссылки, если есть
+        links = (links ?? []).slice(0, 3);
+        contextCards = [];
+      }
+
+    const assistantMessage: AssistantMessage = {
+      id: `${Date.now()}-assistant`,
+      role: "assistant",
+      text: answerText,
+      links,
+      contextCards,
+      actions,
+      drafts: data.drafts,
+      source: data.source,
+      engineSource: data.engineSource,
+      cached: data.cached,
+      outOfScope: data.outOfScope,
+      suggestedKnowledge: data.suggestedKnowledge,
+      suggestedTemplates: data.suggestedTemplates,
+      facts: data.facts,
+      isSmalltalk: data.isSmalltalk ?? false,
+      provider: data.provider,
+      latencyMs: data.latencyMs,
+      requestId: data.requestId,
+      intent: data.intent,
+      usedFallback: data.usedFallback,
+      sourceHints: data.sourceHints,
+    };
       setMessages((prev) => [...prev, assistantMessage]);
       if (lastTopicRef.current) {
         setLastTopicAnswer(assistantMessage);
@@ -735,18 +894,42 @@ export default function AssistantWidget({
     const aiPayload = isAiTab ? { ai_answer_style: aiStyle, ai_show_sources: aiShowSources } : {};
     lastUserPromptRef.current = trimmed;
     lastHintModeRef.current = hintMode;
+    setDeadEndShown(false);
+    setDeadEndReason(null);
     setLoading(true);
     setError(null);
     setBanner(null);
     setLastStatus(null);
     setMessages((prev) => [...prev, userMessage]);
+    const recentUserMessages = [...messages, userMessage].filter((m) => m.role === "user");
+    const normalized = (text: string) =>
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (recentUserMessages.length >= 2) {
+      const lastNormalized = normalized(userMessage.text);
+      const lastSix = recentUserMessages.slice(-6).map((m) => normalized(m.text));
+      const similarCount = lastSix
+        .slice(0, -1)
+        .filter(
+          (t) =>
+            t.length > 5 &&
+            lastNormalized.length > 5 &&
+            (t.includes(lastNormalized) || lastNormalized.includes(t)),
+        ).length;
+      if (similarCount >= 1 && !deadEndShown) {
+        showDeadEndCard("repeat");
+      }
+    }
     try {
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
-          pageContext: { path: pathname },
+          pageContext: { path: pathname, zone, module: moduleHint },
           hint: { mode: hintMode, verbosity: hintVerbosity },
           ...aiPayload,
         }),
@@ -767,6 +950,14 @@ export default function AssistantWidget({
         outOfScope?: boolean;
         suggestedKnowledge?: Array<{ slug: string; title: string; category?: string; reason?: string }>;
         suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
+        isSmalltalk?: boolean;
+        provider?: "openai" | "fallback";
+        engineSource?: "llm" | "kb" | "fallback";
+        latencyMs?: number;
+        requestId?: string;
+        intent?: string;
+        usedFallback?: boolean;
+        sourceHints?: string[];
       }>(response);
       const hasApiError = Boolean(data.error || data.error_code);
       if (!response.ok || !data.ok || hasApiError) {
@@ -828,10 +1019,18 @@ export default function AssistantWidget({
         actions: data.actions,
         drafts: data.drafts,
         source: data.source,
+        engineSource: (data as { engineSource?: "llm" | "kb" | "fallback" }).engineSource,
         cached: data.cached,
         outOfScope: data.outOfScope,
         suggestedKnowledge: data.suggestedKnowledge,
         suggestedTemplates: data.suggestedTemplates,
+        isSmalltalk: data.isSmalltalk ?? false,
+        provider: (data as { provider?: "openai" | "fallback" }).provider,
+        latencyMs: (data as { latencyMs?: number }).latencyMs,
+        requestId: (data as { requestId?: string }).requestId,
+        intent: (data as { intent?: string }).intent,
+        usedFallback: (data as { usedFallback?: boolean }).usedFallback,
+        sourceHints: (data as { sourceHints?: string[] }).sourceHints,
       };
       setMessages((prev) => [...prev, assistantMessage]);
       if (lastTopicRef.current) {
@@ -890,6 +1089,85 @@ export default function AssistantWidget({
     }
   };
 
+  const handleActionNavigation = useCallback(
+    (href: string | undefined, e: React.MouseEvent | React.KeyboardEvent) => {
+      if (!href) return;
+      e.preventDefault();
+      e.stopPropagation();
+      router.push(href);
+    },
+    [router],
+  );
+
+  const handleInlineAction = (action: AssistantAction) => {
+    if (!("kind" in action) || action.kind !== "inline") return;
+    if (action.payload.type === "requisites") {
+      const text =
+        action.payload.text?.trim() ||
+        (action.payload.data
+          ? Object.values(action.payload.data)
+              .filter(Boolean)
+              .join("\n")
+          : "Реквизиты пока не указаны. Свяжитесь с правлением для уточнения.");
+      const inlineMessage: AssistantMessage = {
+        id: `${Date.now()}-inline-requisites`,
+        role: "assistant",
+        text: text,
+        inlineType: "requisites",
+        meta: true,
+      };
+      setMessages((prev) => [...prev, inlineMessage]);
+    }
+  };
+
+  const logDeadEnd = async (trigger: "thumbs" | "repeat") => {
+    try {
+      await fetch("/api/assistant/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "assistant_dead_end",
+          trigger,
+          zone,
+          module: moduleHint,
+          pathname,
+          role: userRole ?? "guest",
+          userId: userId ?? "guest",
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const showDeadEndCard = (trigger: "thumbs" | "repeat") => {
+    if (deadEndShown) return;
+    setDeadEndShown(true);
+    setDeadEndReason(trigger);
+    void logDeadEnd(trigger);
+    const appealHref =
+      zone === "office"
+        ? "/office/appeals"
+        : zone === "admin"
+          ? "/admin/appeals"
+          : isGuest
+            ? "/login?next=/cabinet/appeals/new"
+            : "/cabinet/appeals/new";
+    const contactsHref = "/contacts";
+    const deadEndMessage: AssistantMessage = {
+      id: `${Date.now()}-deadend`,
+      role: "assistant",
+      text: "Похоже, ответ не помог. Создать обращение или перейти к контактам?",
+      inlineType: "deadend",
+      meta: true,
+      actions: [
+        { id: "deadend-appeal", kind: "navigate", label: "Создать обращение", href: appealHref, testId: "assistant-deadend-create-appeal" },
+        { id: "deadend-contacts", kind: "navigate", label: "Открыть контакты", href: contactsHref, testId: "assistant-deadend-contacts" },
+      ],
+    };
+    setMessages((prev) => [...prev, deadEndMessage]);
+  };
+
   const handleInsertDraft = (id: string, text?: string) => {
     if (!text || typeof window === "undefined") return;
     try {
@@ -902,6 +1180,56 @@ export default function AssistantWidget({
     } catch {
       setError("Не удалось подготовить черновик.");
     }
+  };
+
+  const handleFeedback = async (messageId: string, rating: "up" | "down") => {
+    const current = feedback[messageId];
+    const nextRating = current === rating ? undefined : rating;
+    setFeedback((prev) => {
+      const copy = { ...prev };
+      if (nextRating) copy[messageId] = nextRating;
+      else delete copy[messageId];
+      return copy;
+    });
+    try {
+      await fetch("/api/assistant/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId,
+          conversationKey: historyKey,
+          userId: userId ?? "guest",
+          role: userRole ?? "guest",
+          zone,
+          rating: nextRating ?? null,
+          context: { page: pathname, module: moduleHint },
+          module: moduleHint,
+          pathname,
+        }),
+      });
+    } catch {
+      // best effort
+    }
+    if (rating === "down") {
+      showDeadEndCard("thumbs");
+    }
+  };
+
+  const clearHistory = () => {
+    if (typeof window === "undefined") return;
+    if (historyKey) {
+      try {
+        window.localStorage.removeItem(historyKey);
+        window.localStorage.removeItem(`assistant_feedback:${historyKey}`);
+      } catch {
+        // ignore
+      }
+    }
+    setMessages([]);
+    setLastTopicAnswer(null);
+    historyLoadedRef.current = true;
+    feedbackLoadedRef.current = true;
+    setFeedback({});
   };
 
   const statusLabel = (status?: ContextCard["status"]) => {
@@ -985,11 +1313,15 @@ export default function AssistantWidget({
     return next.length > 0 ? next : text;
   };
 
-  const handleScroll = () => {
-    if (!listRef.current) return;
+  const isNearBottom = () => {
+    if (!listRef.current) return true;
     const el = listRef.current;
     const threshold = 24;
-    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  };
+
+  const handleScroll = () => {
+    atBottomRef.current = isNearBottom();
   };
 
   const startResize = useCallback(
@@ -1137,6 +1469,14 @@ export default function AssistantWidget({
             </button>
             <button
               type="button"
+              onClick={clearHistory}
+              className="min-h-[32px] rounded-full border border-zinc-200 px-3 py-1 text-[11px] font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
+              data-testid="assistant-clear-history"
+            >
+              Начать заново
+            </button>
+            <button
+              type="button"
               onClick={() => setViewState("minimized")}
               className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:border-[#5E704F] hover:text-[#5E704F]"
             >
@@ -1167,7 +1507,7 @@ export default function AssistantWidget({
             width: `${(1 / uiScale) * 100}%`,
           }}
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {banner && !isContactsTab ? (
           <div
             className={`mb-3 rounded-xl border px-3 py-2 text-xs ${
@@ -1282,12 +1622,12 @@ export default function AssistantWidget({
                       <div className="text-sm font-semibold text-zinc-900">Email</div>
                       <div className="text-xs text-zinc-600">{contactEmail ?? "Уточняется"}</div>
                     </div>
-                    <a
+                    <Link
                       href={contactEmail ? `mailto:${contactEmail}` : "/contacts"}
                       className="flex h-10 items-center rounded-xl border border-[#D7DDCF] bg-white px-4 text-sm font-semibold text-[#5E704F] transition hover:bg-[#F4F6F1]"
                     >
                       Написать
-                    </a>
+                    </Link>
                   </div>
                   <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                     <div className="font-semibold text-zinc-900">Адрес и приём</div>
@@ -1301,17 +1641,17 @@ export default function AssistantWidget({
                         <div className="text-sm font-semibold text-zinc-900">Ответы по обращениям</div>
                         <div className="text-xs text-zinc-700">Новых ответов: {unreadAppeals}</div>
                       </div>
-                      <a
+                      <Link
                         href="/cabinet/appeals"
                         className="flex h-10 items-center rounded-xl border border-amber-200 bg-white px-4 text-sm font-semibold text-amber-900 transition hover:border-amber-400"
                       >
                         Открыть
-                      </a>
+                      </Link>
                     </div>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <a
+                  <Link
                     href={
                       isGuest
                         ? "/login?next=/cabinet/appeals/new"
@@ -1324,7 +1664,7 @@ export default function AssistantWidget({
                     className="flex h-10 items-center rounded-xl bg-[#5E704F] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
                   >
                     Написать в правление
-                  </a>
+                  </Link>
                   <a
                     href="/contacts"
                     className="flex h-10 items-center rounded-xl border border-[#D7DDCF] bg-white px-4 text-sm font-semibold text-[#5E704F] transition hover:bg-[#F4F6F1]"
@@ -1431,7 +1771,7 @@ export default function AssistantWidget({
           </>
         ) : null}
         {isHelpTab ? (
-          <div className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700">
             {lastTopicAnswer ? (
               <div className="rounded-lg bg-white/80 p-3 animate-assistant-in">
                 <div className="flex items-center justify-between text-[11px] text-zinc-400">
@@ -1461,7 +1801,8 @@ export default function AssistantWidget({
           <div
             ref={listRef}
             onScroll={handleScroll}
-            className="min-h-[320px] flex-1 space-y-3 overflow-y-auto rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700"
+            className="flex-1 min-h-0 space-y-3 overflow-y-auto overscroll-contain rounded-lg bg-zinc-50/60 px-2 py-2 text-sm text-zinc-700"
+            data-testid="assistant-messages-scroll"
           >
             {messages.length === 0 ? (
               <div className="flex flex-col gap-3 rounded-lg bg-white/70 p-3 text-xs text-zinc-600">
@@ -1523,12 +1864,40 @@ export default function AssistantWidget({
                   >
                     <div className="flex items-center justify-between text-[11px] text-zinc-400">
                       <span>{item.role === "user" ? "Вы" : "Помощник"}</span>
-                      {item.role === "assistant" ? (
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
-                          {badgeLabel(item)}
-                        </span>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        {showProviderBadge && item.role === "assistant" && item.provider ? (
+                          <span
+                            data-testid="assistant-provider-badge"
+                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600"
+                          >
+                            ИИ: {item.provider}
+                            {typeof item.latencyMs === "number" ? ` · ${Math.round(item.latencyMs)}мс` : ""}
+                          </span>
+                        ) : null}
+        {showProviderBadge && item.role === "assistant" ? (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
+            intent: {item.intent ?? "—"}
+            {item.engineSource
+              ? ` · source: ${item.engineSource}`
+              : item.sourceHints?.length
+                ? ` · source: ${item.sourceHints.join("/")}`
+                : ""}
+            {typeof item.latencyMs === "number" ? ` · ${Math.round(item.latencyMs)}мс` : ""}
+            {item.requestId ? ` · req: ${item.requestId.slice(0, 6)}` : ""}
+          </span>
+        ) : null}
+        {item.role === "assistant" ? (
+                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-500">
+                            {badgeLabel(item)}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
+                    {item.usedFallback && showProviderBadge ? (
+                      <div className="mt-1 text-[11px] text-amber-600">
+                        Сейчас отвечаю в упрощённом режиме (ИИ недоступен).
+                      </div>
+                    ) : null}
                     {item.role === "assistant" && item.topicTitle ? (
                       <div className="mt-1 text-[11px] font-semibold text-zinc-600">
                         По теме: {item.topicTitle}
@@ -1571,6 +1940,74 @@ export default function AssistantWidget({
                           </div>
                         );
                       })()
+                    ) : null}
+
+                    {item.inlineType === "requisites" ? (
+                      <div
+                        className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700"
+                        data-testid="assistant-requisites-card"
+                      >
+                        <p className="font-semibold text-zinc-800">Реквизиты для оплаты</p>
+                        <p className="mt-1 whitespace-pre-line text-zinc-700">{item.text}</p>
+                      </div>
+                    ) : item.inlineType === "deadend" ? (
+                      <div
+                        className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700"
+                        data-testid="assistant-deadend-card"
+                      >
+                        <p className="font-semibold text-zinc-800">Похоже, ответ не помог</p>
+                        <p className="mt-1 text-zinc-700">
+                          Хотите создать обращение или открыть контакты?
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            data-testid="assistant-deadend-create-appeal"
+                            onClick={(e) => {
+                              const action = item.actions?.find(
+                                (a) => "kind" in a && a.id === "deadend-appeal" && a.kind === "navigate",
+                              ) as Extract<AssistantAction, { kind: "navigate" }> | undefined;
+                              handleActionNavigation(action?.href, e);
+                              setDeadEndShown(false);
+                              setDeadEndReason(null);
+                            }}
+                            className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                          >
+                            Создать обращение
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="assistant-deadend-contacts"
+                            onClick={(e) => {
+                              const contactAction =
+                                item.actions?.find(
+                                  (a) => "kind" in a && a.id === "deadend-contacts" && a.kind === "navigate",
+                                ) as Extract<AssistantAction, { kind: "navigate" }> | undefined;
+                              handleActionNavigation(contactAction?.href ?? "/contacts", e);
+                              setDeadEndShown(false);
+                              setDeadEndReason(null);
+                            }}
+                            className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                          >
+                            Открыть контакты
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="assistant-deadend-clear"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              clearHistory();
+                              setMessages([]);
+                              setDeadEndShown(false);
+                              setDeadEndReason(null);
+                            }}
+                            className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:border-[#5E704F]"
+                          >
+                            Начать заново
+                          </button>
+                        </div>
+                      </div>
                     ) : null}
 
                     <div className={`mt-2 ${textSize === "large" ? "text-[18px]" : "text-base"} leading-relaxed text-zinc-700`}>
@@ -1714,29 +2151,64 @@ export default function AssistantWidget({
                           {isLastAssistant && item.links && item.links.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {item.links.map((link) => (
-                                <a
+                                <button
                                   key={`${item.id}-${link.href}`}
-                                  href={link.href}
+                                  type="button"
+                                  onClick={(e) => handleActionNavigation(link.href, e)}
                                   className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
                                 >
                                   {link.label}
-                                </a>
+                                </button>
                               ))}
                             </div>
                           ) : null}
                           {isLastAssistant && item.actions && item.actions.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {item.actions.slice(0, 1).map((action, actionIndex) => {
-                                const key = `${item.id}-action-${actionIndex}`;
+                                const key = "kind" in action ? action.id ?? `${item.id}-action-${actionIndex}` : `${item.id}-action-${actionIndex}`;
+                                if ("kind" in action) {
+                                  if (action.kind === "navigate") {
+                                    return (
+                                      <button
+                                        key={key}
+                                        type="button"
+                                        data-testid={action.testId}
+                                        onClick={(e) => handleActionNavigation(action.href, e)}
+                                        className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                      >
+                                        {action.label}
+                                      </button>
+                                    );
+                                  }
+                                  if (action.kind === "inline" && action.payload?.type === "requisites") {
+                                    return (
+                                      <button
+                                        key={key}
+                                        type="button"
+                                        data-testid={action.testId}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          handleInlineAction(action);
+                                        }}
+                                        className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                      >
+                                        {action.label}
+                                      </button>
+                                    );
+                                  }
+                                  return null;
+                                }
                                 if (action.type === "link" && action.href) {
                                   return (
-                                    <a
+                                    <button
                                       key={key}
-                                      href={action.href}
+                                      type="button"
+                                      onClick={(e) => handleActionNavigation(action.href, e)}
                                       className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
                                     >
                                       {action.label}
-                                    </a>
+                                    </button>
                                   );
                                 }
                                 if (action.type === "copy") {
@@ -1771,16 +2243,50 @@ export default function AssistantWidget({
                               ) : null}
                               {expandedActions.has(item.id)
                                 ? item.actions.slice(1).map((action, idx) => {
-                                    const key = `${item.id}-action-extra-${idx}`;
+                                    const key = "kind" in action ? action.id ?? `${item.id}-action-extra-${idx}` : `${item.id}-action-extra-${idx}`;
+                                    if ("kind" in action) {
+                                      if (action.kind === "navigate") {
+                                        return (
+                                          <button
+                                            key={key}
+                                            type="button"
+                                            data-testid={action.testId}
+                                            onClick={(e) => handleActionNavigation(action.href, e)}
+                                            className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                          >
+                                            {action.label}
+                                          </button>
+                                        );
+                                      }
+                                      if (action.kind === "inline" && action.payload?.type === "requisites") {
+                                        return (
+                                          <button
+                                            key={key}
+                                            type="button"
+                                            data-testid={action.testId}
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              handleInlineAction(action);
+                                            }}
+                                            className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                          >
+                                            {action.label}
+                                          </button>
+                                        );
+                                      }
+                                      return null;
+                                    }
                                     if (action.type === "link" && action.href) {
                                       return (
-                                        <a
+                                        <button
                                           key={key}
-                                          href={action.href}
+                                          type="button"
+                                          onClick={(e) => handleActionNavigation(action.href, e)}
                                           className="min-h-[44px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
                                         >
                                           {action.label}
-                                        </a>
+                                        </button>
                                       );
                                     }
                                     if (action.type === "copy") {
@@ -1801,20 +2307,21 @@ export default function AssistantWidget({
                             </div>
                           ) : null}
                         </div>
-                        {isLastAssistant &&
-                        item.suggestedKnowledge &&
-                        item.suggestedKnowledge.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {item.suggestedKnowledge.slice(0, 3).map((sugg) => (
-                              <a
-                                key={`${item.id}-sugg-k-${sugg.slug}`}
-                                href={`/knowledge/${sugg.slug}`}
-                                className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
-                              >
-                                {sugg.title}
-                              </a>
-                            ))}
-                          </div>
+                            {isLastAssistant &&
+                            item.suggestedKnowledge &&
+                            item.suggestedKnowledge.length > 0 ? (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {item.suggestedKnowledge.slice(0, 3).map((sugg) => (
+                                  <button
+                                    key={`${item.id}-sugg-k-${sugg.slug}`}
+                                    type="button"
+                                    onClick={(e) => handleActionNavigation(`/knowledge/${sugg.slug}`, e)}
+                                    className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+                                  >
+                                    {sugg.title}
+                                  </button>
+                                ))}
+                              </div>
                         ) : null}
                         {isLastAssistant &&
                         item.suggestedTemplates &&
@@ -1825,17 +2332,55 @@ export default function AssistantWidget({
                                 ? `/templates/${sugg.slug}`
                                 : `/cabinet/templates/${sugg.slug}`;
                               return (
-                                <a
+                                <button
                                   key={`${item.id}-sugg-t-${sugg.slug}`}
-                                  href={href}
+                                  type="button"
+                                  onClick={(e) => handleActionNavigation(href, e)}
                                   className="min-h-[40px] rounded-full border border-zinc-200 px-3 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
                                 >
-                                  {sugg.title}
-                                </a>
-                              );
-                            })}
-                          </div>
-                        ) : null}
+                                {sugg.title}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
+                          <span className="text-zinc-500">Было полезно?</span>
+                          <button
+                            type="button"
+                            data-testid="assistant-feedback-up"
+                            aria-pressed={feedback[item.id] === "up"}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleFeedback(item.id, "up");
+                            }}
+                            className={`rounded-full border px-3 py-1 transition ${
+                              feedback[item.id] === "up"
+                                ? "border-[#5E704F] bg-[#E7EDE0] text-[#2F3A28]"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:border-[#5E704F] hover:text-[#5E704F]"
+                            }`}
+                          >
+                            👍
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="assistant-feedback-down"
+                            aria-pressed={feedback[item.id] === "down"}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleFeedback(item.id, "down");
+                            }}
+                            className={`rounded-full border px-3 py-1 transition ${
+                              feedback[item.id] === "down"
+                                ? "border-[#5E704F] bg-[#E7EDE0] text-[#2F3A28]"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:border-[#5E704F] hover:text-[#5E704F]"
+                            }`}
+                          >
+                            👎
+                          </button>
+                        </div>
                         <button
                           type="button"
                           onClick={() => setActiveTab("contacts")}
@@ -1922,10 +2467,10 @@ export default function AssistantWidget({
               })
             )}
             {loading ? (
-              <div className="rounded-xl border border-zinc-200 bg-white p-3">
+              <div className="rounded-xl border border-zinc-200 bg-white p-3" data-testid="assistant-loading-indicator">
                 <div className="flex items-center gap-2 text-xs text-zinc-500">
                   <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
-                  🤖 Генерирую ответ…
+                  <span data-testid="assistant-loading-text">{loadingText}</span>
                 </div>
               </div>
             ) : null}

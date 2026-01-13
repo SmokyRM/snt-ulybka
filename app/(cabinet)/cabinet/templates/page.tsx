@@ -13,8 +13,35 @@ export const metadata = {
 
 export default async function TemplatesPage() {
   const session = await getSessionUser();
-  if (!session || !session.id) {
+  if (!session) {
     redirect("/login?next=/cabinet/templates");
+  }
+  if (!session.id) {
+    return (
+      <main
+        className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6"
+        data-testid="cabinet-templates-root"
+      >
+        <div className="mx-auto w-full max-w-3xl space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm">
+          <div className="text-base font-semibold">Не удалось определить пользователя</div>
+          <p>Обновите страницу или войдите заново.</p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/login?next=/cabinet/templates"
+              className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4d5d41]"
+            >
+              Войти снова
+            </Link>
+            <Link
+              href="/cabinet"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              В кабинет
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
   const templates = await getAllTemplates();
   const [profile, plots] = await Promise.all([
