@@ -5,9 +5,9 @@ const TEST_CODE = process.env.TEST_ACCESS_CODE || "1111";
 
 test("login and save state", async ({ page }: { page: Page }) => {
   await page.goto(`${baseURL}/login?next=/cabinet`);
-  await page.getByLabel("Код доступа").fill(TEST_CODE);
-  await page.getByTestId("login-form").getByRole("button", { name: "Войти" }).click();
-  await page.waitForURL(/\/cabinet/);
+  await page.getByTestId("login-access-code").fill(TEST_CODE);
+  await page.getByTestId("login-submit").click();
+  await page.waitForURL(/\/cabinet(\/|$)/, { timeout: 15000 });
   await expect(page).not.toHaveURL(/\/login/);
   await page.context().storageState({ path: "playwright/.auth/state.json" });
 });

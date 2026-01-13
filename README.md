@@ -65,6 +65,70 @@ npm run deploy
 - Релиз в прод: merge `dev` → `main` и push `main` (можно через `npm run deploy`, который сделает merge/push и проверки локально).
 - Проверить задеплоенный SHA и окружение можно на странице `/admin/build-info`.
 
+## Переменные окружения / E2E
+
+### Установка
+
+Для запуска E2E тестов нужно сначала установить браузеры Playwright:
+
+```bash
+npm install
+npx playwright install --with-deps
+```
+
+### Переменные окружения
+
+См. `.env.example` для полного списка переменных. Скопируйте его в `.env.local` и заполните реальными значениями:
+
+```bash
+cp .env.example .env.local
+# Отредактируйте .env.local
+```
+
+#### Базовые переменные (опционально, есть значения по умолчанию)
+
+- `PLAYWRIGHT_BASE_URL` — URL приложения (по умолчанию `http://localhost:3000`)
+- `TEST_ACCESS_CODE` — код доступа для тестового входа жителя (по умолчанию `1111`)
+- `TEST_ADMIN_CODE` — код доступа для тестового входа администратора (по умолчанию `1233`)
+
+#### Креды для staff ролей
+
+Для тестов с staff ролями (chairman, secretary, accountant) требуются переменные:
+
+- `AUTH_USER_CHAIRMAN` / `AUTH_PASS_CHAIRMAN` — креды председателя
+- `AUTH_USER_SECRETARY` / `AUTH_PASS_SECRETARY` — креды секретаря
+- `AUTH_USER_ACCOUNTANT` / `AUTH_PASS_ACCOUNTANT` — креды бухгалтера
+
+Пример `.env.local`:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://localhost:3000
+TEST_ACCESS_CODE=1111
+TEST_ADMIN_CODE=1233
+
+AUTH_USER_CHAIRMAN=председатель
+AUTH_PASS_CHAIRMAN=your_password_here
+
+AUTH_USER_SECRETARY=секретарь
+AUTH_PASS_SECRETARY=your_password_here
+
+AUTH_USER_ACCOUNTANT=бухгалтер
+AUTH_PASS_ACCOUNTANT=your_password_here
+```
+
+### Запуск тестов
+
+```bash
+npm run test:e2e        # Запуск всех тестов
+npm run test:e2e:ui     # Запуск с UI (интерактивный режим)
+npx playwright test tests/e2e/access-roles.spec.ts  # Запуск конкретного файла
+```
+
+### Поведение тестов accountant
+
+- **Локально**: если креды accountant (`AUTH_USER_ACCOUNTANT`, `AUTH_PASS_ACCOUNTANT`) не заданы, тесты accountant будут пропущены (skipped)
+- **В CI** (`process.env.CI === "true"`): если креды accountant не заданы, тесты accountant упадут с явной ошибкой — это гарантирует, что CI не будет зелёным "случайно" при отсутствии кредов
+
 ## Assistant API (MVP)
 POST `/api/assistant` возвращает справку по ключевым словам и контексту страницы.
 

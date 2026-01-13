@@ -4,7 +4,11 @@ import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { saveStatusAction, sendReplyAction } from "../actions";
 
-export default async function OfficeAppealDetail({ params }: { params: { id: string } }) {
+export default async function OfficeAppealDetail({
+  params,
+}: {
+  params: { id: string } | Promise<{ id: string }>;
+}) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/appeals");
   const role = (user.role as Role | undefined) ?? "resident";
@@ -12,7 +16,8 @@ export default async function OfficeAppealDetail({ params }: { params: { id: str
     redirect("/forbidden");
   }
 
-  const appealId = decodeURIComponent(params.id).trim();
+  const resolvedParams = params instanceof Promise ? await params : params;
+  const appealId = decodeURIComponent(resolvedParams.id).trim();
   const appeal = getAppeal(appealId);
   if (!appeal) notFound();
 

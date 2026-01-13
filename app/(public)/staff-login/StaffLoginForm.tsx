@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { sanitizeNext } from "@/lib/sanitizeNext";
 
 const normalizeLogin = (value: string) => {
@@ -21,18 +21,14 @@ const isPathAllowedForRole = (role: string, path: string | null | undefined) => 
   return false;
 };
 
-export default function StaffLoginForm() {
+export default function StaffLoginForm({ next }: { next: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const sanitizedNext = useMemo(() => {
-    const raw = searchParams?.get("next") ?? null;
-    return sanitizeNext(raw) ?? null;
-  }, [searchParams]);
+  const sanitizedNext = sanitizeNext(next) ?? null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -93,9 +89,10 @@ export default function StaffLoginForm() {
         className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
         data-testid="staff-login-form"
       >
-        <label className="block space-y-2 text-sm font-medium text-zinc-800">
+        <label htmlFor="staff-login-username" className="block space-y-2 text-sm font-medium text-zinc-800">
           Роль/логин
           <input
+            id="staff-login-username"
             value={login}
             onChange={(e) => setLogin(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#5E704F]"
@@ -103,9 +100,10 @@ export default function StaffLoginForm() {
             data-testid="staff-login-username"
           />
         </label>
-        <label className="block space-y-2 text-sm font-medium text-zinc-800">
+        <label htmlFor="staff-login-password" className="block space-y-2 text-sm font-medium text-zinc-800">
           Пароль
           <input
+            id="staff-login-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

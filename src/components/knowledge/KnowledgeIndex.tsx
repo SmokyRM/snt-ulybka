@@ -62,6 +62,7 @@ export default function KnowledgeIndex({ articles, categories }: Props) {
             <Link
               key={item.slug}
               href={`/knowledge/${item.slug}`}
+              data-testid={`knowledge-article-link-${item.slug}`}
               className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-[#5E704F]/40 hover:shadow-md"
             >
               <div className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">

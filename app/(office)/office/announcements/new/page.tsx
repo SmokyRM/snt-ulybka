@@ -25,7 +25,7 @@ export default async function OfficeAnnouncementNew() {
   return (
     <div className="space-y-4" data-testid="office-announcements-new-root">
       <h1 className="text-2xl font-semibold text-zinc-900">Новое объявление</h1>
-      <form action={createAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <form action={createAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="office-announcement-new-form">
         <input type="hidden" name="authorRole" value={role} />
         <label className="block space-y-2 text-sm font-semibold text-zinc-900">
           Заголовок
