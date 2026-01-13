@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { sanitizeNext } from "@/lib/sanitizeNext";
 
 const normalizeLogin = (value: string) => {
@@ -21,18 +21,14 @@ const isPathAllowedForRole = (role: string, path: string | null | undefined) => 
   return false;
 };
 
-export default function StaffLoginForm() {
+export default function StaffLoginForm({ next }: { next: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const sanitizedNext = useMemo(() => {
-    const raw = searchParams?.get("next") ?? null;
-    return sanitizeNext(raw) ?? null;
-  }, [searchParams]);
+  const sanitizedNext = sanitizeNext(next) ?? null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

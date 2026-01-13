@@ -5,6 +5,16 @@ export const metadata = {
   alternates: { canonical: "/staff-login" },
 };
 
-export default function StaffLoginPage() {
-  return <StaffLoginForm />;
+export default function StaffLoginPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  // Безопасное извлечение next параметра
+  const nextParam =
+    typeof searchParams?.next === "string" && searchParams.next.startsWith("/")
+      ? searchParams.next
+      : "/office";
+
+  return <StaffLoginForm next={nextParam} />;
 }
