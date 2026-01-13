@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { loginResidentByCode, loginStaff, getStaffCreds } from "./helpers/auth";
+import { loginResidentByCode, loginStaff } from "./helpers/auth";
 
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const adminCode = process.env.TEST_ADMIN_CODE || "1233";
@@ -28,10 +28,8 @@ test.describe("Role-based access", () => {
   });
 
   test("accountant cannot open appeals", async ({ page }: { page: Page }) => {
-    const creds = getStaffCreds("accountant");
-    const isCI = process.env.CI === "true";
-    test.skip(!creds && !isCI, "AUTH_USER_ACCOUNTANT and AUTH_PASS_ACCOUNTANT are not set");
-    await loginStaff(page, "accountant", "/office");
+    const ok = await loginStaff(page, "accountant", "/office");
+    test.skip(!ok, "No accountant creds in local env");
     await page.goto(`${base}/office/appeals`);
     await expect(page).toHaveURL(/forbidden/);
   });

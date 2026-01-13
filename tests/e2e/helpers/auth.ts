@@ -18,6 +18,10 @@ type StaffCreds = {
   password: string;
 };
 
+export function isCI(): boolean {
+  return process.env.CI === "true";
+}
+
 export function getStaffCreds(role: StaffRole): StaffCreds | null {
   const usernameEnv = `AUTH_USER_${role.toUpperCase()}` as const;
   const passwordEnv = `AUTH_PASS_${role.toUpperCase()}` as const;
@@ -29,7 +33,7 @@ export function getStaffCreds(role: StaffRole): StaffCreds | null {
   return { username, password };
 }
 
-export async function loginStaff(page: Page, role: StaffRole, next: string = "/office"): Promise<void> {
+export function requireStaffCreds(role: StaffRole): StaffCreds | null {
   const creds = getStaffCreds(role);
   if (!creds) {
     const missing = [];
@@ -39,10 +43,20 @@ export async function loginStaff(page: Page, role: StaffRole, next: string = "/o
     if (!process.env[`AUTH_PASS_${role.toUpperCase()}`]) {
       missing.push(`AUTH_PASS_${role.toUpperCase()}`);
     }
-    const isCI = process.env.CI === "true";
-    throw new Error(
-      `Missing required environment variables for ${role} login${isCI ? " in CI" : ""}: ${missing.join(", ")}. Set these variables${isCI ? " in CI environment" : " (e.g., in .env.local)"}.`,
-    );
+    if (isCI()) {
+      throw new Error(
+        `Missing required environment variables for ${role} login in CI: ${missing.join(", ")}. Set these variables in CI environment.`,
+      );
+    }
+    return null;
+  }
+  return creds;
+}
+
+export async function loginStaff(page: Page, role: StaffRole, next: string = "/office"): Promise<boolean> {
+  const creds = requireStaffCreds(role);
+  if (!creds) {
+    return false; // For local skip
   }
   await page.goto(`${baseURL}/staff-login?next=${encodeURIComponent(next)}`);
   await page.getByTestId("staff-login-username").fill(creds.username);
@@ -50,4 +64,5 @@ export async function loginStaff(page: Page, role: StaffRole, next: string = "/o
   await page.getByTestId("staff-login-submit").click();
   const urlPattern = next === "/office" ? /\/office(\/|$)/ : new RegExp(next.replace("/", "\\/") + "(\\/|$)", "i");
   await page.waitForURL(urlPattern, { timeout: 15000 });
+  return true;
 }
