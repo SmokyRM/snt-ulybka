@@ -16,8 +16,11 @@ test.describe("Cabinet pages stay logged in", () => {
     await page.goto(base + "/cabinet/appeals");
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByTestId("cabinet-appeals-root")).toBeVisible();
-    await page.getByRole("link", { name: /обращение/i }).first().click();
+    const newCtaCount = await page.getByTestId("cabinet-appeals-new-cta").count();
+    const appealLink = newCtaCount > 0 ? page.getByTestId("cabinet-appeals-new-cta") : page.getByTestId("cabinet-appeals-empty-cta");
+    await expect(appealLink).toBeVisible();
+    await appealLink.click();
     await expect(page).toHaveURL(/\/cabinet\/appeals\/new/);
-    await expect(page.getByTestId("cabinet-appeals-new-form")).toBeVisible();
+    await expect(page.getByTestId("cabinet-appeals-new-root")).toBeVisible();
   });
 });

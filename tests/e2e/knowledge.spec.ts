@@ -4,8 +4,9 @@ test("knowledge list and article do not crash", async ({ page }: { page: Page })
   const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
   await page.goto(base + "/knowledge");
   await expect(page.getByTestId("knowledge-root")).toBeVisible();
-  const firstLink = page.getByRole("link").filter({ hasText: /.+/ }).first();
-  await firstLink.click();
+  const firstArticleLink = page.locator('[data-testid^="knowledge-article-link-"]').first();
+  await expect(firstArticleLink).toBeVisible();
+  await firstArticleLink.click();
   await page.waitForLoadState("networkidle");
   await expect(
     page.locator('[data-testid="knowledge-article-root"], [data-testid="knowledge-article-fallback"]'),

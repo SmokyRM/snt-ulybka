@@ -93,9 +93,10 @@ export default function StaffLoginForm() {
         className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
         data-testid="staff-login-form"
       >
-        <label className="block space-y-2 text-sm font-medium text-zinc-800">
+        <label htmlFor="staff-login-username" className="block space-y-2 text-sm font-medium text-zinc-800">
           Роль/логин
           <input
+            id="staff-login-username"
             value={login}
             onChange={(e) => setLogin(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#5E704F]"
@@ -103,9 +104,10 @@ export default function StaffLoginForm() {
             data-testid="staff-login-username"
           />
         </label>
-        <label className="block space-y-2 text-sm font-medium text-zinc-800">
+        <label htmlFor="staff-login-password" className="block space-y-2 text-sm font-medium text-zinc-800">
           Пароль
           <input
+            id="staff-login-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

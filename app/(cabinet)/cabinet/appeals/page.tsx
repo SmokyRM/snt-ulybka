@@ -17,6 +17,7 @@ export default async function CabinetAppealsPage() {
         </div>
         <Link
           href="/cabinet/appeals/new"
+          data-testid="cabinet-appeals-new-cta"
           className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
         >
           Новая заявка
@@ -31,6 +32,13 @@ export default async function CabinetAppealsPage() {
         {items.length === 0 ? (
           <div className="px-4 py-6 text-sm text-zinc-600" data-testid="cabinet-appeals-empty">
             Обращений пока нет.
+            <Link
+              href="/cabinet/appeals/new"
+              data-testid="cabinet-appeals-empty-cta"
+              className="ml-2 text-[#5E704F] hover:underline"
+            >
+              Создать обращение
+            </Link>
           </div>
         ) : (
           items.map((item) => (

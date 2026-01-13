@@ -31,9 +31,11 @@ test.describe("Office registry", () => {
 
   test("resident gets forbidden", async ({ page }) => {
     await page.goto(`${base}/login?next=${encodeURIComponent("/office/registry")}`);
-    await page.getByLabel(/код доступа/i).fill(residentCode);
-    await page.getByRole("button", { name: /войти/i }).click();
-    await page.waitForURL(/\/office\/registry/);
+    await page.getByTestId("login-access-code").fill(residentCode);
+    await Promise.all([
+      page.waitForURL(/\/office\/registry/, { timeout: 15000 }),
+      page.getByTestId("login-submit").click(),
+    ]);
     await expect(page).toHaveURL(/forbidden/);
   });
 });
