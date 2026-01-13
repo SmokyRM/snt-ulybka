@@ -44,3 +44,9 @@ yarn-error.log*
 next-env.d.ts
 .env*.local
 test-results/
+
+# Playwright auth state
+playwright/.auth/
+playwright/.auth/state.json
+
+test-results/

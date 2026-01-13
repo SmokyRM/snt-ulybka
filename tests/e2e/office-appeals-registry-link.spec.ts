@@ -8,11 +8,9 @@ const accountantCode = process.env.TEST_ACCOUNTANT_CODE || "4444";
 async function login(page: Page, code: string, next: string) {
   await page.goto(`${base}/login?next=${encodeURIComponent(next)}`);
   await page.getByTestId("login-access-code").fill(code);
+  await page.getByTestId("login-submit").click();
   const urlPattern = new RegExp(next.replace("/", "\\/") + "(\\/|$)", "i");
-  await Promise.all([
-    page.waitForURL(urlPattern, { timeout: 15000 }),
-    page.getByTestId("login-submit").click(),
-  ]);
+  await page.waitForURL(urlPattern, { timeout: 15000 });
 }
 
 test.describe("Office appeals registry link", () => {

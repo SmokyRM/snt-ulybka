@@ -12,10 +12,8 @@ test.describe("Admin can open admin panel from home", () => {
     const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
     await page.goto(`${base}/login?next=/`);
     await page.getByTestId("login-access-code").fill(adminCode ?? "");
-    await Promise.all([
-      page.waitForURL(/\/$/, { timeout: 15000 }),
-      page.getByTestId("login-submit").click(),
-    ]);
+    await page.getByTestId("login-submit").click();
+    await page.waitForURL(/\/$/, { timeout: 15000 });
     await page.goto(`${base}/`);
     await page.getByRole("button", { name: /аккаунт/i }).click();
     await expect(page.getByRole("link", { name: /в админку/i })).toBeVisible();
