@@ -23,11 +23,18 @@ export default function AdminQaBanner({ scenario }: Props) {
       // Clear any localStorage/sessionStorage QA keys
       if (typeof window !== "undefined") {
         try {
-          // Clear any QA-related localStorage keys if they exist
-          const qaKeys = Object.keys(window.localStorage).filter((key) => key.toLowerCase().includes("qa"));
-          qaKeys.forEach((key) => window.localStorage.removeItem(key));
+          const clearQaFromStorage = (storage: Storage | null | undefined) => {
+            if (!storage) return;
+            const keys = Object.keys(storage).filter((key) => {
+              const lower = key.toLowerCase();
+              return lower.includes("qa") || lower.includes("admin_view");
+            });
+            keys.forEach((key) => storage.removeItem(key));
+          };
+          clearQaFromStorage(window.localStorage);
+          clearQaFromStorage(window.sessionStorage);
         } catch {
-          // Ignore localStorage errors
+          // Ignore storage errors
         }
       }
     } finally {

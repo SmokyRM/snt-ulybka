@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import { sanitizeNext } from "@/lib/sanitizeNext";
+import ForbiddenQaResetButton from "./ForbiddenQaResetButton";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export default async function ForbiddenPage({
   const nextParam = typeof searchParams?.next === "string" ? searchParams.next : null;
   const sanitizedNext = sanitizeNext(nextParam);
   const reasonText = getReasonText(reasonParam, role);
+  const isDev = process.env.NODE_ENV !== "production";
 
   return (
     <main
@@ -70,14 +72,14 @@ export default async function ForbiddenPage({
             На главную
           </Link>
           <Link
-            href={sanitizedNext ? `/staff-login?next=${encodeURIComponent(sanitizedNext)}` : "/staff-login"}
+            href="/staff-login"
             data-testid="forbidden-cta-staff-login"
             className="inline-flex items-center justify-center rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F]/10"
           >
             Войти сотрудником
           </Link>
           <Link
-            href={sanitizedNext ? `/login?next=${encodeURIComponent(sanitizedNext)}` : "/login"}
+            href="/login"
             data-testid="forbidden-cta-resident-login"
             className="inline-flex items-center justify-center rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F]/10"
           >
@@ -90,6 +92,11 @@ export default async function ForbiddenPage({
           >
             Запросить доступ
           </Link>
+          {isDev ? (
+            <div className="mt-2">
+              <ForbiddenQaResetButton />
+            </div>
+          ) : null}
         </div>
       </div>
     </main>

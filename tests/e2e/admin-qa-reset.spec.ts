@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { loginResidentByCode } from "./helpers/auth";
 
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const adminCode = process.env.TEST_ADMIN_CODE || "1233";
@@ -150,5 +151,43 @@ test.describe("QA reset functionality", () => {
       expect(bannerOnOffice).toBe(false);
       expect(floatingOnOffice).toBe(false);
     }
+  });
+
+  test("QA reset from forbidden clears QA and allows resident login", async ({ page }: { page: Page }) => {
+    // Activate QA override as chairman directly via admin URL
+    await page.goto(`${base}/admin?qa=chairman`, { waitUntil: "domcontentloaded" });
+    // With QA=chairman for /admin we should end up on /forbidden
+    await page.waitForURL((url) => url.pathname.startsWith("/forbidden"), { timeout: 10000 });
+    await expect(page.getByTestId("forbidden-root")).toBeVisible({ timeout: 5000 });
+
+    // Ensure QA cookie is present before reset
+    const cookiesBefore = await page.context().cookies();
+    const qaCookieBefore = cookiesBefore.find((c) => c.name === "qaScenario");
+    expect(qaCookieBefore).toBeDefined();
+
+    // Click "Сбросить QA (dev)" on forbidden page
+    const resetButton = page.getByTestId("forbidden-qa-reset-dev");
+    await expect(resetButton).toBeVisible({ timeout: 5000 });
+    await resetButton.click();
+
+    // After reset we should land on /admin/qa (hard reload)
+    await page.waitForURL((url) => url.pathname === "/admin/qa", { timeout: 20000 });
+
+    // QA cookies should be cleared
+    const cookiesAfter = await page.context().cookies();
+    const qaCookieAfter = cookiesAfter.find((c) => c.name === "qaScenario");
+    const adminViewAfter = cookiesAfter.find((c) => c.name === "admin_view");
+    if (qaCookieAfter) {
+      expect(qaCookieAfter.value).toBe("");
+    }
+    if (adminViewAfter) {
+      expect(adminViewAfter.value).toBe("");
+    }
+
+    // Now user should be able to open login and successfully log in as resident
+    await loginResidentByCode(page, "/cabinet");
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 20000 });
+    const finalUrl = page.url();
+    expect(finalUrl).not.toContain("/login");
   });
 });
