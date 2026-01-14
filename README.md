@@ -153,6 +153,7 @@ QA отчёты и шаблоны для тестирования админск
 - [QA Reports Directory](docs/qa/) — папка с QA документацией
 - [Latest QA Report](docs/qa/QA_REPORT_admin_qa.md) — последний отчёт по тестированию админских QA инструментов
 - [QA Template](docs/qa/QA_TEMPLATE_admin_qa.md) — шаблон для будущих прогонов
+- Generate report: `npm run qa:report` (writes to `docs/qa/runs/`)
 
 ## Assistant API (MVP)
 POST `/api/assistant` возвращает справку по ключевым словам и контексту страницы.
