@@ -116,7 +116,10 @@ test.describe("Smoke tests - basic page rendering", () => {
     }
 
     if (result === "error") {
-      const errorText = await page.getByTestId("login-error-text").textContent().catch(() => "(no error text)");
+      const errorText = await page
+        .getByTestId("login-error-block")
+        .innerText()
+        .catch(() => "(no error text)");
       throw new Error(`Admin code invalid or login didn't redirect. URL=${afterSubmitUrl}, error=${errorText}`);
     }
 

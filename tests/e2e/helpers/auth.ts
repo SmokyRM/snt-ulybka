@@ -18,8 +18,27 @@ export async function loginResidentByCode(page: Page, next: string = "/cabinet")
   await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
   await page.getByTestId("login-access-code").fill(TEST_ACCESS_CODE);
   await page.getByTestId("login-submit").click();
-  // Wait for navigation away from /login (allow onboarding/forbidden redirects)
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15000 });
+
+  // Wait for either navigation away from /login or login error
+  const result = await Promise.race([
+    page
+      .waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 20000 })
+      .then(() => "navigated"),
+    page
+      .getByTestId("login-error-block")
+      .waitFor({ state: "visible", timeout: 20000 })
+      .then(() => "error")
+      .catch(() => null),
+  ]);
+
+  if (result === "error") {
+    const errorText = await page
+      .getByTestId("login-error-block")
+      .innerText()
+      .catch(() => "(no error text)");
+    throw new Error(`[loginResidentByCode] Login failed, error block visible: ${errorText}`);
+  }
+
   // Allow onboarding redirect (/cabinet/profile?onboarding=1 or /onboarding) as successful login
   const finalUrl = page.url();
   const pathname = new URL(finalUrl).pathname;
