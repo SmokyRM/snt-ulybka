@@ -45,12 +45,6 @@ const readSessionRole = (
 export function middleware(request: NextRequest) {
   try {
     const { pathname, search } = request.nextUrl;
-    const isAdminPath = pathname.startsWith("/admin");
-    const isCabinetPath = pathname.startsWith("/cabinet");
-    const isOfficePath = pathname.startsWith("/office");
-    const isApiAdmin = pathname.startsWith("/api/admin");
-    const { hasSession } = readSessionRole(request);
-    const { role } = readSessionRole(request);
     const isDev = process.env.NODE_ENV !== "production";
     const qaParam = isDev ? request.nextUrl.searchParams.get("qa") : null;
     const allowedQa =
@@ -63,11 +57,26 @@ export function middleware(request: NextRequest) {
       qaParam === "secretary" ||
       qaParam === "resident";
 
-    const response = NextResponse.next();
+    // Handle QA override *before* any auth / RBAC redirects so that QA cookies
+    // are set on the response that performs the redirect.
     if (isDev && (allowedQa || qaParam === "clear")) {
+      const url = request.nextUrl.clone();
+      url.searchParams.delete("qa");
+
+      const response = NextResponse.redirect(url);
+
       if (qaParam === "clear") {
-        response.cookies.set(QA_COOKIE, "", { path: "/", maxAge: 0 });
+        // Clear QA scenario cookie with same options as setting
+        response.cookies.set(QA_COOKIE, "", {
+          path: "/",
+          maxAge: 0,
+          httpOnly: false,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          expires: new Date(0),
+        });
       } else if (qaParam) {
+        // Set QA scenario cookie with standard options
         response.cookies.set(QA_COOKIE, qaParam, {
           path: "/",
           httpOnly: false,
@@ -76,7 +85,17 @@ export function middleware(request: NextRequest) {
           maxAge: 60 * 60 * 24 * 7,
         });
       }
+
+      return response;
     }
+
+    const isAdminPath = pathname.startsWith("/admin");
+    const isCabinetPath = pathname.startsWith("/cabinet");
+    const isOfficePath = pathname.startsWith("/office");
+    const isApiAdmin = pathname.startsWith("/api/admin");
+    const { hasSession } = readSessionRole(request);
+    const { role } = readSessionRole(request);
+    const response = NextResponse.next();
     const qaCookie = isDev ? request.cookies.get(QA_COOKIE)?.value : null;
     const qaRole =
       qaParam && allowedQa
@@ -96,6 +115,15 @@ export function middleware(request: NextRequest) {
         if (isApiAdmin) {
           return NextResponse.json({ error: "unauthorized" }, { status: 401 });
         }
+        // Office paths should redirect to staff-login, not regular login
+        if (isOfficePath) {
+          const url = new URL("/staff-login", request.url);
+          if (!pathname.startsWith("/staff-login")) {
+            url.searchParams.set("next", `${pathname}${search}`);
+          }
+          return NextResponse.redirect(url);
+        }
+        // Admin and cabinet paths redirect to regular login
         const url = new URL("/login", request.url);
         if (!pathname.startsWith("/login")) {
           url.searchParams.set("next", `${pathname}${search}`);
