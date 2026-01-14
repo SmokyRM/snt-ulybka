@@ -42,6 +42,32 @@ const readSessionRole = (
   }
 };
 
+/**
+ * Helper to apply QA cookie to any NextResponse (redirect or next)
+ */
+function applyQaCookie(response: NextResponse, qaParam: string | null): void {
+  if (qaParam === "clear") {
+    // Clear QA scenario cookie with same options as setting
+    response.cookies.set(QA_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+      httpOnly: false,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      expires: new Date(0),
+    });
+  } else if (qaParam) {
+    // Set QA scenario cookie with standard options
+    response.cookies.set(QA_COOKIE, qaParam, {
+      path: "/",
+      httpOnly: false,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+  }
+}
+
 export function middleware(request: NextRequest) {
   try {
     const { pathname, search } = request.nextUrl;
@@ -59,58 +85,14 @@ export function middleware(request: NextRequest) {
 
     // Handle QA override *before* any auth / RBAC redirects so that QA cookies
     // are set on the response that performs the redirect.
-    if (isDev && (allowedQa || qaParam === "clear")) {
-      // For API routes, don't redirect - just set cookie and continue
-      if (pathname.startsWith("/api/")) {
-        const response = NextResponse.next();
-        if (qaParam === "clear") {
-          response.cookies.set(QA_COOKIE, "", {
-            path: "/",
-            maxAge: 0,
-            httpOnly: false,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
-            expires: new Date(0),
-          });
-        } else if (qaParam) {
-          response.cookies.set(QA_COOKIE, qaParam, {
-            path: "/",
-            httpOnly: false,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 60 * 60 * 24 * 7,
-          });
-        }
-        return response;
-      }
-
-      // For page routes, redirect to clean URL without qa param
-      const url = request.nextUrl.clone();
-      url.searchParams.delete("qa");
-
-      const response = NextResponse.redirect(url);
-
-      if (qaParam === "clear") {
-        // Clear QA scenario cookie with same options as setting
-        response.cookies.set(QA_COOKIE, "", {
-          path: "/",
-          maxAge: 0,
-          httpOnly: false,
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
-          expires: new Date(0),
-        });
-      } else if (qaParam) {
-        // Set QA scenario cookie with standard options
-        response.cookies.set(QA_COOKIE, qaParam, {
-          path: "/",
-          httpOnly: false,
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 60 * 60 * 24 * 7,
-        });
-      }
-
+    if (isDev && qaParam && (allowedQa || qaParam === "clear")) {
+      const isApi = pathname.startsWith("/api/");
+      const response = isApi ? NextResponse.next() : (() => {
+        const cleanUrl = request.nextUrl.clone();
+        cleanUrl.searchParams.delete("qa");
+        return NextResponse.redirect(cleanUrl);
+      })();
+      applyQaCookie(response, qaParam);
       return response;
     }
 
@@ -122,16 +104,18 @@ export function middleware(request: NextRequest) {
     const { role } = readSessionRole(request);
     const response = NextResponse.next();
 
-    // Derive QA role from cookie (query param was already consumed above)
-    const qaCookie = isDev ? request.cookies.get(QA_COOKIE)?.value : null;
-    const qaRoleRaw = qaCookie as string | null;
+    // Derive QA role from cookie (query param was already consumed above if redirect happened)
+    // Also check qaParam if cookie isn't available yet (for cases where cookie is being set on redirect)
+    const qaCookieAfterRedirect = isDev ? request.cookies.get(QA_COOKIE)?.value : null;
+    const qaSourceForAuth = qaCookieAfterRedirect ?? (isDev && allowedQa ? qaParam : null);
+    const qaRoleSource = qaSourceForAuth as string | null;
     const mappedQaRole: SessionRole | null =
-      qaRoleRaw === "guest"
+      qaRoleSource === "guest"
         ? null
-        : qaRoleRaw === "resident_ok" || qaRoleRaw === "resident_debtor" || qaRoleRaw === "resident"
+        : qaRoleSource === "resident_ok" || qaRoleSource === "resident_debtor" || qaRoleSource === "resident"
           ? "resident"
-          : qaRoleRaw === "chairman" || qaRoleRaw === "accountant" || qaRoleRaw === "secretary" || qaRoleRaw === "admin"
-            ? (qaRoleRaw as SessionRole)
+          : qaRoleSource === "chairman" || qaRoleSource === "accountant" || qaRoleSource === "secretary" || qaRoleSource === "admin"
+            ? (qaRoleSource as SessionRole)
             : null;
 
     const effectiveRole: SessionRole | null = mappedQaRole ?? role;
@@ -150,14 +134,24 @@ export function middleware(request: NextRequest) {
           if (!pathname.startsWith("/staff-login")) {
             url.searchParams.set("next", `${pathname}${search}`);
           }
-          return NextResponse.redirect(url);
+          const redirectResponse = NextResponse.redirect(url);
+          // Apply QA cookie to redirect if qaParam was present in query
+          if (qaParam && (allowedQa || qaParam === "clear")) {
+            applyQaCookie(redirectResponse, qaParam);
+          }
+          return redirectResponse;
         }
         // Admin and cabinet paths redirect to regular login
         const url = new URL("/login", request.url);
         if (!pathname.startsWith("/login")) {
           url.searchParams.set("next", `${pathname}${search}`);
         }
-        return NextResponse.redirect(url);
+        const redirectResponse = NextResponse.redirect(url);
+        // Apply QA cookie to redirect if qaParam was present in query
+        if (qaParam && (allowedQa || qaParam === "clear")) {
+          applyQaCookie(redirectResponse, qaParam);
+        }
+        return redirectResponse;
       }
     }
 
@@ -169,7 +163,12 @@ export function middleware(request: NextRequest) {
           return NextResponse.json({ error: "forbidden" }, { status: 403 });
         }
         const url = new URL("/forbidden", request.url);
-        return NextResponse.redirect(url);
+        const redirectResponse = NextResponse.redirect(url);
+        // Apply QA cookie to redirect if qaParam was present in query
+        if (qaParam && (allowedQa || qaParam === "clear")) {
+          applyQaCookie(redirectResponse, qaParam);
+        }
+        return redirectResponse;
       }
     }
 
@@ -180,7 +179,12 @@ export function middleware(request: NextRequest) {
         checkRole === "chairman" || checkRole === "accountant" || checkRole === "secretary" || checkRole === "admin";
       if (!isStaff) {
         const url = new URL("/forbidden", request.url);
-        return NextResponse.redirect(url);
+        const redirectResponse = NextResponse.redirect(url);
+        // Apply QA cookie to redirect if qaParam was present in query
+        if (qaParam && (allowedQa || qaParam === "clear")) {
+          applyQaCookie(redirectResponse, qaParam);
+        }
+        return redirectResponse;
       }
     }
 
@@ -191,7 +195,12 @@ export function middleware(request: NextRequest) {
         checkRole === "resident" || checkRole === "resident_debtor" || checkRole === "user" || checkRole === "admin";
       if (!isResident) {
         const url = new URL("/forbidden", request.url);
-        return NextResponse.redirect(url);
+        const redirectResponse = NextResponse.redirect(url);
+        // Apply QA cookie to redirect if qaParam was present in query
+        if (qaParam && (allowedQa || qaParam === "clear")) {
+          applyQaCookie(redirectResponse, qaParam);
+        }
+        return redirectResponse;
       }
     }
 
