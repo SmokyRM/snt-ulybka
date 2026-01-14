@@ -4,7 +4,7 @@ const adminCode = process.env.TEST_ADMIN_CODE;
 
 test.describe("Admin can open admin panel from home", () => {
   // start without user storageState to avoid inheriting resident session
-  test.use({ storageState: {} as Record<string, unknown> });
+  test.use({ storageState: undefined });
 
   test.skip(!adminCode, "TEST_ADMIN_CODE is not set for admin login");
 

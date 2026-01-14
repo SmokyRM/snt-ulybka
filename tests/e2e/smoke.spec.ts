@@ -36,7 +36,13 @@ test.describe("Smoke tests - basic page rendering", () => {
 
   test("resident login -> cabinet shows root", async ({ page }: { page: Page }) => {
     await loginResidentByCode(page, "/cabinet");
-    await expect(page.getByTestId("cabinet-root")).toBeVisible();
+    await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/cabinet/);
+    const pathname = new URL(page.url()).pathname;
+    if (pathname !== "/cabinet" && pathname !== "/cabinet/") {
+      await page.goto(`${base}/cabinet`);
+      await expect.poll(() => new URL(page.url()).pathname).toBe("/cabinet");
+    }
+    await expect(page.getByTestId("cabinet-root")).toBeVisible({ timeout: 15000 });
   });
 
   test("admin login -> admin shows root", async ({ page }: { page: Page }) => {

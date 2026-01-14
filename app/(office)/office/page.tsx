@@ -46,8 +46,10 @@ export default async function OfficeIndex() {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office");
   const role = (user.role as Role | undefined) ?? "resident";
-  if (!(role === "chairman" || role === "accountant" || role === "secretary" || role === "admin")) {
-    redirect("/staff-login?next=/office");
+  const { can, getForbiddenReason } = await import("@/lib/rbac");
+  if (!can(role, "office.access")) {
+    const reason = getForbiddenReason(role, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office")}`);
   }
 
   const visible = cards.filter((card) => card.allowed(role));

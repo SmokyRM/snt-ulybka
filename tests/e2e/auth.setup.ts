@@ -7,7 +7,7 @@ test("login and save state", async ({ page }: { page: Page }) => {
   await page.goto(`${baseURL}/login?next=/cabinet`);
   await page.getByTestId("login-access-code").fill(TEST_CODE);
   await page.getByTestId("login-submit").click();
-  await page.waitForURL(/\/cabinet(\/|$)/, { timeout: 15000 });
+  await expect.poll(() => new URL(page.url()).pathname).toMatch(/^\/cabinet/);
   await expect(page).not.toHaveURL(/\/login/);
   await page.context().storageState({ path: "playwright/.auth/state.json" });
 });

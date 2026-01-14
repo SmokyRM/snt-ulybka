@@ -172,9 +172,20 @@ export default async function CabinetPage({
 }) {
   const sp = (await Promise.resolve(searchParams)) ?? {};
   const user = await getSessionUser();
-  if (!user || (user.role !== "admin" && user.role !== "user" && user.role !== "board")) {
-    redirect("/login");
+  if (!user) {
+    redirect("/login?next=/cabinet");
   }
+  const role = (user.role as "admin" | "chairman" | "secretary" | "accountant" | "resident" | "user" | "board" | undefined) ?? "resident";
+  const { can, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: "admin" | "chairman" | "secretary" | "accountant" | "resident" = 
+    role === "user" || role === "board" ? "resident" : role;
+  // Проверяем RBAC доступ первым делом
+  if (!can(normalizedRole, "cabinet.access")) {
+    const reason = getForbiddenReason(normalizedRole, "cabinet.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/cabinet")}`);
+  }
+  // Для admin проверяем режим просмотра: если не "user", редиректим в админку
+  // Это безопасно, т.к. admin всегда имеет cabinet.access по RBAC, но может переключаться между режимами
   if (user.role === "admin") {
     const store = await Promise.resolve(cookies());
     const view = store.get("admin_view")?.value || "admin";
@@ -1166,6 +1177,13 @@ export default async function CabinetPage({
     return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
   })();
 
+  const cabinetRole: "user" | "admin" | "board" | "chair" | null = 
+    user.role === "admin" ? "admin" :
+    user.role === "board" ? "board" :
+    user.role === "chairman" ? "chair" :
+    user.role === "user" || user.role === "resident" ? "user" :
+    null;
+
   return (
     <div data-testid="cabinet-root">
       <CabinetShell
@@ -1173,7 +1191,7 @@ export default async function CabinetPage({
         quickActions={quickActions}
         initialActive={initialSection}
         isImpersonating={Boolean(user.isImpersonating)}
-        role={user.role}
+        role={cabinetRole}
         userName={profile.fullName ?? null}
         plotsCount={plotsCount}
       />

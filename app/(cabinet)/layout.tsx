@@ -5,21 +5,19 @@ import AssistantWidget from "@/components/AssistantWidget";
 import { getEffectiveSessionUser, type SessionRole } from "@/lib/session.server";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 
-const isCabinetAllowed = (role: SessionRole | undefined | null) =>
-  role === "resident" ||
-  role === "user" ||
-  role === "admin" ||
-  role === "chairman" ||
-  role === "accountant" ||
-  role === "secretary";
-
 export default async function CabinetLayout({ children }: { children: React.ReactNode }) {
   const user = await getEffectiveSessionUser();
   if (!user) {
     redirect("/login?next=/cabinet");
   }
-  if (!isCabinetAllowed(user.role)) {
-    redirect("/forbidden");
+  // Используем RBAC для проверки доступа
+  const role = user.role as "admin" | "chairman" | "secretary" | "accountant" | "resident" | "user" | "board" | undefined;
+  const normalizedRole: "admin" | "chairman" | "secretary" | "accountant" | "resident" =
+    role === "user" || role === "board" ? "resident" : role ?? "resident";
+  const { can, getForbiddenReason } = await import("@/lib/rbac");
+  if (!can(normalizedRole, "cabinet.access")) {
+    const reason = getForbiddenReason(normalizedRole, "cabinet.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/cabinet")}`);
   }
   const residentId = (user as { residentId?: string | null }).residentId ?? null;
   const hasResidentId = Boolean(residentId);

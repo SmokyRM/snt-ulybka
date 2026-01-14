@@ -45,8 +45,15 @@ const loadBlock = async <T,>(block: string, loader: () => Promise<T>): Promise<L
 
 export default async function AdminDashboard() {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) {
+  if (!user) {
     redirect("/login?next=/admin");
+  }
+  const role = (user.role as "admin" | "chairman" | "secretary" | "accountant" | "resident" | undefined) ?? "resident";
+  const { can } = await import("@/lib/rbac");
+  if (!can(role, "admin.access")) {
+    const { getForbiddenReason } = await import("@/lib/rbac");
+    const reason = getForbiddenReason(role, "admin.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/admin")}`);
   }
   const dashboardBlock = await loadBlock<DashboardData>("dashboard", async () => getAdminDashboardData());
   const analyticsBlock = await loadBlock("analytics", async () => getAnalyticsPoints());

@@ -7,8 +7,12 @@ export async function loginResidentByCode(page: Page, next: string = "/cabinet")
   await page.goto(`${baseURL}/login?next=${encodeURIComponent(next)}`);
   await page.getByTestId("login-access-code").fill(TEST_ACCESS_CODE);
   await page.getByTestId("login-submit").click();
-  const urlPattern = new RegExp(next.replace("/", "\\/") + "(\\/|$)", "i");
-  await page.waitForURL(urlPattern, { timeout: 15000 });
+  await page.waitForLoadState("networkidle");
+  const pathname = new URL(page.url()).pathname;
+  const expectedPath = next === "/cabinet" ? "/cabinet" : next;
+  if (!pathname.startsWith(expectedPath)) {
+    throw new Error(`Expected pathname to start with ${expectedPath}, got ${pathname}`);
+  }
 }
 
 type StaffRole = "chairman" | "secretary" | "accountant";
