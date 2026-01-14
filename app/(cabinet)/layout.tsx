@@ -6,6 +6,7 @@ import { getEffectiveSessionUser, type SessionRole } from "@/lib/session.server"
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import { RoleIndicator } from "../_components/RoleIndicator";
 import { canAccess } from "@/lib/rbac";
+import GlobalLogoutButton from "../_components/GlobalLogoutButton";
 
 export default async function CabinetLayout({ children }: { children: React.ReactNode }) {
   const user = await getEffectiveSessionUser();
@@ -61,6 +62,7 @@ export default async function CabinetLayout({ children }: { children: React.Reac
                 Админка
               </Link>
             ) : null}
+            <GlobalLogoutButton />
           </div>
         </div>
       </div>

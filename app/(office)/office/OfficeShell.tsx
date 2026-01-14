@@ -2,6 +2,7 @@
 
 import AppLink from "@/components/AppLink";
 import type { Role } from "@/lib/permissions";
+import GlobalLogoutButton from "../../_components/GlobalLogoutButton";
 
 type NavItem = { label: string; href: string; capability: string; testId?: string };
 
@@ -26,13 +27,16 @@ export default function OfficeShell({ role, roleLabel, navItems, children, hasQa
             </div>
             <div className="text-xs text-zinc-500">Рабочие разделы правления и бухгалтерии</div>
           </div>
-          <AppLink
-            href="/cabinet"
-            data-testid="office-to-cabinet"
-            className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-semibold text-[#5E704F] transition hover:border-[#5E704F]"
-          >
-            Кабинет жителя (как видят жители)
-          </AppLink>
+          <div className="flex items-center gap-2">
+            <AppLink
+              href="/cabinet"
+              data-testid="office-to-cabinet"
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-semibold text-[#5E704F] transition hover:border-[#5E704F]"
+            >
+              Кабинет жителя (как видят жители)
+            </AppLink>
+            <GlobalLogoutButton />
+          </div>
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-6xl gap-6 px-4 pb-10 pt-8 sm:px-6">

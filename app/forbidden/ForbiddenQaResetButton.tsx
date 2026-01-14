@@ -3,12 +3,12 @@
 import { useState } from "react";
 
 export default function ForbiddenQaResetButton() {
+  const [loading, setLoading] = useState(false);
+
   // В проде кнопку не показываем вовсе
   if (process.env.NODE_ENV === "production") {
     return null;
   }
-
-  const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
     if (typeof window === "undefined") return;

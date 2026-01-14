@@ -14,6 +14,7 @@ import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import AdminQaBanner from "./_components/AdminQaBanner";
 import { canAccess, type Role as RbacRole } from "@/lib/rbac";
 import Link from "next/link";
+import GlobalLogoutButton from "../_components/GlobalLogoutButton";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -100,6 +101,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   </Link>
                 ) : null}
                 <AdminSiteLink />
+                <GlobalLogoutButton />
               </div>
               {qaScenario ? <AdminQaBanner scenario={qaScenario} /> : null}
           </header>

@@ -18,16 +18,20 @@ export default async function OfficeAppealDetail({
       ? "resident"
       : rawRole ?? "guest";
 
+  const resolvedParams = params instanceof Promise ? await params : params;
+  const appealId = decodeURIComponent(resolvedParams.id).trim();
+  const nextUrl = `/office/appeals/${appealId}`;
+
   // Guard: office.access
   if (!canAccess(normalizedRole, "office.access")) {
     const reason = getForbiddenReason(normalizedRole, "office.access");
-    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/appeals")}`);
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(nextUrl)}`);
   }
 
   // Guard: office.appeals.read
   if (!canAccess(normalizedRole, "office.appeals.read")) {
     const reason = getForbiddenReason(normalizedRole, "office.appeals.read");
-    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/appeals")}`);
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(nextUrl)}`);
   }
 
   // UI permissions
@@ -35,8 +39,6 @@ export default async function OfficeAppealDetail({
   const canComment = canAccess(normalizedRole, "office.appeals.comment");
   const canStatus = canAccess(normalizedRole, "office.appeals.status");
 
-  const resolvedParams = params instanceof Promise ? await params : params;
-  const appealId = decodeURIComponent(resolvedParams.id).trim();
   const appeal = getAppeal(appealId);
   if (!appeal) notFound();
 

@@ -41,12 +41,13 @@ const getReasonText = (reason: string | null | undefined, role: string | null | 
 export default async function ForbiddenPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getEffectiveSessionUser();
   const role = user?.role ?? null;
-  const reasonParam = typeof searchParams?.reason === "string" ? searchParams.reason : null;
-  const nextParam = typeof searchParams?.next === "string" ? searchParams.next : null;
+  const resolvedParams = (await searchParams) ?? {};
+  const reasonParam = typeof resolvedParams.reason === "string" ? resolvedParams.reason : null;
+  const nextParam = typeof resolvedParams.next === "string" ? resolvedParams.next : null;
   const sanitizedNext = sanitizeNext(nextParam);
   const reasonText = getReasonText(reasonParam, role);
   const isDev = process.env.NODE_ENV !== "production";

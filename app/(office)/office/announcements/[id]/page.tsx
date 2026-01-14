@@ -21,16 +21,18 @@ export default async function OfficeAnnouncementDetailPage({
       ? "resident"
       : rawRole ?? "guest";
 
+  const nextUrl = `/office/announcements/${params.id}`;
+
   // Guard: office.access
   if (!canAccess(normalizedRole, "office.access")) {
     const reason = getForbiddenReason(normalizedRole, "office.access");
-    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}`)}`);
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(nextUrl)}`);
   }
 
   // Guard: office.announcements.read
   if (!canAccess(normalizedRole, "office.announcements.read")) {
     const reason = getForbiddenReason(normalizedRole, "office.announcements.read");
-    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}`)}`);
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(nextUrl)}`);
   }
 
   // UI permissions

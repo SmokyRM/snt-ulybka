@@ -7,16 +7,14 @@ export const metadata = {
   alternates: { canonical: "/staff-login" },
 };
 
-export default function StaffLoginPage({
+export default async function StaffLoginPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // Безопасное извлечение next параметра
-  const nextParam =
-    typeof searchParams?.next === "string" && searchParams.next.startsWith("/")
-      ? searchParams.next
-      : "/office";
+  const params = (await searchParams) ?? {};
+  const rawNext = typeof params.next === "string" ? params.next : null;
+  const nextParam = rawNext && rawNext.startsWith("/") ? rawNext : "/office";
 
   return <StaffLoginForm next={nextParam} />;
 }
