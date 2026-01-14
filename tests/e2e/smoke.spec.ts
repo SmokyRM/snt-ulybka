@@ -92,9 +92,9 @@ test.describe("Smoke tests - basic page rendering", () => {
   });
 
   test("admin login -> admin shows root", async ({ page }: { page: Page }) => {
-    // Diagnostic: log admin code (in dev only)
+    // Diagnostic: log admin code presence (in dev only)
     if (process.env.NODE_ENV !== "production") {
-      console.log(`[smoke] Using adminCode: ${adminCode ? "***" : "MISSING"}`);
+      console.log(`[smoke] adminCode present: ${Boolean(adminCode)}`);
     }
     // Ensure clean state before admin login
     await page.context().clearCookies();

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:turbo": "next dev --turbopack",
-    "dev:e2e": "cross-env NEXT_DISABLE_TURBOPACK=1 next dev",
+    "dev:e2e": "next dev --webpack",
     "clean": "rm -rf .next .turbo node_modules/.cache",
     "build": "cross-env NEXT_PUBLIC_BUILD_TIME=$(node -e \"process.stdout.write(new Date().toISOString())\") next build --webpack",
     "start": "next start",

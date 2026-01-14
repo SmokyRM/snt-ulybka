@@ -130,7 +130,7 @@ npx playwright test tests/e2e/access-roles.spec.ts  # Запуск конкре�
 
 ```bash
 npm run clean          # Очистка .next/.turbo кешей (опционально)
-npm run dev:e2e        # next dev с отключённым Turbopack
+npm run dev:e2e        # next dev --webpack (Next 16, без Turbopack)
 ```
 
 Во втором терминале запускаем тесты, указывая baseURL:

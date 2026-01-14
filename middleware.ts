@@ -60,6 +60,31 @@ export function middleware(request: NextRequest) {
     // Handle QA override *before* any auth / RBAC redirects so that QA cookies
     // are set on the response that performs the redirect.
     if (isDev && (allowedQa || qaParam === "clear")) {
+      // For API routes, don't redirect - just set cookie and continue
+      if (pathname.startsWith("/api/")) {
+        const response = NextResponse.next();
+        if (qaParam === "clear") {
+          response.cookies.set(QA_COOKIE, "", {
+            path: "/",
+            maxAge: 0,
+            httpOnly: false,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            expires: new Date(0),
+          });
+        } else if (qaParam) {
+          response.cookies.set(QA_COOKIE, qaParam, {
+            path: "/",
+            httpOnly: false,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 60 * 60 * 24 * 7,
+          });
+        }
+        return response;
+      }
+
+      // For page routes, redirect to clean URL without qa param
       const url = request.nextUrl.clone();
       url.searchParams.delete("qa");
 
@@ -136,9 +161,9 @@ export function middleware(request: NextRequest) {
       }
     }
 
-    // Admin guard
+    // Admin guard - use effectiveRole to support QA override
     if (isAdminPath || isApiAdmin) {
-      const isAdminRole = role === "admin";
+      const isAdminRole = effectiveRole === "admin";
       if (!isAdminRole) {
         if (isApiAdmin) {
           return NextResponse.json({ error: "forbidden" }, { status: 403 });
