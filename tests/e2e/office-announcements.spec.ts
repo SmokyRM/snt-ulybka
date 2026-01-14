@@ -4,6 +4,8 @@ import { loginStaff } from "./helpers/auth";
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
 test.describe("Office announcements", () => {
+  test.use({ storageState: undefined });
+
   test("secretary can open announcements list", async ({ page }) => {
     await loginStaff(page, "secretary", "/office");
     await page.goto(`${base}/office/announcements`);

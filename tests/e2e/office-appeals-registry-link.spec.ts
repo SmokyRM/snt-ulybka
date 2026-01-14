@@ -14,6 +14,8 @@ async function login(page: Page, code: string, next: string) {
 }
 
 test.describe("Office appeals registry link", () => {
+  test.use({ storageState: undefined });
+
   test("chairman opens registry from appeal with plotNumber", async ({ page }) => {
     await login(page, chairmanCode, "/office/appeals?q=Березовая, 12");
     await page.goto(`${base}/office/appeals?q=${encodeURIComponent("Березовая, 12")}`);

@@ -4,6 +4,8 @@ import { loginStaff } from "./helpers/auth";
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
 test.describe("Office appeals search by plot", () => {
+  test.use({ storageState: undefined });
+
   test("chairman can search by plot number", async ({ page }) => {
     await loginStaff(page, "chairman", "/office");
     await page.goto(`${base}/office/appeals?q=12`);

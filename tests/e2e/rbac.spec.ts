@@ -5,6 +5,8 @@ const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const adminCode = process.env.TEST_ADMIN_CODE || "1233";
 
 test.describe("RBAC - Role-based access control", () => {
+  test.use({ storageState: undefined });
+
   test("admin can access /admin, others -> /forbidden", async ({ page }: { page: Page }) => {
     // Admin can access /admin
     await page.goto(`${base}/login?next=/admin`);

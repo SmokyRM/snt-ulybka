@@ -3,6 +3,8 @@ import { test, expect } from "@playwright/test";
 const staffPassword = process.env.AUTH_PASS_ACCOUNTANT;
 
 test.describe("Office finance", () => {
+  test.use({ storageState: undefined });
+
   test("finance доступен для сотрудника или показывает staff login", async ({ page }) => {
     if (staffPassword) {
       await page.goto("/staff-login");

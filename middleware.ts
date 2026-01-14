@@ -96,22 +96,26 @@ export function middleware(request: NextRequest) {
     const { hasSession } = readSessionRole(request);
     const { role } = readSessionRole(request);
     const response = NextResponse.next();
+
+    // Derive QA role from cookie (query param was already consumed above)
     const qaCookie = isDev ? request.cookies.get(QA_COOKIE)?.value : null;
-    const qaRole =
-      qaParam && allowedQa
-        ? qaParam
-        : qaCookie;
-    const effectiveRole: SessionRole | null =
-      qaRole === "guest"
+    const qaRoleRaw = qaCookie as string | null;
+    const mappedQaRole: SessionRole | null =
+      qaRoleRaw === "guest"
         ? null
-        : qaRole === "resident_ok" || qaRole === "resident_debtor" || qaRole === "resident"
+        : qaRoleRaw === "resident_ok" || qaRoleRaw === "resident_debtor" || qaRoleRaw === "resident"
           ? "resident"
-          : qaRole === "chairman" || qaRole === "accountant" || qaRole === "secretary" || qaRole === "admin"
-            ? (qaRole as SessionRole)
-            : role;
+          : qaRoleRaw === "chairman" || qaRoleRaw === "accountant" || qaRoleRaw === "secretary" || qaRoleRaw === "admin"
+            ? (qaRoleRaw as SessionRole)
+            : null;
+
+    const effectiveRole: SessionRole | null = mappedQaRole ?? role;
+    const hasAuth = hasSession || mappedQaRole !== null;
 
     if (isAdminPath || isCabinetPath || isOfficePath || isApiAdmin) {
-      if (!hasSession) {
+      // Treat QA override as a form of auth in dev; only redirect when neither
+      // real session nor QA role are present.
+      if (!hasAuth) {
         if (isApiAdmin) {
           return NextResponse.json({ error: "unauthorized" }, { status: 401 });
         }

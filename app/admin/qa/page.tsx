@@ -6,6 +6,8 @@ import { qaEnabled } from "@/lib/qaScenario";
 import { getQaScenarioFromCookies, writeQaScenarioCookie } from "@/lib/qaScenario.server";
 import QaClearButton from "../_components/QaClearButton";
 
+const ADMIN_VIEW_COOKIE = "admin_view";
+
 export const metadata = {
   title: "QA-инструменты — СНТ «Улыбка»",
   alternates: { canonical: "/admin/qa" },
@@ -25,7 +27,22 @@ export default async function QaPage() {
 
   async function clearScenario() {
     "use server";
+    const cookieStore = await cookies();
+    // Clear QA scenario cookie
     await writeQaScenarioCookie(null);
+    // Clear admin_view cookie if it exists
+    const adminView = cookieStore.get(ADMIN_VIEW_COOKIE);
+    if (adminView) {
+      cookieStore.set(ADMIN_VIEW_COOKIE, "", {
+        path: "/",
+        maxAge: 0,
+        httpOnly: false,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        expires: new Date(0),
+      });
+    }
+    redirect("/admin/qa");
   }
 
   return (

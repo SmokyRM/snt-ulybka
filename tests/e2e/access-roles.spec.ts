@@ -5,6 +5,8 @@ const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const adminCode = process.env.TEST_ADMIN_CODE || "1233";
 
 test.describe("Role-based access", () => {
+  test.use({ storageState: undefined });
+
   test("resident accesses cabinet, blocked from admin", async ({ page }: { page: Page }) => {
     await loginResidentByCode(page, "/cabinet");
     await page.goto(`${base}/cabinet`);

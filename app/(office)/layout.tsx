@@ -35,7 +35,7 @@ export default async function OfficeLayout({ children }: { children: React.React
   const navItems = NAV_ITEMS.filter((item) => caps.has(item.capability));
 
   return (
-    <div className="min-h-screen bg-[#F8F1E9] text-zinc-900">
+    <div className="min-h-screen bg-[#F8F1E9] text-zinc-900" data-testid="office-root">
       <Header />
       <OfficeShell role={role} roleLabel={roleLabel(role)} navItems={navItems}>
         {children}

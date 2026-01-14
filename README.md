@@ -119,10 +119,27 @@ AUTH_PASS_ACCOUNTANT=your_password_here
 ### Запуск тестов
 
 ```bash
-npm run test:e2e        # Запуск всех тестов
+npm run test:e2e        # Запуск всех тестов (ожидает, что dev-сервер уже запущен)
 npm run test:e2e:ui     # Запуск с UI (интерактивный режим)
 npx playwright test tests/e2e/access-roles.spec.ts  # Запуск конкретного файла
 ```
+
+### Рекомендуемый сценарий для стабильных E2E (без Turbopack)
+
+В одном терминале поднимаем dev-сервер без Turbopack:
+
+```bash
+npm run clean          # Очистка .next/.turbo кешей (опционально)
+npm run dev:e2e        # next dev с отключённым Turbopack
+```
+
+Во втором терминале запускаем тесты, указывая baseURL:
+
+```bash
+npm run test:e2e       # PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test
+```
+
+Такой режим исключает конкуренцию за `.next/dev/lock` и проблемы Turbopack/ChunkLoadError.
 
 ### Поведение тестов accountant
 

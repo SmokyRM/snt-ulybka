@@ -142,6 +142,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 30,
       httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
     });
   }
   if (process.env.NODE_ENV !== "production") {

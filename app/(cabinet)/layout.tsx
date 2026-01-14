@@ -32,7 +32,7 @@ export default async function CabinetLayout({ children }: { children: React.Reac
   const canSeeOfficeLink = effectiveRole ? officeLinkRoles.includes(effectiveRole) : false;
 
   return (
-    <div className="min-h-screen bg-[#F8F1E9]">
+    <div className="min-h-screen bg-[#F8F1E9]" data-testid="cabinet-root">
       <Header />
       <div className="border-b border-zinc-200 bg-white px-4 py-2 text-xs text-zinc-600 sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between">

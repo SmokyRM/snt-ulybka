@@ -6,6 +6,8 @@ const accountantPass = process.env.AUTH_PASS_ACCOUNTANT || "";
 const residentCode = process.env.TEST_ACCESS_CODE || "1111";
 
 test.describe("Office registry", () => {
+  test.use({ storageState: undefined });
+
   test("accountant can open registry and item", async ({ page }) => {
     const staffPassword = chairmanPass || accountantPass;
     if (!staffPassword) {
