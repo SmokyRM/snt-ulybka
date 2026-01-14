@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Header from "@/components/home/Header";
 import Footer from "@/components/home/Footer";
 import { getEffectiveSessionUser } from "@/lib/session.server";
+import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import { getOfficeCapabilities, type Role } from "@/lib/permissions";
 import OfficeShell from "./office/OfficeShell";
 
@@ -23,10 +24,22 @@ const roleLabel = (role: Role) => {
 
 export default async function OfficeLayout({ children }: { children: React.ReactNode }) {
   const user = await getEffectiveSessionUser();
-  if (!user) {
+  const qa = await getQaScenarioFromCookies();
+  const isDev = process.env.NODE_ENV !== "production";
+
+  let role: Role | null = (user?.role as Role | undefined) ?? null;
+
+  // In dev, allow QA override for staff roles even without a real session
+  if (!role && isDev && qa) {
+    if (qa === "chairman" || qa === "accountant" || qa === "secretary" || qa === "admin") {
+      role = qa as Role;
+    }
+  }
+
+  if (!role) {
     redirect("/staff-login?next=/office");
   }
-  const role = (user.role as Role | undefined) ?? "resident";
+
   if (!(role === "chairman" || role === "accountant" || role === "secretary" || role === "admin")) {
     redirect("/staff-login?next=/office");
   }

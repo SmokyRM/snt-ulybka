@@ -24,6 +24,18 @@ export default async function OfficeAnnouncementsPage({
 }) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/announcements");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  if (!canAccess(normalizedRole, "office.announcements.read")) {
+    const reason = getForbiddenReason(normalizedRole, "office.announcements.read");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/announcements")}`);
+  }
+
   const role = (user.role as Role | undefined) ?? "resident";
   const canPublish = role === "chairman" || role === "secretary" || role === "admin";
 

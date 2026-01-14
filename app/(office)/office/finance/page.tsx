@@ -14,6 +14,18 @@ const formatCurrency = (value: number) => `${Math.round(value).toLocaleString("r
 export default async function OfficeFinancePage({ searchParams }: Props) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/finance");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  if (!canAccess(normalizedRole, "office.finance.view")) {
+    const reason = getForbiddenReason(normalizedRole, "office.finance.view");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/finance")}`);
+  }
+
   const role = (user.role as Role | undefined) ?? "resident";
   if (!(role === "chairman" || role === "accountant" || role === "admin")) {
     redirect("/forbidden");

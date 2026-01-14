@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
-import { type Role } from "@/lib/permissions";
+import type { Role } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -10,49 +10,55 @@ const cards: Array<{
   href: string;
   description: string;
   testId: string;
-  allowed: (role: Role) => boolean;
+  permission: import("@/lib/rbac").Capability;
 }> = [
   {
     label: "Обращения",
     href: "/office/appeals",
     description: "Заявки жителей и ответы",
-    testId: "office-card-appeals",
-    allowed: () => true,
+    testId: "office-tile-appeals",
+    permission: "office.appeals.read",
   },
   {
     label: "Объявления",
     href: "/office/announcements",
     description: "Публикации и черновики",
-    testId: "office-card-announcements",
-    allowed: () => true,
+    testId: "office-tile-announcements",
+    permission: "office.announcements.read",
   },
   {
     label: "Документы",
     href: "/office/documents",
     description: "Шаблоны и файлы",
-    testId: "office-card-documents",
-    allowed: () => true,
+    testId: "office-tile-documents",
+    // Пока отдельного permission нет — считаем доступным для всех staff, у кого есть office.access
+    permission: "office.access",
   },
   {
     label: "Платежи и долги",
     href: "/office/finance",
     description: "Начисления, должники, отчёты",
-    testId: "office-card-finance",
-    allowed: (role) => role === "accountant" || role === "chairman" || role === "admin",
+    testId: "office-tile-finance",
+    permission: "office.finance.view",
   },
 ];
 
 export default async function OfficeIndex() {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office");
-  const role = (user.role as Role | undefined) ?? "resident";
-  const { can, getForbiddenReason } = await import("@/lib/rbac");
-  if (!can(role, "office.access")) {
+  const rawRole = user.role as Role | undefined;
+  const role: Role = rawRole ?? "resident";
+
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+
+  // Серверный guard: если нет доступа к офису вообще — редиректим на /forbidden с кодом
+  if (!canAccess(role, "office.access")) {
     const reason = getForbiddenReason(role, "office.access");
     redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office")}`);
   }
 
-  const visible = cards.filter((card) => card.allowed(role));
+  // Фильтрация плиток по canAccess
+  const visible = cards.filter((card) => canAccess(role, card.permission));
 
   return (
     <div className="space-y-4" data-testid="office-dashboard-root">
