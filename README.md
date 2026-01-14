@@ -146,6 +146,14 @@ npm run test:e2e       # PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright te
 - **Локально**: если креды accountant (`AUTH_USER_ACCOUNTANT`, `AUTH_PASS_ACCOUNTANT`) не заданы, тесты accountant будут пропущены (skipped)
 - **В CI** (`process.env.CI === "true"`): если креды accountant не заданы, тесты accountant упадут с явной ошибкой — это гарантирует, что CI не будет зелёным "случайно" при отсутствии кредов
 
+## QA reports
+
+QA отчёты и шаблоны для тестирования админских QA инструментов:
+
+- [QA Reports Directory](docs/qa/) — папка с QA документацией
+- [Latest QA Report](docs/qa/QA_REPORT_admin_qa.md) — последний отчёт по тестированию админских QA инструментов
+- [QA Template](docs/qa/QA_TEMPLATE_admin_qa.md) — шаблон для будущих прогонов
+
 ## Assistant API (MVP)
 POST `/api/assistant` возвращает справку по ключевым словам и контексту страницы.
 
