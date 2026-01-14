@@ -1,8 +1,7 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
-import { can, type Role } from "@/lib/permissions";
+import { getEffectiveSessionUser } from "@/lib/session.server";
 import { getOfficeAnnouncement, updateOfficeAnnouncement } from "@/lib/office/announcements.store";
 
 export default async function OfficeAnnouncementEditPage({
@@ -10,12 +9,25 @@ export default async function OfficeAnnouncementEditPage({
 }: {
   params: { id: string };
 }) {
-  const session = await getSessionUser();
-  if (!session) redirect(`/login?next=/office/announcements/${params.id}/edit`);
-  const role = (session.role as Role | undefined) ?? "resident";
-  const normalizedRole = role === "admin" ? "chairman" : role;
-  if (!can(normalizedRole, "office.announcements.manage")) {
-    redirect("/forbidden");
+  const session = await getEffectiveSessionUser();
+  if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
+  const rawRole = session.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}/edit`)}`);
+  }
+
+  // Guard: office.announcements.write
+  if (!canAccess(normalizedRole, "office.announcements.write")) {
+    const reason = getForbiddenReason(normalizedRole, "office.announcements.write");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}/edit`)}`);
   }
 
   const announcement = getOfficeAnnouncement(params.id);

@@ -31,13 +31,21 @@ export default async function OfficeAnnouncementsPage({
       ? "resident"
       : rawRole ?? "guest";
 
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/announcements")}`);
+  }
+
+  // Guard: office.announcements.read
   if (!canAccess(normalizedRole, "office.announcements.read")) {
     const reason = getForbiddenReason(normalizedRole, "office.announcements.read");
     redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/announcements")}`);
   }
 
-  const role = (user.role as Role | undefined) ?? "resident";
-  const canPublish = role === "chairman" || role === "secretary" || role === "admin";
+  // UI permissions
+  const canRead = canAccess(normalizedRole, "office.announcements.read");
+  const canWrite = canAccess(normalizedRole, "office.announcements.write");
 
   const status = statuses.some((s) => s.value === searchParams.status) ? searchParams.status : "all";
   const q = searchParams.q?.trim() ?? "";
@@ -53,14 +61,21 @@ export default async function OfficeAnnouncementsPage({
           <h1 className="text-2xl font-semibold text-zinc-900">Объявления</h1>
           <p className="text-sm text-zinc-600">Черновики и публикации для жителей/сотрудников</p>
         </div>
-        <Link
-          href="/office/announcements/new"
-          data-testid="office-announcements-new"
-          className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
-        >
-          Создать
-        </Link>
+        {canWrite ? (
+          <Link
+            href="/office/announcements/new"
+            data-testid="office-announcements-create"
+            className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
+          >
+            Создать
+          </Link>
+        ) : null}
       </div>
+      {canRead && !canWrite ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-announcements-readonly-hint">
+          Только просмотр
+        </div>
+      ) : null}
       <form className="flex flex-wrap gap-3 text-sm">
         <select
           name="status"
@@ -93,13 +108,15 @@ export default async function OfficeAnnouncementsPage({
         {items.length === 0 ? (
           <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-600" data-testid="office-announcements-empty">
             Объявлений пока нет.
-            <Link
-              href="/office/announcements/new"
-              data-testid="office-announcements-empty-cta"
-              className="ml-2 text-[#5E704F] hover:underline"
-            >
-              Создать объявление
-            </Link>
+            {canWrite ? (
+              <Link
+                href="/office/announcements/new"
+                data-testid="office-announcements-empty-cta"
+                className="ml-2 text-[#5E704F] hover:underline"
+              >
+                Создать объявление
+              </Link>
+            ) : null}
           </div>
         ) : (
           items.map((item) => (
@@ -128,7 +145,7 @@ export default async function OfficeAnnouncementsPage({
                   >
                     {item.status === "published" ? "Опубликовано" : "Черновик"}
                   </span>
-                  {canPublish ? (
+                  {canWrite ? (
                     <div className="flex flex-wrap gap-2">
                       <form action={publishAction}>
                         <input type="hidden" name="id" value={item.id} />
@@ -144,6 +161,7 @@ export default async function OfficeAnnouncementsPage({
                         <input type="hidden" name="id" value={item.id} />
                         <button
                           type="submit"
+                          data-testid={`office-announcements-delete-${item.id}`}
                           className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:border-rose-300"
                         >
                           Удалить

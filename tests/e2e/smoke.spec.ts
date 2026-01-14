@@ -49,6 +49,8 @@ test.describe("Smoke tests - basic page rendering", () => {
     await page.waitForURL((url) => url.pathname.startsWith("/office"), { timeout: 20000 });
     // Verify office root layout is present (primary check)
     await expect(page.getByTestId("office-root")).toBeVisible({ timeout: 15000 });
+    // Verify role indicator is present
+    await expect(page.getByTestId("role-indicator")).toBeVisible({ timeout: 5000 });
     // Verify office dashboard content is visible
     await expect(page.getByTestId("office-dashboard-root")).toBeVisible({ timeout: 15000 });
   });
@@ -141,6 +143,62 @@ test.describe("Smoke tests - basic page rendering", () => {
     } else {
       await expect(page).toHaveURL(/\/admin/);
       await expect(page.getByTestId("admin-root")).toBeVisible();
+      // Verify role indicator is present
+      await expect(page.getByTestId("role-indicator")).toBeVisible({ timeout: 5000 });
+    }
+  });
+
+  test("staff QA fallback -> office shows root and role indicator", async ({ page }: { page: Page }) => {
+    // Clear cookies and navigate with QA param
+    await page.context().clearCookies();
+    await page.goto(`${base}/office?qa=chairman`, { waitUntil: "domcontentloaded" });
+    // Wait for navigation to /office (not /staff-login)
+    await page.waitForURL((url) => {
+      const path = url.pathname;
+      // If redirected to /staff-login, QA override failed
+      if (path.startsWith("/staff-login")) {
+        return false;
+      }
+      return path.startsWith("/office") || path.startsWith("/forbidden");
+    }, { timeout: 20000 });
+    
+    const currentUrl = page.url();
+    // Should NOT redirect to /staff-login
+    expect(currentUrl).not.toContain("/staff-login");
+    
+    // Primary check: office-root MUST be visible
+    await expect(page.getByTestId("office-root")).toBeVisible({ timeout: 15000 });
+    // Verify role indicator is present
+    await expect(page.getByTestId("role-indicator")).toBeVisible({ timeout: 5000 });
+  });
+
+  test("resident login -> cabinet shows role indicator", async ({ page }: { page: Page }) => {
+    await loginResidentByCode(page, "/cabinet");
+    // Wait for navigation away from /login
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15000 });
+    const url = page.url();
+    
+    // Handle onboarding redirect
+    if (url.includes("onboarding=1") || url.includes("/onboarding") || url.includes("/cabinet/profile")) {
+      await page.waitForURL((url) => url.pathname.includes("/onboarding") || url.pathname.includes("/cabinet"), { timeout: 5000 }).catch(() => {});
+      const currentUrl = page.url();
+      if (currentUrl.includes("/onboarding")) {
+        await expect(page.locator('input[name="fullName"]')).toBeVisible({ timeout: 5000 });
+        return;
+      }
+      await expect(page.locator('h1').or(page.locator('input')).first()).toBeVisible({ timeout: 5000 });
+      return;
+    }
+    
+    // Wait for final URL if not onboarding
+    await page.waitForURL((url) => url.pathname.startsWith("/cabinet") || url.pathname.startsWith("/forbidden"), { timeout: 15000 });
+    const finalUrl = page.url();
+    if (finalUrl.includes("/forbidden")) {
+      await expect(page.getByTestId("forbidden-root")).toBeVisible();
+    } else {
+      await expect(page.getByTestId("cabinet-root")).toBeVisible({ timeout: 15000 });
+      // Verify role indicator is present
+      await expect(page.getByTestId("role-indicator")).toBeVisible({ timeout: 5000 });
     }
   });
 });

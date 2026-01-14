@@ -22,12 +22,21 @@ const statusOptions = [
 export default async function OfficeRegistryPage({ searchParams }: Props) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/registry");
-  const role = (user.role as Role | undefined) ?? "resident";
-  const canRead =
-    can(role === "admin" ? "chairman" : role, "office.registry.read") ||
-    can(role === "admin" ? "chairman" : role, "office.registry.manage");
-  if (!canRead) redirect("/forbidden");
-  const canManage = can(role === "admin" ? "chairman" : role, "office.registry.manage");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/registry")}`);
+  }
+
+  // UI permissions: write only for admin/chairman
+  const canWriteRegistry = normalizedRole === "admin" || normalizedRole === "chairman";
 
   const street = searchParams?.street ? Number(searchParams.street) : undefined;
   const statusParam = searchParams?.status ?? "all";
@@ -47,8 +56,13 @@ export default async function OfficeRegistryPage({ searchParams }: Props) {
           <p className="text-sm text-zinc-600">Заявки на подтверждение участка и контакты</p>
         </div>
       </div>
+      {!canWriteRegistry ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-registry-readonly-hint">
+          Только просмотр
+        </div>
+      ) : null}
 
-      <form className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:grid-cols-4 sm:items-end">
+      <form className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 sm:grid-cols-4 sm:items-end" data-testid="office-registry-filters">
         <label className="text-sm text-zinc-700">
           <div className="text-xs font-semibold text-zinc-600">Улица</div>
           <select
@@ -102,7 +116,7 @@ export default async function OfficeRegistryPage({ searchParams }: Props) {
       </form>
 
       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
-        <table className="min-w-full divide-y divide-zinc-200">
+        <table className="min-w-full divide-y divide-zinc-200" data-testid="office-registry-table">
           <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
             <tr>
               <th className="px-3 py-2">Участок</th>
@@ -149,21 +163,21 @@ export default async function OfficeRegistryPage({ searchParams }: Props) {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {canManage && (row.status === "pending" || row.status === "conflict") ? (
-                      <div className="flex justify-end gap-2">
+                    {canWriteRegistry && (row.status === "pending" || row.status === "conflict") ? (
+                      <div className="flex justify-end gap-2" data-testid={`office-registry-edit-${row.id}`}>
                         <form action={verifyOwnershipAction}>
                           <input type="hidden" name="id" value={row.id} />
                           <button
                             type="submit"
                             data-testid={`office-registry-verify-${row.id}`}
-                            disabled={row.status === "conflict" && !(role === "admin" || role === "chairman")}
+                            disabled={row.status === "conflict" && !canWriteRegistry}
                             title={
-                              row.status === "conflict" && !(role === "admin" || role === "chairman")
+                              row.status === "conflict" && !canWriteRegistry
                                 ? "Подтверждать конфликт может только админ/председатель"
                                 : undefined
                             }
                             className={`rounded-lg border px-3 py-1 text-xs font-semibold ${
-                              row.status === "conflict" && !(role === "admin" || role === "chairman")
+                              row.status === "conflict" && !canWriteRegistry
                                 ? "cursor-not-allowed border-zinc-200 text-zinc-400"
                                 : "border-emerald-200 text-emerald-700 hover:border-emerald-300"
                             }`}

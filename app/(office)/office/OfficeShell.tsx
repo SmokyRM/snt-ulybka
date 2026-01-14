@@ -10,16 +10,20 @@ type Props = {
   roleLabel: string;
   navItems: NavItem[];
   children: React.ReactNode;
+  hasQa?: boolean;
 };
 
-export default function OfficeShell({ role, roleLabel, navItems, children }: Props) {
+export default function OfficeShell({ role, roleLabel, navItems, children, hasQa = false }: Props) {
   return (
     <div className="min-h-screen bg-[#F8F1E9] text-zinc-900">
       <header className="border-b border-zinc-200 bg-white px-4 py-3 shadow-sm sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-wide text-zinc-500">Офис</div>
-            <div className="text-sm font-semibold text-zinc-900">Роль: {roleLabel}</div>
+            <div className="text-sm font-semibold text-zinc-900" data-testid="role-indicator">
+              Роль: {roleLabel}
+              {hasQa ? " (QA)" : ""}
+            </div>
             <div className="text-xs text-zinc-500">Рабочие разделы правления и бухгалтерии</div>
           </div>
           <AppLink

@@ -32,11 +32,21 @@ export default async function OfficeDocumentsPage({
 }) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/documents");
-  const role = (user.role as Role | undefined) ?? "resident";
-  if (!(role === "chairman" || role === "secretary" || role === "accountant" || role === "admin")) {
-    redirect("/forbidden");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/documents")}`);
   }
-  const canPublish = role === "chairman" || role === "secretary" || role === "admin";
+
+  // UI permissions: write only for admin/chairman
+  const canWriteDocs = normalizedRole === "admin" || normalizedRole === "chairman";
 
   const status = statuses.some((s) => s.value === searchParams.status) ? searchParams.status : "all";
   const category = categories.some((c) => c.value === searchParams.category) ? searchParams.category : "all";
@@ -54,14 +64,21 @@ export default async function OfficeDocumentsPage({
           <h1 className="text-2xl font-semibold text-zinc-900">Документы</h1>
           <p className="text-sm text-zinc-600">Файлы и шаблоны для работы</p>
         </div>
-        <Link
-          href="/office/documents/new"
-          data-testid="office-documents-new"
-          className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
-        >
-          Создать
-        </Link>
+        {canWriteDocs ? (
+          <Link
+            href="/office/documents/new"
+            data-testid="office-documents-upload"
+            className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
+          >
+            Создать
+          </Link>
+        ) : null}
       </div>
+      {!canWriteDocs ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-documents-readonly-hint">
+          Только просмотр
+        </div>
+      ) : null}
 
       <form className="flex flex-wrap gap-3 text-sm">
         <select
@@ -103,7 +120,7 @@ export default async function OfficeDocumentsPage({
         </button>
       </form>
 
-      <div className="space-y-2">
+      <div className="space-y-2" data-testid="office-documents-list">
         {items.length === 0 ? (
           <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-600">
             Документы пока не добавлены.
@@ -145,7 +162,7 @@ export default async function OfficeDocumentsPage({
                   >
                     {item.status === "published" ? "Опубликовано" : "Черновик"}
                   </span>
-                  {canPublish ? (
+                  {canWriteDocs ? (
                     <div className="flex flex-wrap gap-2">
                       <form action={publishAction}>
                         <input type="hidden" name="id" value={item.id} />

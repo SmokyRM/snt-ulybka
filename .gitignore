@@ -51,3 +51,6 @@ playwright/.auth/
 playwright/.auth/state.json
 
 test-results/
+
+# QA report artifacts (local only)
+docs/qa/runs/

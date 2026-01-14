@@ -1185,7 +1185,7 @@ export default async function CabinetPage({
     null;
 
   return (
-    <div data-testid="cabinet-root">
+    <div data-testid="cabinet-page-root">
       <CabinetShell
         sections={sections}
         quickActions={quickActions}

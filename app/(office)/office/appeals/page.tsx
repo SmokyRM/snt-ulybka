@@ -15,10 +15,29 @@ const statuses = [
 export default async function OfficeAppealsPage({ searchParams }: { searchParams: { status?: string; q?: string } }) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/appeals");
-  const role = (user.role as Role | undefined) ?? "resident";
-  if (!(role === "chairman" || role === "accountant" || role === "secretary" || role === "admin")) {
-    redirect("/forbidden");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/appeals")}`);
   }
+
+  // Guard: office.appeals.read
+  if (!canAccess(normalizedRole, "office.appeals.read")) {
+    const reason = getForbiddenReason(normalizedRole, "office.appeals.read");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/appeals")}`);
+  }
+
+  // UI permissions
+  const canRead = canAccess(normalizedRole, "office.appeals.read");
+  const canComment = canAccess(normalizedRole, "office.appeals.comment");
+  const canStatus = canAccess(normalizedRole, "office.appeals.status");
 
   const status = statuses.some((s) => s.value === searchParams.status) ? searchParams.status : "all";
   const q = searchParams.q?.trim() ?? "";
@@ -69,11 +88,18 @@ export default async function OfficeAppealsPage({ searchParams }: { searchParams
         </button>
       </form>
 
-      <form
-        action={createAppealAction}
-        className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
-      >
-        <div className="text-sm font-semibold text-zinc-900">Добавить новую заявку</div>
+      {canRead && !canComment ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-appeals-readonly-hint">
+          Только просмотр
+        </div>
+      ) : null}
+
+      {canComment ? (
+        <form
+          action={createAppealAction}
+          className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+        >
+          <div className="text-sm font-semibold text-zinc-900">Добавить новую заявку</div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm text-zinc-700">
             Тема
@@ -95,13 +121,15 @@ export default async function OfficeAppealsPage({ searchParams }: { searchParams
             />
           </label>
         </div>
-        <button
-          type="submit"
-          className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
-        >
-          Создать заявку
-        </button>
-      </form>
+          <button
+            type="submit"
+            data-testid="office-appeals-create"
+            className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41]"
+          >
+            Создать заявку
+          </button>
+        </form>
+      ) : null}
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
         <div className="grid grid-cols-4 gap-3 border-b border-zinc-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-600">
           <div>Тема</div>

@@ -1,8 +1,7 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
-import { can, type Role } from "@/lib/permissions";
+import { getEffectiveSessionUser } from "@/lib/session.server";
 import {
   getOfficeAnnouncement,
   setOfficeAnnouncementStatus,
@@ -13,13 +12,30 @@ export default async function OfficeAnnouncementDetailPage({
 }: {
   params: { id: string };
 }) {
-  const session = await getSessionUser();
-  if (!session) redirect(`/login?next=/office/announcements/${params.id}`);
-  const role = (session.role as Role | undefined) ?? "resident";
-  const normalizedRole = role === "admin" ? "chairman" : role;
-  if (!can(normalizedRole, "office.announcements.manage")) {
-    redirect("/forbidden");
+  const session = await getEffectiveSessionUser();
+  if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}`);
+  const rawRole = session.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}`)}`);
   }
+
+  // Guard: office.announcements.read
+  if (!canAccess(normalizedRole, "office.announcements.read")) {
+    const reason = getForbiddenReason(normalizedRole, "office.announcements.read");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent(`/office/announcements/${params.id}`)}`);
+  }
+
+  // UI permissions
+  const canRead = canAccess(normalizedRole, "office.announcements.read");
+  const canWrite = canAccess(normalizedRole, "office.announcements.write");
 
   const announcement = getOfficeAnnouncement(params.id);
   if (!announcement) notFound();
@@ -77,36 +93,43 @@ export default async function OfficeAnnouncementDetailPage({
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/office/announcements/${existing.id}/edit`}
-          className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
-          data-testid="announcement-edit"
-        >
-          Редактировать
-        </Link>
-        {existing.status === "published" ? (
-          <form action={unpublish}>
-            <button
-              type="submit"
-              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
-              data-testid="announcement-unpublish"
-            >
-              В черновик
-            </button>
-          </form>
-        ) : (
-          <form action={publish}>
-            <button
-              type="submit"
-              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
-              data-testid="announcement-publish"
-            >
-              Опубликовать
-            </button>
-          </form>
-        )}
-      </div>
+      {canRead && !canWrite ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-announcement-readonly-hint">
+          Только просмотр
+        </div>
+      ) : null}
+      {canWrite ? (
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/office/announcements/${existing.id}/edit`}
+            className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+            data-testid="office-announcements-edit"
+          >
+            Редактировать
+          </Link>
+          {existing.status === "published" ? (
+            <form action={unpublish}>
+              <button
+                type="submit"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+                data-testid="office-announcements-unpublish"
+              >
+                В черновик
+              </button>
+            </form>
+          ) : (
+            <form action={publish}>
+              <button
+                type="submit"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+                data-testid="office-announcements-publish"
+              >
+                Опубликовать
+              </button>
+            </form>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

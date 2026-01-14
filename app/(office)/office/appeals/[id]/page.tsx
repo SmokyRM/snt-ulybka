@@ -11,10 +11,29 @@ export default async function OfficeAppealDetail({
 }) {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/appeals");
-  const role = (user.role as Role | undefined) ?? "resident";
-  if (!(role === "chairman" || role === "accountant" || role === "secretary" || role === "admin")) {
-    redirect("/forbidden");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board"
+      ? "resident"
+      : rawRole ?? "guest";
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/appeals")}`);
   }
+
+  // Guard: office.appeals.read
+  if (!canAccess(normalizedRole, "office.appeals.read")) {
+    const reason = getForbiddenReason(normalizedRole, "office.appeals.read");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/appeals")}`);
+  }
+
+  // UI permissions
+  const canRead = canAccess(normalizedRole, "office.appeals.read");
+  const canComment = canAccess(normalizedRole, "office.appeals.comment");
+  const canStatus = canAccess(normalizedRole, "office.appeals.status");
 
   const resolvedParams = params instanceof Promise ? await params : params;
   const appealId = decodeURIComponent(resolvedParams.id).trim();
@@ -38,51 +57,61 @@ export default async function OfficeAppealDetail({
         </div>
       </div>
 
-      <form
-        action={saveStatusAction}
-        className="flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
-      >
-        <input type="hidden" name="id" value={appeal.id} />
-        <label className="text-sm font-medium text-zinc-800">
-          Статус
-          <select name="status" defaultValue={appeal.status} className="ml-2 rounded-lg border border-zinc-200 px-3 py-2">
-            <option value="new">Новая</option>
-            <option value="in_progress">В работе</option>
-            <option value="closed">Закрыта</option>
-          </select>
-        </label>
-        <button
-          type="submit"
-          data-testid="office-appeal-save"
-          className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
-        >
-          Сохранить
-        </button>
-      </form>
+      {canRead && !canComment && !canStatus ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-appeal-readonly-hint">
+          Только просмотр
+        </div>
+      ) : null}
 
-      <form
-        action={sendReplyAction}
-        className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
-      >
-        <input type="hidden" name="id" value={appeal.id} />
-        <label className="block text-sm font-semibold text-zinc-900">
-          Ответ / комментарий
-          <textarea
-            name="reply"
-            data-testid="office-appeal-reply"
-            className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-            rows={4}
-            placeholder="Короткий ответ или комментарий"
-          />
-        </label>
-        <button
-          type="submit"
-          data-testid="office-appeal-reply-submit"
-          className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+      {canStatus ? (
+        <form
+          action={saveStatusAction}
+          className="flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
         >
-          Отправить
-        </button>
-      </form>
+          <input type="hidden" name="id" value={appeal.id} />
+          <label className="text-sm font-medium text-zinc-800">
+            Статус
+            <select name="status" defaultValue={appeal.status} className="ml-2 rounded-lg border border-zinc-200 px-3 py-2">
+              <option value="new">Новая</option>
+              <option value="in_progress">В работе</option>
+              <option value="closed">Закрыта</option>
+            </select>
+          </label>
+          <button
+            type="submit"
+            data-testid="office-appeals-status"
+            className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+          >
+            Сохранить
+          </button>
+        </form>
+      ) : null}
+
+      {canComment ? (
+        <form
+          action={sendReplyAction}
+          className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
+        >
+          <input type="hidden" name="id" value={appeal.id} />
+          <label className="block text-sm font-semibold text-zinc-900">
+            Ответ / комментарий
+            <textarea
+              name="reply"
+              data-testid="office-appeals-comment"
+              className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+              rows={4}
+              placeholder="Короткий ответ или комментарий"
+            />
+          </label>
+          <button
+            type="submit"
+            data-testid="office-appeals-comment-submit"
+            className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-[#5E704F] hover:border-[#5E704F]"
+          >
+            Отправить
+          </button>
+        </form>
+      ) : null}
 
       {appeal.comments && appeal.comments.length > 0 ? (
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">

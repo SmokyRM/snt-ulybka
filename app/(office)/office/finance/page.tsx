@@ -21,18 +21,20 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
       ? "resident"
       : rawRole ?? "guest";
 
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/finance")}`);
+  }
+
+  // Guard: office.finance.view
   if (!canAccess(normalizedRole, "office.finance.view")) {
     const reason = getForbiddenReason(normalizedRole, "office.finance.view");
     redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/finance")}`);
   }
 
-  const role = (user.role as Role | undefined) ?? "resident";
-  if (!(role === "chairman" || role === "accountant" || role === "admin")) {
-    redirect("/forbidden");
-  }
-  if (!can(role === "admin" ? "chairman" : role, "office.finance.manage")) {
-    redirect("/forbidden");
-  }
+  // UI permissions - finance is read-only (only view permission exists)
+  const canView = canAccess(normalizedRole, "office.finance.view");
 
   const q = searchParams?.q ?? "";
   const summary = getOfficeSummary();
@@ -43,6 +45,11 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
       <div className="flex flex-col gap-2">
         <h1 className="text-xl font-semibold text-zinc-900">Финансы</h1>
         <p className="text-sm text-zinc-600">Долги и оплаты по участкам (мок-данные).</p>
+        {canView ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="office-finance-readonly-hint">
+            Только просмотр
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">

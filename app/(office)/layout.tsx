@@ -5,6 +5,7 @@ import { getEffectiveSessionUser } from "@/lib/session.server";
 import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import { getOfficeCapabilities, type Role } from "@/lib/permissions";
 import OfficeShell from "./office/OfficeShell";
+import { canAccess, type Role as RbacRole } from "@/lib/rbac";
 
 const NAV_ITEMS: Array<{ label: string; href: string; capability: string; testId: string }> = [
   { label: "Обращения", href: "/office/appeals", capability: "office.appeals.manage", testId: "office-nav-appeals" },
@@ -45,12 +46,33 @@ export default async function OfficeLayout({ children }: { children: React.React
   }
 
   const caps = getOfficeCapabilities(role === "admin" ? "chairman" : role);
-  const navItems = NAV_ITEMS.filter((item) => caps.has(item.capability));
+  // Use RBAC canAccess for filtering nav items
+  const rbacRole: RbacRole = role === "admin" ? "admin" : role;
+  const navItems = NAV_ITEMS.filter((item) => {
+    // Map old capabilities to RBAC capabilities
+    if (item.capability === "office.appeals.manage") {
+      return canAccess(rbacRole, "office.appeals.read");
+    }
+    if (item.capability === "office.announcements.manage") {
+      return canAccess(rbacRole, "office.announcements.read");
+    }
+    if (item.capability === "office.finance.manage") {
+      return canAccess(rbacRole, "office.finance.view");
+    }
+    if (item.capability === "office.registry.read") {
+      return canAccess(rbacRole, "office.access"); // registry is part of office.access
+    }
+    if (item.capability === "office.documents.manage") {
+      return canAccess(rbacRole, "office.access"); // documents is part of office.access
+    }
+    return false;
+  });
+  const hasQa = Boolean(qa);
 
   return (
     <div className="min-h-screen bg-[#F8F1E9] text-zinc-900" data-testid="office-root">
       <Header />
-      <OfficeShell role={role} roleLabel={roleLabel(role)} navItems={navItems}>
+      <OfficeShell role={role} roleLabel={roleLabel(role)} navItems={navItems} hasQa={hasQa}>
         {children}
       </OfficeShell>
       <Footer />
