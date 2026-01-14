@@ -10,20 +10,99 @@ if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
 
+// Helper: Check if element is visible (soft check, doesn't throw)
+async function isElementVisible(page: Page, selector: string, testId?: string): Promise<boolean> {
+  try {
+    const element = testId ? page.getByTestId(testId) : page.locator(selector);
+    return await element.isVisible({ timeout: 5_000 }).catch(() => false);
+  } catch {
+    return false;
+  }
+}
+
+// Helper: Navigate and take screenshot (soft, doesn't throw)
+async function navigateAndScreenshot(
+  page: Page,
+  url: string,
+  screenshotPath: string,
+  timeout: number = 60_000
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await page.goto(`${baseURL}${url}`, { timeout, waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("domcontentloaded");
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+// Helper: Check office page and collect testids
+async function checkOfficePage(page: Page, role: string): Promise<{
+  ok: boolean;
+  testids: {
+    "office-root": boolean;
+    "office-tile-appeals": boolean;
+    "office-tile-announcements": boolean;
+    "office-tile-documents": boolean;
+    "office-tile-finance": boolean;
+  };
+  error?: string;
+}> {
+  try {
+    await page.goto(`${baseURL}/office?qa=${role}`, { timeout: 60_000, waitUntil: "domcontentloaded" });
+    await page.waitForURL((url) => url.pathname === "/office" || url.pathname.startsWith("/office/"), {
+      timeout: 10_000,
+    });
+
+    // Wait a bit for page to render
+    await page.waitForLoadState("domcontentloaded");
+
+    const testids = {
+      "office-root": await isElementVisible(page, "", "office-root"),
+      "office-tile-appeals": await isElementVisible(page, "", "office-tile-appeals"),
+      "office-tile-announcements": await isElementVisible(page, "", "office-tile-announcements"),
+      "office-tile-documents": await isElementVisible(page, "", "office-tile-documents"),
+      "office-tile-finance": await isElementVisible(page, "", "office-tile-finance"),
+    };
+
+    return { ok: true, testids };
+  } catch (error) {
+    return {
+      ok: false,
+      testids: {
+        "office-root": false,
+        "office-tile-appeals": false,
+        "office-tile-announcements": false,
+        "office-tile-documents": false,
+        "office-tile-finance": false,
+      },
+      error: String(error),
+    };
+  }
+}
+
 test.describe("QA Report - Admin QA Tools", () => {
   test.use({ storageState: undefined });
 
-  test("generate QA report with screenshots", async ({ page }: { page: Page }) => {
-    const steps: Array<{ step: string; status: "pass" | "fail"; screenshot?: string; notes?: string }> = [];
+  test("generate QA report with role scenarios", async ({ page }: { page: Page }) => {
+    const startedAt = new Date().toISOString();
+    const scenarios: Array<{
+      role: string;
+      pages: {
+        office: { url: string; ok: boolean; testids?: Record<string, boolean>; screenshot?: string; error?: string };
+        cabinet: { url: string; ok: boolean; screenshot?: string; error?: string };
+        home: { url: string; ok: boolean; screenshot?: string; error?: string };
+        admin: { url: string; ok: boolean; screenshot?: string; error?: string };
+      };
+    }> = [];
 
-    // Step A: Navigate to /admin/qa
+    // Step 1: Verify /admin/qa is accessible (critical - should throw if fails)
     try {
       await page.goto(`${baseURL}/admin/qa`, { timeout: 60_000, waitUntil: "domcontentloaded" });
-      
-      // Try to find qa-root testid, but don't fail if it doesn't exist
       const qaRoot = page.getByTestId("qa-root");
       const hasQaRoot = await qaRoot.isVisible().catch(() => false);
-      
+
       if (!hasQaRoot) {
         // Fallback: check URL and look for "QA" heading
         await page.waitForURL((url) => url.pathname.includes("/admin/qa"), { timeout: 10_000 });
@@ -32,89 +111,81 @@ test.describe("QA Report - Admin QA Tools", () => {
       } else {
         await expect(qaRoot).toBeVisible({ timeout: 10_000 });
       }
-
-      const screenshotPath = path.join(outDir, "admin-qa.png");
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      steps.push({ step: "Navigate to /admin/qa", status: "pass", screenshot: "admin-qa.png" });
     } catch (error) {
-      steps.push({ step: "Navigate to /admin/qa", status: "fail", notes: String(error) });
-      throw error; // Navigation timeout is critical
+      throw new Error(`Critical: Cannot access /admin/qa: ${error}`);
     }
 
-    // Step B: Navigate to different pages and take screenshots
-    const pagesToCheck = [
-      { url: "/office", screenshot: "office.png", name: "Office page" },
-      { url: "/cabinet", screenshot: "cabinet.png", name: "Cabinet page" },
-      { url: "/", screenshot: "home.png", name: "Home page" },
-      { url: "/admin", screenshot: "admin.png", name: "Admin page" },
-    ];
+    // Step 2: Test each role scenario
+    const roles = ["chairman", "accountant", "secretary", "admin"];
 
-    for (const { url, screenshot, name } of pagesToCheck) {
-      try {
-        await page.goto(`${baseURL}${url}`, { timeout: 60_000, waitUntil: "domcontentloaded" });
-        const screenshotPath = path.join(outDir, screenshot);
-        await page.screenshot({ path: screenshotPath, fullPage: true });
-        steps.push({ step: `Navigate to ${name} (${url})`, status: "pass", screenshot });
-      } catch (error) {
-        steps.push({ step: `Navigate to ${name} (${url})`, status: "fail", notes: String(error) });
-        // Continue with other pages even if one fails
+    for (const role of roles) {
+      const roleDir = path.join(outDir, role);
+      if (!fs.existsSync(roleDir)) {
+        fs.mkdirSync(roleDir, { recursive: true });
       }
-    }
 
-    // Step C: Role checks (soft - don't fail if text not found)
-    const roleChecks: Array<{ page: string; check: string; found: boolean; text?: string }> = [];
-
-    // Check /office for role indicator
-    try {
-      await page.goto(`${baseURL}/office`, { timeout: 60_000, waitUntil: "domcontentloaded" });
-      const roleText = page.getByText(/Роль:/i);
-      const hasRoleText = await roleText.isVisible().catch(() => false);
-      if (hasRoleText) {
-        const text = await roleText.textContent();
-        roleChecks.push({ page: "/office", check: "Роль:", found: true, text: text || undefined });
-      } else {
-        roleChecks.push({ page: "/office", check: "Роль:", found: false });
+      // 2a: Check /office with QA role
+      const officeResult = await checkOfficePage(page, role);
+      const officeScreenshot = path.join(roleDir, "office.png");
+      if (officeResult.ok) {
+        await page.screenshot({ path: officeScreenshot, fullPage: true });
       }
-    } catch (error) {
-      roleChecks.push({ page: "/office", check: "Роль:", found: false });
+
+      // 2b: Navigate to other pages and take screenshots
+      const cabinetResult = await navigateAndScreenshot(
+        page,
+        `/cabinet?qa=${role}`,
+        path.join(roleDir, "cabinet.png")
+      );
+      const homeResult = await navigateAndScreenshot(page, `/`, path.join(roleDir, "home.png"));
+      const adminResult = await navigateAndScreenshot(page, `/admin?qa=${role}`, path.join(roleDir, "admin.png"));
+
+      scenarios.push({
+        role,
+        pages: {
+          office: {
+            url: `/office?qa=${role}`,
+            ok: officeResult.ok,
+            testids: officeResult.testids,
+            screenshot: officeResult.ok ? `${role}/office.png` : undefined,
+            error: officeResult.error,
+          },
+          cabinet: {
+            url: `/cabinet?qa=${role}`,
+            ok: cabinetResult.ok,
+            screenshot: cabinetResult.ok ? `${role}/cabinet.png` : undefined,
+            error: cabinetResult.error,
+          },
+          home: {
+            url: `/`,
+            ok: homeResult.ok,
+            screenshot: homeResult.ok ? `${role}/home.png` : undefined,
+            error: homeResult.error,
+          },
+          admin: {
+            url: `/admin?qa=${role}`,
+            ok: adminResult.ok,
+            screenshot: adminResult.ok ? `${role}/admin.png` : undefined,
+            error: adminResult.error,
+          },
+        },
+      });
     }
 
-    // Check /cabinet for "Личный кабинет"
-    try {
-      await page.goto(`${baseURL}/cabinet`, { timeout: 60_000, waitUntil: "domcontentloaded" });
-      const cabinetText = page.getByText(/Личный кабинет/i);
-      const hasCabinetText = await cabinetText.isVisible().catch(() => false);
-      if (hasCabinetText) {
-        const text = await cabinetText.textContent();
-        roleChecks.push({ page: "/cabinet", check: "Личный кабинет", found: true, text: text || undefined });
-      } else {
-        roleChecks.push({ page: "/cabinet", check: "Личный кабинет", found: false });
-      }
-    } catch (error) {
-      roleChecks.push({ page: "/cabinet", check: "Личный кабинет", found: false });
-    }
+    // Step 3: Get commit hash (will be set by report generator script)
+    const commitHash = process.env.GIT_COMMIT || "unknown";
 
-    // Check /admin for "Админ"
-    try {
-      await page.goto(`${baseURL}/admin`, { timeout: 60_000, waitUntil: "domcontentloaded" });
-      const adminText = page.getByText(/Админ/i);
-      const hasAdminText = await adminText.isVisible().catch(() => false);
-      if (hasAdminText) {
-        const text = await adminText.textContent();
-        roleChecks.push({ page: "/admin", check: "Админ", found: true, text: text || undefined });
-      } else {
-        roleChecks.push({ page: "/admin", check: "Админ", found: false });
-      }
-    } catch (error) {
-      roleChecks.push({ page: "/admin", check: "Админ", found: false });
-    }
+    // Step 4: Store results
+    const results = {
+      meta: {
+        baseURL,
+        commit: commitHash,
+        startedAt,
+      },
+      scenarios,
+    };
 
-    // Store results in a file for the report generator script to read
     const resultsPath = path.join(outDir, "results.json");
-    fs.writeFileSync(
-      resultsPath,
-      JSON.stringify({ steps, roleChecks }, null, 2),
-      "utf-8"
-    );
+    fs.writeFileSync(resultsPath, JSON.stringify(results, null, 2), "utf-8");
   });
 });

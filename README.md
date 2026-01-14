@@ -154,6 +154,7 @@ QA отчёты и шаблоны для тестирования админск
 - [Latest QA Report](docs/qa/QA_REPORT_admin_qa.md) — последний отчёт по тестированию админских QA инструментов
 - [QA Template](docs/qa/QA_TEMPLATE_admin_qa.md) — шаблон для будущих прогонов
 - Generate report: `npm run qa:report` (writes to `docs/qa/runs/`)
+- **Note:** Generated reports and screenshots in `docs/qa/runs/` are local artifacts and not committed to git
 
 ## Assistant API (MVP)
 POST `/api/assistant` возвращает справку по ключевым словам и контексту страницы.
