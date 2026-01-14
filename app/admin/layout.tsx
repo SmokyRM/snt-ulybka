@@ -12,12 +12,6 @@ import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import QaFloatingIndicator from "./_components/QaFloatingIndicator";
 import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import AdminQaBanner from "./_components/AdminQaBanner";
-<<<<<<< HEAD
-import { canAccess, type Role as RbacRole } from "@/lib/rbac";
-import Link from "next/link";
-import GlobalLogoutButton from "../_components/GlobalLogoutButton";
-=======
->>>>>>> 737c5be (codex snapshot)
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -62,9 +56,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white px-6 py-4">
               <div className="space-y-1">
                 <h1 className="text-lg font-semibold">Админка СНТ «Улыбка»</h1>
-                <div className="text-xs text-zinc-600" data-testid="role-indicator">
-                  Роль: Администратор{qaScenario ? " (QA)" : ""}
-                </div>
                 {buildInfo ? (
                   <div className="text-xs text-zinc-600">
                     Build: {buildInfo.sha.slice(0, 7)} · Updated: {buildInfo.builtAt}
@@ -85,26 +76,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                     <AdminViewAsUserButton action={viewAsUser} />
                   </>
                 ) : null}
-                {canAccess(effectiveRole as RbacRole, "office.access") ? (
-                  <Link
-                    href="/office"
-                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-[#5E704F] transition hover:border-[#5E704F]"
-                    data-testid="admin-cta-office"
-                  >
-                    Офис
-                  </Link>
-                ) : null}
-                {canAccess(effectiveRole as RbacRole, "cabinet.access") ? (
-                  <Link
-                    href="/cabinet"
-                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-[#5E704F] transition hover:border-[#5E704F]"
-                    data-testid="admin-cta-cabinet"
-                  >
-                    Кабинет
-                  </Link>
-                ) : null}
                 <AdminSiteLink />
-                <GlobalLogoutButton />
               </div>
               {qaScenario ? <AdminQaBanner scenario={qaScenario} /> : null}
           </header>

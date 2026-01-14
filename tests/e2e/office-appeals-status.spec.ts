@@ -1,16 +1,4 @@
 import { test, expect, type Page } from "@playwright/test";
-<<<<<<< HEAD
-import { loginStaff } from "./helpers/auth";
-
-const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
-
-test.describe("Office appeals status action", () => {
-  test.use({ storageState: undefined });
-
-  test("chairman can change status", async ({ page }) => {
-    await loginStaff(page, "chairman", "/office");
-    await page.goto(`${base}/office/appeals/a1`);
-=======
 
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 const chairmanCode = process.env.TEST_CHAIRMAN_CODE || "2222";
@@ -30,7 +18,6 @@ test.describe("Office appeals status action", () => {
     await expect(page.getByTestId("office-appeals-root")).toBeVisible();
     const firstItem = page.getByRole("link").first();
     await firstItem.click();
->>>>>>> 737c5be (codex snapshot)
     await expect(page.getByTestId("office-appeal-root")).toBeVisible();
     await page.locator('[data-testid="appeal-status-select"]').selectOption({ value: "in_progress" });
     await page.getByTestId("appeal-status-submit").click();
@@ -38,12 +25,7 @@ test.describe("Office appeals status action", () => {
   });
 
   test("accountant is forbidden", async ({ page }) => {
-<<<<<<< HEAD
-    const ok = await loginStaff(page, "accountant", "/office");
-    test.skip(!ok, "No accountant creds in local env");
-=======
     await login(page, accountantCode, "/office/appeals");
->>>>>>> 737c5be (codex snapshot)
     await page.goto(`${base}/office/appeals`);
     await expect(page).toHaveURL(/forbidden/);
   });

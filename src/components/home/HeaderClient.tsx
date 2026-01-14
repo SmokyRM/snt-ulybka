@@ -161,11 +161,7 @@ export function HeaderClient({
         Жителям
       </AppLink>
       <AppLink
-<<<<<<< HEAD
-        href="/staff-login"
-=======
         href="/staff/login"
->>>>>>> 737c5be (codex snapshot)
         className="flex-shrink-0 rounded-full border border-white/50 bg-transparent px-5 py-2 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/10"
       >
         Сотрудникам

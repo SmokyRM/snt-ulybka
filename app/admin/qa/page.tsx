@@ -1,18 +1,14 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-<<<<<<< HEAD
-=======
 import QaCleanerClient from "../_components/QaCleanerClient";
->>>>>>> 737c5be (codex snapshot)
 import { getSessionUser } from "@/lib/session.server";
-import { qaEnabled } from "@/lib/qaScenario";
-import { getQaScenarioFromCookies, writeQaScenarioCookie } from "@/lib/qaScenario.server";
-import QaClearButton from "../_components/QaClearButton";
+import { qaEnabled, type QaScenario } from "@/lib/qaScenario";
+import {
+  getQaScenarioFromCookies,
+  writeQaScenarioCookie,
+} from "@/lib/qaScenario.server";
 
-<<<<<<< HEAD
-const ADMIN_VIEW_COOKIE = "admin_view";
-=======
 const qaOptions: QaScenario[] = [
   "guest",
   "resident_ok",
@@ -22,7 +18,6 @@ const qaOptions: QaScenario[] = [
   "accountant",
   "secretary",
 ];
->>>>>>> 737c5be (codex snapshot)
 
 export const metadata = {
   title: "QA-инструменты — СНТ «Улыбка»",
@@ -41,24 +36,19 @@ export default async function QaPage() {
   const cookieStore = await cookies();
   const current = await getQaScenarioFromCookies(cookieStore);
 
+  async function setScenario(formData: FormData) {
+    "use server";
+    const value = (formData.get("scenario") as string | null) as QaScenario | null;
+    if (value && qaOptions.includes(value)) {
+      await writeQaScenarioCookie(value);
+    } else {
+      await writeQaScenarioCookie(null);
+    }
+  }
+
   async function clearScenario() {
     "use server";
-    const cookieStore = await cookies();
-    // Clear QA scenario cookie
     await writeQaScenarioCookie(null);
-    // Clear admin_view cookie if it exists
-    const adminView = cookieStore.get(ADMIN_VIEW_COOKIE);
-    if (adminView) {
-      cookieStore.set(ADMIN_VIEW_COOKIE, "", {
-        path: "/",
-        maxAge: 0,
-        httpOnly: false,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        expires: new Date(0),
-      });
-    }
-    redirect("/admin/qa");
   }
 
   return (
@@ -97,65 +87,38 @@ export default async function QaPage() {
           <div className="text-xs text-zinc-500">Текущий сценарий: {current ?? "не задан"}</div>
         </header>
 
-
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Роль офиса (QA)</div>
+          <div className="text-sm font-semibold text-zinc-900">Открыть в новом окне</div>
           <div className="flex flex-wrap gap-2 text-sm">
             <Link
-              href="/office?qa=chairman"
+              href="/cabinet?qa=resident_ok"
               target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-office-chairman"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Председатель
+              Житель (без долга)
             </Link>
             <Link
-              href="/office?qa=accountant"
+              href="/cabinet?qa=resident_debtor"
               target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-office-accountant"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Бухгалтер
+              Житель (должник)
             </Link>
             <Link
-              href="/office?qa=secretary"
+              href="/cabinet/announcements"
               target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-office-secretary"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Секретарь
+              Объявления
             </Link>
-            <form action={clearScenario}>
-              <button
-                type="submit"
-                data-testid="qa-reset-admin"
-                className="rounded-full border border-amber-300 px-4 py-2 font-semibold text-amber-900 hover:border-amber-400"
-              >
-                Сбросить (админ)
-              </button>
-            </form>
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Открыть</div>
-          <div className="flex flex-wrap gap-2 text-sm">
             <Link
-              href="/office"
+              href="/cabinet/templates"
               target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-office"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
-              Офис
+              Шаблоны
             </Link>
             <Link
-<<<<<<< HEAD
-              href="/cabinet"
-=======
               href="/office"
               target="_blank"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
@@ -164,28 +127,21 @@ export default async function QaPage() {
             </Link>
             <Link
               href="/?qa=guest"
->>>>>>> 737c5be (codex snapshot)
               target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-cabinet"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Кабинет
-            </Link>
-            <Link
-              href="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-guest"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
               Гость (главная)
             </Link>
             <Link
+              href="/login"
+              target="_blank"
+              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
+            >
+              Логин
+            </Link>
+            <Link
               href="/admin"
               target="_blank"
-              rel="noopener noreferrer"
-              data-testid="qa-open-admin"
               className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
             >
               Админка
@@ -194,10 +150,6 @@ export default async function QaPage() {
         </section>
 
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-<<<<<<< HEAD
-          <div className="text-sm font-semibold text-zinc-900">Сервис</div>
-          <QaClearButton />
-=======
           <div className="text-sm font-semibold text-zinc-900">Открыть офис как роль</div>
           <div className="flex flex-wrap gap-2 text-sm">
             <Link
@@ -314,9 +266,7 @@ export default async function QaPage() {
           <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-3">
             <QaCleanerClient />
           </div>
->>>>>>> 737c5be (codex snapshot)
         </section>
-
       </div>
     </main>
   );

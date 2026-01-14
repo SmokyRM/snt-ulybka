@@ -18,9 +18,6 @@ type LoginFormProps = {
 
 type LoginRole = "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
 
-<<<<<<< HEAD
-import { getSafeRedirectUrl } from "@/lib/safeRedirect";
-=======
 const defaultPathForRole = (role: LoginRole) => {
   if (role === "admin") return "/admin";
   if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") return "/office";
@@ -35,7 +32,6 @@ const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) 
   }
   return path.startsWith("/cabinet");
 };
->>>>>>> 737c5be (codex snapshot)
 
 export default function LoginForm({ nextParam }: LoginFormProps) {
   const router = useAppRouter();
@@ -58,11 +54,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     if (isSubmittingRef.current) return;
     if (!session?.role) return;
     const role = (session.role as LoginRole) ?? "user";
-<<<<<<< HEAD
-    const target = getSafeRedirectUrl(role, sanitizedNext);
-=======
     const target = isPathAllowedForRole(role, sanitizedNext) ? sanitizedNext : defaultPathForRole(role);
->>>>>>> 737c5be (codex snapshot)
     queueMicrotask(() => {
       router.replace(target);
       router.refresh();
@@ -91,11 +83,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         return;
       }
       const role: LoginRole = (data.role as LoginRole) ?? "user";
-<<<<<<< HEAD
-      const target = getSafeRedirectUrl(role, sanitizedNext);
-=======
       const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
->>>>>>> 737c5be (codex snapshot)
       router.replace(target);
       router.refresh();
     } catch {
@@ -129,17 +117,13 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         data-testid="login-form"
       >
         <div className="space-y-2">
-          <label htmlFor="access-code" className="text-sm font-medium text-zinc-800">
-            Код доступа
-          </label>
+          <label className="text-sm font-medium text-zinc-800">Код доступа</label>
           <input
-            id="access-code"
             type="password"
             inputMode="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Введите код"
-            data-testid="login-access-code"
             className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
           />
         </div>
@@ -167,7 +151,6 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         <button
           type="submit"
           disabled={loading}
-          data-testid="login-submit"
           className="w-full rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Вход..." : "Войти"}
@@ -175,7 +158,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         <div className="min-h-[76px]" data-testid="login-error-block">
           {error && (
             <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-              <div data-testid="login-error-text">{error}</div>
+              <div>{error}</div>
               <div className="flex flex-wrap gap-3 text-xs font-semibold text-[#5E704F]">
                 <Link href="/#get-access" className="hover:underline">
                   Как получить доступ
@@ -188,14 +171,6 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           )}
         </div>
       </form>
-      <div className="text-sm text-[#5E704F]">
-        <Link
-          href={sanitizedNext ? `/staff-login?next=${encodeURIComponent(sanitizedNext)}` : "/staff-login"}
-          className="font-semibold hover:underline"
-        >
-          Я сотрудник → Войти для сотрудников
-        </Link>
-      </div>
     </>
   );
 }

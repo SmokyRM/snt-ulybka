@@ -33,11 +33,7 @@ const normalizeLogin = (
   value: string | null | undefined
 ): "admin" | "resident" | "chairman" | "accountant" | "secretary" | null => {
   if (!value) return null;
-<<<<<<< HEAD
-  const v = value.trim().toLowerCase().replace(/\s+/g, " ");
-=======
   const v = value.trim().toLowerCase();
->>>>>>> 737c5be (codex snapshot)
   if (v === "admin" || v === "админ") return "admin";
   if (v === "resident" || v === "житель") return "resident";
   if (v === "chairman" || v === "председатель" || v === "пред") return "chairman";
@@ -53,8 +49,6 @@ const safeEquals = (a: string, b: string) => {
   return timingSafeEqual(aBuf, bBuf);
 };
 
-<<<<<<< HEAD
-=======
 const mapStaffRoleRu = (
   value: string | null | undefined
 ): { role: "admin" | "chairman" | "accountant" | "secretary"; env: string } | null => {
@@ -67,23 +61,17 @@ const mapStaffRoleRu = (
   return null;
 };
 
->>>>>>> 737c5be (codex snapshot)
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const code = (body.code as string | undefined)?.trim();
   const loginRaw = (body.login as string | undefined)?.trim();
   const login = normalizeLogin(loginRaw);
   const password = (body.password as string | undefined) ?? "";
-<<<<<<< HEAD
-=======
   const mode = (body.mode as string | undefined)?.trim();
->>>>>>> 737c5be (codex snapshot)
   const url = new URL(request.url);
   const nextRaw = url.searchParams.get("next") || (body.next as string | undefined) || "";
   const sanitizedNext = sanitizeNext(nextRaw);
 
-<<<<<<< HEAD
-=======
   // Staff login (separate form)
   if (mode === "staff") {
     const roleRu = (body.roleRu as string | undefined)?.trim();
@@ -115,7 +103,6 @@ export async function POST(request: Request) {
     return response;
   }
 
->>>>>>> 737c5be (codex snapshot)
   // Credential-based login (staff roles)
   if (login || password) {
     if (!login || !password) {
@@ -133,17 +120,7 @@ export async function POST(request: Request) {
     const userId = ROLE_USER_IDS[role];
     upsertUserById({ id: userId, role });
     const payload = JSON.stringify({ role, userId });
-<<<<<<< HEAD
-    const { getSafeRedirectUrl } = await import("@/lib/safeRedirect");
-    const redirectUrl = getSafeRedirectUrl(role, sanitizedNext);
-    const response = NextResponse.json({
-      ok: true,
-      role,
-      redirectUrl,
-    });
-=======
     const response = NextResponse.json({ ok: true, role });
->>>>>>> 737c5be (codex snapshot)
     response.cookies.set(SESSION_COOKIE, payload, {
       httpOnly: true,
       sameSite: "lax",
@@ -203,7 +180,6 @@ export async function POST(request: Request) {
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 30,
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
     });
   }
   if (process.env.NODE_ENV !== "production") {

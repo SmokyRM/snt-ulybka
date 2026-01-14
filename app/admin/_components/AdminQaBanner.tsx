@@ -18,36 +18,10 @@ export default function AdminQaBanner({ scenario }: Props) {
   const handleClear = async () => {
     try {
       setLoading(true);
-<<<<<<< HEAD
-      // Use reset endpoint to clear all QA-related cookies
-      await fetch("/api/admin/qa/reset", { method: "POST" });
-      // Clear any localStorage/sessionStorage QA keys
-      if (typeof window !== "undefined") {
-        try {
-          const clearQaFromStorage = (storage: Storage | null | undefined) => {
-            if (!storage) return;
-            const keys = Object.keys(storage).filter((key) => {
-              const lower = key.toLowerCase();
-              return lower.includes("qa") || lower.includes("admin_view");
-            });
-            keys.forEach((key) => storage.removeItem(key));
-          };
-          clearQaFromStorage(window.localStorage);
-          clearQaFromStorage(window.sessionStorage);
-        } catch {
-          // Ignore storage errors
-        }
-      }
-    } finally {
-      setLoading(false);
-      // Hard reload to ensure all state is cleared and banners disappear
-      window.location.assign("/admin/qa");
-=======
       await fetch("/api/admin/qa/clear", { method: "POST" });
     } finally {
       setLoading(false);
       router.refresh();
->>>>>>> 737c5be (codex snapshot)
     }
   };
 
