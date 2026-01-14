@@ -7,16 +7,18 @@ export type Appeal = {
   title: string;
   body: string;
   status: AppealStatus;
+  authorId?: string;
   plotNumber?: string;
   authorName?: string;
   authorPhone?: string;
+  updatedByRole?: "chairman" | "secretary" | "accountant" | "admin";
   comments: AppealComment[];
 };
 
 export type AppealComment = {
   id: string;
   createdAt: string;
-  authorRole: "chairman" | "secretary";
+  authorRole: "chairman" | "secretary" | "accountant" | "admin";
   text: string;
 };
 
@@ -132,7 +134,7 @@ export function setAppealStatus(id: string, status: AppealStatus): Appeal | null
 
 export function addAppealComment(
   id: string,
-  authorRole: "chairman" | "secretary",
+  authorRole: "chairman" | "secretary" | "accountant" | "admin",
   text: string,
 ): Appeal | null {
   const trimmed = text.trim();
@@ -152,4 +154,42 @@ export function addAppealComment(
   };
   seedAppeals[idx] = updated;
   return updated;
+}
+
+export function updateAppealStatus(
+  id: string,
+  status: AppealStatus,
+  updatedByRole?: "chairman" | "secretary" | "accountant" | "admin",
+): Appeal | null {
+  const updated = setAppealStatus(id, status);
+  if (updated) {
+    updated.updatedByRole = updatedByRole;
+  }
+  return updated;
+}
+
+export function createAppeal(input: {
+  title: string;
+  body: string;
+  authorId?: string;
+  authorName?: string;
+  plotNumber?: string;
+  authorPhone?: string;
+}): Appeal {
+  const now = new Date().toISOString();
+  const newAppeal: Appeal = {
+    id: `a${Date.now().toString(36)}`,
+    createdAt: now,
+    updatedAt: now,
+    title: input.title,
+    body: input.body,
+    status: "new",
+    authorId: input.authorId,
+    authorName: input.authorName,
+    plotNumber: input.plotNumber,
+    authorPhone: input.authorPhone,
+    comments: [],
+  };
+  seedAppeals.unshift(newAppeal);
+  return newAppeal;
 }

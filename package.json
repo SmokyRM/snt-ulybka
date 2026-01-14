@@ -15,6 +15,7 @@
     "test:e2e": "PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test",
     "test:e2e:ui": "playwright test --ui",
     "qa:report": "node scripts/qa-report.mjs",
+    "check:conflicts": "node -e \"const {execSync}=require('node:child_process');const patterns=['<<<<<<','=======','>>>>>>'];const files=execSync('git ls-files').toString().trim().split('\\n').filter(Boolean);let bad=[];for(const f of files){const txt=execSync(`cat ${JSON.stringify(f)}`).toString();if(patterns.some(p=>txt.includes(p))) bad.push(f);}if(bad.length){console.error('Conflict markers found in:\\n'+bad.join('\\n'));process.exit(1);}\"",
     "deploy": "npm run lint && npm run typecheck && npm run build && node scripts/release.js",
     "deploy:prod": "npm run deploy",
     "deploy:dry": "node scripts/release.js --dry-run",

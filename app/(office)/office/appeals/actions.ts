@@ -13,25 +13,25 @@ const assertOfficeRole = async () => {
   if (!(role === "chairman" || role === "accountant" || role === "secretary" || role === "admin")) {
     redirect("/forbidden");
   }
-  return true;
+  return role;
 };
 
 export async function saveStatusAction(formData: FormData) {
-  await assertOfficeRole();
+  const role = await assertOfficeRole();
   const id = formData.get("id") as string;
   const status = formData.get("status") as AppealStatus;
   if (!id || !status) return;
-  updateAppealStatus(id, status);
+  updateAppealStatus(id, status, role === "admin" || role === "chairman" || role === "accountant" || role === "secretary" ? role : undefined);
   revalidatePath("/office/appeals");
   revalidatePath(`/office/appeals/${id}`);
 }
 
 export async function sendReplyAction(formData: FormData) {
-  await assertOfficeRole();
+  const role = await assertOfficeRole();
   const id = formData.get("id") as string;
   const text = (formData.get("reply") as string | null) ?? "";
   if (!id) return;
-  addAppealComment(id, text, "office");
+  addAppealComment(id, role === "admin" || role === "chairman" || role === "accountant" || role === "secretary" ? role : "secretary", text);
   revalidatePath("/office/appeals");
   revalidatePath(`/office/appeals/${id}`);
 }

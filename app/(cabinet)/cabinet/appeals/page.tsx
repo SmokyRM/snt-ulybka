@@ -94,12 +94,12 @@ export default async function AppealsPage({ searchParams }: Props) {
               Номер: {submittedId}. Статус: Принято. Ответ придёт в ваш кабинет.
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              <a
+              <Link
                 href="/cabinet/appeals"
                 className="rounded-full border border-green-300 px-3 py-1 text-xs font-semibold text-green-800 hover:border-green-500"
               >
                 Обновить список
-              </a>
+              </Link>
             </div>
           </div>
         ) : null}

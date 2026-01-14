@@ -7,10 +7,10 @@ import { getHomeViews } from "@/lib/homeViews";
 import { getAllAppeals } from "@/lib/appeals";
 import { RetryButton } from "./RetryButton";
 import { startTestScenario } from "./impersonationActions";
-import AnalyticsBlockClient from "./_components/AnalyticsBlockClient";
 import type { ReactNode } from "react";
 import { getAdminDashboardData, type DashboardData } from "@/lib/adminDashboard";
 import { getCollectionsAnalytics, type CollectionPoint } from "@/lib/analytics";
+import AnalyticsBlockLazy from "./_components/AnalyticsBlockLazy";
 
 const getAnalyticsPoints = (): CollectionPoint[] => {
   const now = new Date();
@@ -242,7 +242,7 @@ export default async function AdminDashboard() {
             </Card>
 
             <Card title="Аналитика (accrued vs paid)">
-              <AnalyticsBlockClient points={analytics} />
+              <AnalyticsBlockLazy points={analytics} />
             </Card>
           </Section>
 
