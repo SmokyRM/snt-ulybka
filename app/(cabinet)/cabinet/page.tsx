@@ -30,6 +30,14 @@ import CopyToClipboard from "@/components/CopyToClipboard";
 import { redirectToCabinetStep } from "@/lib/cabinetRedirect";
 import RecentAnnouncements from "@/components/RecentAnnouncements";
 import { getCabinetContext } from "@/lib/cabinetContext";
+import { qaEnabled } from "@/lib/qaScenario";
+import {
+  SubmitElectricityButton,
+  SubmitAppealButton,
+  MarkEventButton,
+  MarkAllEventsButton,
+  AckDocButton,
+} from "./CabinetFormButtons";
 
 const logCabinetError = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown error";
@@ -714,12 +722,7 @@ export default async function CabinetPage({
             </div>
           ) : null}
         </label>
-        <button
-          type="submit"
-          className="self-start rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4d5d41]"
-        >
-          Отправить
-        </button>
+        <SubmitElectricityButton />
       </form>
     </div>
   );
@@ -809,9 +812,13 @@ export default async function CabinetPage({
               </div>
             </div>
           ) : !hasAnyFinanceData && electricityHistory.length === 0 ? (
-            <div className="text-zinc-600">Данные загружаются</div>
+            <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-600">
+              Данные загружаются
+            </div>
           ) : electricityHistory.length === 0 ? (
-            <div className="text-zinc-600">Начислений пока нет</div>
+            <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-600">
+              Начислений пока нет
+            </div>
           ) : (
             <ul className="mt-2 space-y-1">
               {electricityHistory.map((h) => (
@@ -844,9 +851,13 @@ export default async function CabinetPage({
               </div>
             </div>
           ) : !hasAnyFinanceData && financeHistory.length === 0 ? (
-            <div className="text-zinc-600">Данные загружаются</div>
+            <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-600">
+              Данные загружаются
+            </div>
           ) : financeHistory.length === 0 ? (
-            <div className="text-zinc-600">Платежей пока нет</div>
+            <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-600">
+              Платежей пока нет
+            </div>
           ) : (
             <ul className="mt-2 space-y-2">
               {financeHistory.map((f) => {
@@ -876,7 +887,9 @@ export default async function CabinetPage({
       <h2 className="text-lg font-semibold text-zinc-900">Начисления</h2>
       <p className="text-xs text-zinc-500">Начисления — суммы к оплате за период.</p>
       {charges.length === 0 ? (
-        <p className="text-sm text-zinc-700">Начислений пока нет.</p>
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-600">
+          Начислений пока нет
+        </div>
       ) : (
         <div className="space-y-2 text-sm text-zinc-800">
           {charges.slice(0, 10).map((c) => {
@@ -934,7 +947,9 @@ export default async function CabinetPage({
       <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
         <h3 className="text-sm font-semibold text-zinc-900">Обязательные документы</h3>
         {requiredDocs.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-700">Нет обязательных документов.</p>
+          <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-600">
+            Нет обязательных документов
+          </div>
         ) : (
           <div className="mt-3 space-y-3">
             {requiredDocs.map((d) => (
@@ -958,12 +973,7 @@ export default async function CabinetPage({
                   {!d.acked && (
                     <form action={ackDoc}>
                       <input type="hidden" name="docId" value={d.id} />
-                      <button
-                        type="submit"
-                        className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:border-zinc-400"
-                      >
-                        Я ознакомлен(а)
-                      </button>
+                      <AckDocButton />
                     </form>
                   )}
                 </div>
@@ -1015,12 +1025,7 @@ export default async function CabinetPage({
         <h2 className="text-lg font-semibold text-zinc-900">Уведомления</h2>
         {events.length > 0 && (
           <form action={markAllEvents}>
-            <button
-              type="submit"
-              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:border-zinc-400"
-            >
-              Отметить всё прочитанным
-            </button>
+            <MarkAllEventsButton />
           </form>
         )}
       </div>
@@ -1028,7 +1033,9 @@ export default async function CabinetPage({
         Здесь появятся уведомления от правления и статусы ваших обращений.
       </p>
       {events.length === 0 ? (
-        <p className="text-sm text-zinc-700">Пока нет новых уведомлений.</p>
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-600">
+          Пока нет новых уведомлений
+        </div>
       ) : (
         <div className="space-y-3">
           {events.map((ev) => (
@@ -1049,12 +1056,7 @@ export default async function CabinetPage({
                 {ev.readAt == null && (
                   <form action={markEvent}>
                     <input type="hidden" name="eventId" value={ev.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-800 hover:border-zinc-400"
-                    >
-                      Отметить прочитанным
-                    </button>
+                    <MarkEventButton />
                   </form>
                 )}
               </div>
@@ -1069,9 +1071,15 @@ export default async function CabinetPage({
     <div className="space-y-3" id="appeals-section">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-900">Обращения</h2>
-        <Link href="/admin/appeals" className="text-xs font-semibold text-[#5E704F] underline">
-          Админка обращений
-        </Link>
+        {qaEnabled() ? (
+          <Link href="/admin/appeals" className="text-xs font-semibold text-[#5E704F] underline">
+            Админка обращений
+          </Link>
+        ) : (
+          <span className="text-xs text-zinc-500" title="Доступно только при ENABLE_QA=true">
+            Админка обращений (недоступно)
+          </span>
+        )}
       </div>
       <form action={submitAppeal} className="space-y-3">
         <label className="block text-sm text-zinc-800">
@@ -1084,17 +1092,14 @@ export default async function CabinetPage({
             required
           />
         </label>
-        <button
-          type="submit"
-          className="rounded-full bg-[#5E704F] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4d5d41]"
-        >
-          Отправить
-        </button>
+        <SubmitAppealButton />
       </form>
       <div className="space-y-2 text-sm text-zinc-800">
         <div className="text-sm font-semibold text-zinc-900">Мои обращения</div>
         {appeals.length === 0 ? (
-          <p className="text-sm text-zinc-600">Обращений нет — вы можете написать новое.</p>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-600">
+            Обращений нет — вы можете написать новое
+          </div>
         ) : (
           <ul className="space-y-2">
             {appeals.map((a) => (

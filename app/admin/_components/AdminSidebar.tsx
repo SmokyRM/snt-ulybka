@@ -214,7 +214,9 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
     })
     .filter((section) => section.links.length > 0);
 
-  if (qaEnabled() && (role === "admin" || role === "board")) {
+  // QA только в dev или если явно включен через ENABLE_QA (скрыть в prod)
+  const showQa = isDev && qaEnabled() && (role === "admin" || role === "board");
+  if (showQa) {
     sections[0].links.push({
       href: "/admin/qa",
       label: "QA",

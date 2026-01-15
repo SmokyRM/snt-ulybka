@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
-import { can, type Role } from "@/lib/permissions";
-import { listRegistry } from "@/lib/registry.store";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import type { Role } from "@/lib/permissions";
+import { isOfficeRole } from "@/lib/rbac";
+import { searchPlots } from "@/lib/office/registry.server";
 
 type Props = {
   searchParams?: { q?: string };
@@ -21,15 +22,12 @@ const statusClass: Record<string, string> = {
 };
 
 export default async function OfficeRegistryPage({ searchParams }: Props) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?next=/office/registry");
+  const user = await getEffectiveSessionUser();
+  if (!user) redirect("/staff-login?next=/office/registry");
   const role = (user?.role as Role | undefined) ?? "resident";
-  const normalizedRole = role === "admin" ? "chairman" : role;
-  if (!can(normalizedRole, "office.registry.manage") && !can(normalizedRole, "office.registry.read")) {
-    redirect("/forbidden");
-  }
+  if (!isOfficeRole(role)) redirect("/forbidden");
   const q = searchParams?.q ?? "";
-  const items = listRegistry({ q });
+  const items = await searchPlots(q);
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="office-registry-root">
@@ -48,6 +46,7 @@ export default async function OfficeRegistryPage({ searchParams }: Props) {
             type="text"
             name="q"
             defaultValue={q}
+            data-testid="office-registry-search"
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none"
             placeholder="Участок, владелец, телефон"
           />
@@ -62,7 +61,7 @@ export default async function OfficeRegistryPage({ searchParams }: Props) {
         </div>
       </form>
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 overflow-x-auto" data-testid="office-registry-results">
         <table className="min-w-full divide-y divide-zinc-200">
           <thead className="bg-zinc-50">
             <tr className="text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
@@ -82,32 +81,22 @@ export default async function OfficeRegistryPage({ searchParams }: Props) {
               </tr>
             ) : (
               items.map((item) => (
-                <tr key={item.id} data-testid="registry-row">
+                <tr key={item.id} data-testid={`office-registry-row-${item.id}`}>
                   <td className="px-3 py-2 text-sm font-semibold text-[#5E704F]">
                     <Link href={`/office/registry/${item.id}`} className="hover:underline">
-                      {item.plotNumber}
+                      {item.number}
                     </Link>
                   </td>
                   <td className="px-3 py-2 text-sm text-zinc-800">{item.ownerName ?? "—"}</td>
                   <td className="px-3 py-2 text-sm text-zinc-700">
-                    <div className="space-y-1">
-                      {item.phone ? <div>{item.phone}</div> : null}
-                      {item.email ? <div className="text-xs text-zinc-500">{item.email}</div> : null}
-                      {!item.phone && !item.email ? <div className="text-xs text-zinc-500">Нет контактов</div> : null}
-                    </div>
+                    {item.phone ? <div>{item.phone}</div> : <div className="text-xs text-zinc-500">Нет контактов</div>}
                   </td>
                   <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${
-                        statusClass[item.status ?? "draft"] ?? "bg-zinc-100 text-zinc-700"
-                      }`}
-                    >
-                      {statusLabel[item.status ?? "draft"] ?? "Черновик"}
+                    <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-zinc-100 text-zinc-700">
+                      Доступно
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-sm text-zinc-600">
-                    {new Date(item.updatedAt).toLocaleDateString("ru-RU")}
-                  </td>
+                  <td className="px-3 py-2 text-sm text-zinc-600">—</td>
                 </tr>
               ))
             )}

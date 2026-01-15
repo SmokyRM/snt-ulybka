@@ -15,6 +15,8 @@ import {
   AccrualItem,
   Payment,
   ImportBatch,
+  BillingImport,
+  BillingImportError,
   ElectricityMeter,
   MeterReading,
   ElectricityTariff,
@@ -36,6 +38,8 @@ interface MockDb {
   accrualItems: AccrualItem[];
   payments: Payment[];
   importBatches: ImportBatch[];
+  billingImports: BillingImport[];
+  billingImportErrors: BillingImportError[];
   electricityMeters: ElectricityMeter[];
   meterReadings: MeterReading[];
   electricityTariffs: ElectricityTariff[];
@@ -152,6 +156,8 @@ const getDb = (): MockDb => {
       accrualItems: [],
       payments: [],
       importBatches: [],
+      billingImports: [],
+      billingImportErrors: [],
       electricityMeters: [],
       meterReadings: [],
       electricityTariffs: [],
@@ -260,12 +266,15 @@ export const upsertUserById = (input: {
   const db = getDb();
   const existing = db.users.find((user) => user.id === input.id);
   if (existing) {
+    // ВАЖНО: Если role указан явно, используем его (не перезаписываем существующую роль если role не передан)
+    // Это гарантирует, что staff/admin роли не перезаписываются при обновлении других полей
     const updated: User = {
       ...existing,
       fullName: input.fullName ?? existing.fullName,
       phone: input.phone ?? existing.phone,
       email: input.email ?? existing.email,
-      role: input.role ?? existing.role,
+      // Если role явно передан - используем его, иначе сохраняем существующую
+      role: input.role !== undefined ? input.role : existing.role,
       status: input.status ?? existing.status,
     };
     db.users = db.users.map((u) => (u.id === updated.id ? updated : u));
@@ -459,6 +468,8 @@ export const resetMockDb = () => {
     accrualItems: [],
     payments: [],
     importBatches: [],
+    billingImports: [],
+    billingImportErrors: [],
     electricityMeters: [],
     meterReadings: [],
     electricityTariffs: [],
@@ -911,6 +922,78 @@ export const updateImportBatch = (id: string, patch: Partial<ImportBatch>) => {
 
 export const listImportBatches = () => getDb().importBatches;
 export const findImportBatch = (id: string) => getDb().importBatches.find((b) => b.id === id) ?? null;
+
+export const createBillingImport = (payload: {
+  batchId: string;
+  createdByUserId: string | null;
+  fileName?: string | null;
+  comment?: string | null;
+  totals: {
+    total: number;
+    valid: number;
+    invalid: number;
+    unmatched: number;
+    duplicates: number;
+  };
+  warnings?: string[] | null;
+}) => {
+  const db = getDb();
+  const billingImport: BillingImport = {
+    id: createId("billing-import"),
+    batchId: payload.batchId,
+    createdAt: new Date().toISOString(),
+    createdByUserId: payload.createdByUserId,
+    fileName: payload.fileName ?? null,
+    comment: payload.comment ?? null,
+    totals: payload.totals,
+    status: "completed",
+    warnings: payload.warnings ?? null,
+    cancelledAt: null,
+  };
+  db.billingImports.unshift(billingImport);
+  return billingImport;
+};
+
+export const updateBillingImport = (id: string, patch: Partial<BillingImport>) => {
+  const db = getDb();
+  const existing = db.billingImports.find((item) => item.id === id);
+  if (!existing) return null;
+  const updated: BillingImport = {
+    ...existing,
+    ...patch,
+  };
+  db.billingImports = db.billingImports.map((item) => (item.id === id ? updated : item));
+  return updated;
+};
+
+export const listBillingImports = () => getDb().billingImports;
+export const findBillingImport = (id: string) => getDb().billingImports.find((item) => item.id === id) ?? null;
+export const findBillingImportByBatch = (batchId: string) =>
+  getDb().billingImports.find((item) => item.batchId === batchId) ?? null;
+
+export const addBillingImportError = (payload: {
+  billingImportId: string;
+  rowIndex: number;
+  type: BillingImportError["type"];
+  reason: string;
+  rowText: string;
+}) => {
+  const db = getDb();
+  const error: BillingImportError = {
+    id: createId("billing-import-error"),
+    billingImportId: payload.billingImportId,
+    rowIndex: payload.rowIndex,
+    type: payload.type,
+    reason: payload.reason,
+    rowText: payload.rowText,
+    createdAt: new Date().toISOString(),
+  };
+  db.billingImportErrors.unshift(error);
+  return error;
+};
+
+export const listBillingImportErrors = (billingImportId: string) =>
+  getDb().billingImportErrors.filter((error) => error.billingImportId === billingImportId);
 
 // Electricity meters & readings
 export const createMeter = (data: { plotId: string; meterNumber?: string | null; installedAt?: string | null }) => {

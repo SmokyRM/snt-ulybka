@@ -18,7 +18,7 @@ const requireRole = (role?: string | null) =>
 export default async function AdminAnnouncementsPage() {
   const user = await getSessionUser();
   if (!user || !requireRole(user.role)) {
-    redirect("/login?next=/admin/announcements");
+    redirect("/staff/login?next=/admin/announcements");
   }
 
   const announcements = await listAnnouncements(true);

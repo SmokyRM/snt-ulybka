@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { sanitizeNext } from "@/lib/sanitizeNext";
+import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { upsertUserById } from "@/lib/mockDb";
 
 const SESSION_COOKIE = "snt_session";
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const loginRaw = (body.login as string | undefined) ?? null;
   const password = (body.password as string | undefined) ?? "";
   const nextRaw = (body.next as string | undefined) ?? "";
-  const sanitizedNext = sanitizeNext(nextRaw);
+  const sanitizedNext = sanitizeNextUrl(nextRaw);
   const mapped = mapLogin(loginRaw);
   if (!mapped || !password.trim()) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
@@ -57,7 +57,19 @@ export async function POST(request: Request) {
   const role = mapped.role;
   const userId = ROLE_USER_IDS[role];
   upsertUserById({ id: userId, role });
+  
+  // КРИТИЧНО: payload должен содержать роль "admin" для admin входа
   const payload = JSON.stringify({ role, userId });
+  
+  // Debug: проверяем что роль правильно сохраняется
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[staff-login] Устанавливаем cookie:", {
+      role,
+      userId,
+      payload,
+      roleType: typeof role,
+    });
+  }
   const response = NextResponse.json({
     ok: true,
     role,
@@ -68,6 +80,9 @@ export async function POST(request: Request) {
           ? "/admin"
           : "/office",
   });
+  // КРИТИЧНО: Устанавливаем cookie с правильными параметрами
+  // secure: только в production (не ломает localhost)
+  // path: "/" чтобы cookie была доступна на всех путях
   response.cookies.set(SESSION_COOKIE, payload, {
     httpOnly: true,
     sameSite: "lax",
@@ -75,5 +90,16 @@ export async function POST(request: Request) {
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24 * 7,
   });
+  
+  // Debug: в dev режиме логируем установку cookie
+  const isProduction = process.env.NODE_ENV === "production";
+  if (!isProduction) {
+    console.log("[staff-login] Cookie установлена:", {
+      name: SESSION_COOKIE,
+      payload,
+      path: "/",
+      secure: isProduction,
+    });
+  }
   return response;
 }

@@ -32,9 +32,7 @@ export default async function OfficeDocumentNew() {
   const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
   const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
   const normalizedRole: import("@/lib/rbac").Role =
-    rawRole === "user" || rawRole === "board"
-      ? "resident"
-      : rawRole ?? "guest";
+    rawRole === "user" || rawRole === "board" || !rawRole ? "resident" : rawRole;
 
   // Guard: office.access
   if (!canAccess(normalizedRole, "office.access")) {

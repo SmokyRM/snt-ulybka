@@ -12,6 +12,42 @@ const eslintConfig = defineConfig([
       "no-redeclare": "error",
     },
   },
+  {
+    files: ["middleware.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            "crypto",
+            "node:crypto",
+            "fs",
+            "node:fs",
+            "fs/promises",
+            "node:fs/promises",
+            "path",
+            "node:path",
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["app/(public)/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            "app/admin/*",
+            "app/admin/**",
+            "src/components/admin/*",
+            "src/components/admin/**",
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

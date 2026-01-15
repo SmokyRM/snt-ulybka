@@ -5,7 +5,7 @@ import ClientTariffs from "./ClientTariffs";
 export default async function AdminTariffsPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (

@@ -5,7 +5,7 @@ import ReportClient from "./ReportClient";
 export default async function ElectricityReportPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (

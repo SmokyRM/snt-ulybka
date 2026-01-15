@@ -1,44 +1,39 @@
-import { revalidatePath } from "next/cache";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
-import { can, type Role } from "@/lib/permissions";
-import { createOfficeAnnouncement } from "@/lib/office/announcements.store";
+import Link from "next/link";
+import { createAnnouncement, type OfficeAnnouncementStatus } from "@/lib/office/announcements.server";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import type { Role } from "@/lib/permissions";
 
 export default async function OfficeAnnouncementNewPage() {
-  const session = await getSessionUser();
-  if (!session) redirect("/login?next=/office/announcements/new");
+  const session = await getEffectiveSessionUser();
+  if (!session) redirect("/staff-login?next=/office/announcements/new");
   const role = (session.role as Role | undefined) ?? "resident";
-  if (!can(role === "admin" ? "chairman" : role, "office.announcements.manage")) {
-    redirect("/forbidden");
-  }
+  if (!isOfficeRole(role)) redirect("/forbidden");
+  const canManage = hasPermission(role, "announcements.manage");
+  if (!canManage) redirect("/forbidden");
 
   async function create(formData: FormData) {
     "use server";
+    const session = await getEffectiveSessionUser();
+    if (!session) redirect("/staff-login?next=/office/announcements/new");
+    const sessionRole = (session.role as Role | undefined) ?? "resident";
+    if (!hasPermission(sessionRole, "announcements.manage")) redirect("/forbidden");
     const title = String(formData.get("title") ?? "").trim();
     const body = String(formData.get("body") ?? "").trim();
-    const status = (formData.get("status") as "draft" | "published" | null) ?? "draft";
-    const announcement = createOfficeAnnouncement({
-      title: title || "Без названия",
-      body: body || "Текст объявления не указан",
-      status: status === "published" ? "published" : "draft",
-      authorRole: role,
-    });
-    revalidatePath("/office/announcements");
-    redirect(`/office/announcements/${announcement.id}`);
+    const status = (formData.get("status") as OfficeAnnouncementStatus | null) ?? "draft";
+    if (!title || !body) return;
+    const created = createAnnouncement({ title, body, authorRole: sessionRole, status });
+    redirect(`/office/announcements/${created.id}/edit`);
   }
 
   return (
-    <div className="space-y-4" data-testid="office-announcement-new-root">
+    <div className="space-y-4" data-testid="office-announcement-form">
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900">Новое объявление</h1>
         <p className="text-sm text-zinc-600">Создайте публикацию для жителей</p>
       </div>
-      <form
-        action={create}
-        className="space-y-3 rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm"
-        data-testid="office-announcement-new-form"
-      >
+      <form action={create} className="space-y-3 rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm">
         <div className="space-y-1">
           <label className="text-sm font-semibold text-zinc-800" htmlFor="title">
             Заголовок

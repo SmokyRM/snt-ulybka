@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
-import { listImportBatches } from "@/lib/mockDb";
+import { getSessionUser, hasBillingAccess } from "@/lib/session.server";
+import { listBillingImports } from "@/lib/mockDb";
 import ImportBatchesClient from "./ImportBatchesClient";
 
 export default async function ImportBatchesPage() {
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
-  const batches = listImportBatches();
+  if (!hasBillingAccess(user)) redirect("/staff/login?next=/admin");
+  const batches = listBillingImports();
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6">

@@ -9,6 +9,7 @@ export type OfficeAnnouncement = {
   status: OfficeAnnouncementStatus;
   createdAt: string;
   updatedAt: string;
+  publishedAt?: string;
   authorRole: string;
 };
 
@@ -33,6 +34,7 @@ let announcements: OfficeAnnouncement[] = [
     status: "published",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 9).toISOString(),
     authorRole: "chairman",
   },
   {
@@ -42,6 +44,7 @@ let announcements: OfficeAnnouncement[] = [
     status: "published",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 8).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 8).toISOString(),
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 8).toISOString(),
     authorRole: "secretary",
   },
   {
@@ -60,6 +63,7 @@ let announcements: OfficeAnnouncement[] = [
     status: "published",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
     authorRole: "chairman",
   },
   {
@@ -97,6 +101,7 @@ export const createOfficeAnnouncement = (data: CreateInput): OfficeAnnouncement 
     status: data.status ?? "draft",
     createdAt: now,
     updatedAt: now,
+    publishedAt: data.status === "published" ? now : undefined,
     authorRole: data.authorRole ?? "chairman",
   };
   announcements = [item, ...announcements];
@@ -113,6 +118,12 @@ export const updateOfficeAnnouncement = (
     ...announcements[idx],
     ...data,
     updatedAt: new Date().toISOString(),
+    publishedAt:
+      data.status === "draft"
+        ? undefined
+        : data.status === "published"
+          ? announcements[idx].publishedAt ?? new Date().toISOString()
+          : announcements[idx].publishedAt,
   };
   announcements[idx] = updated;
   return updated;

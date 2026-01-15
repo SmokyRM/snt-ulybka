@@ -1,170 +1,178 @@
-// Базовые роли для RBAC, включая гостя для неавторизованных пользователей
-export type Role = "guest" | "resident" | "chairman" | "secretary" | "accountant" | "admin";
+import type { Role as PermissionsRole } from "./permissions";
+import { can as canPermission } from "./permissions";
 
-// Единый список разрешений (permissions) для кабинетов и офиса
-export type Capability =
-  | "office.access"
-  | "office.finance.view"
-  | "office.announcements.read"
-  | "office.announcements.write"
-  | "office.appeals.read"
-  | "office.appeals.comment"
-  | "office.appeals.status"
-  | "admin.access"
-  | "admin.qa"
-  // дополнительные capability для обратной совместимости с существующим кодом
-  | "cabinet.access"
-  | "office.finance.read"
-  | "office.announcements.edit";
+export type Role = PermissionsRole;
+export type OfficeRole = "chairman" | "secretary" | "accountant" | "admin";
+export type AdminRole = "admin";
 
-type CapabilityMatrix = Record<Role, Set<Capability>>;
+/**
+ * Нормализует роль из различных вариантов в стандартный формат
+ * Маппинг: 'administrator'/'Администратор'/'admin' -> 'admin'
+ * Также обрабатывает другие варианты ролей
+ */
+export function normalizeRole(
+  rawRole: string | null | undefined
+): "admin" | "resident" | "chairman" | "secretary" | "accountant" | "guest" {
+  if (!rawRole) return "guest";
 
-// Матрица прав по ролям:
-// - admin имеет все права
-// - resident только кабинет / публичные разделы (office.* отсутствуют)
-// - staff (chairman / accountant / secretary) имеют доступ только к офису и части прав
-const capabilityMatrix: CapabilityMatrix = {
-  guest: new Set<Capability>(),
-  resident: new Set<Capability>(["cabinet.access"]),
-  chairman: new Set<Capability>([
-    "cabinet.access",
-    "office.access",
-    "office.finance.view",
-    "office.finance.read",
-    "office.announcements.read",
-    "office.announcements.write",
-    "office.announcements.edit",
-    "office.appeals.read",
-    "office.appeals.comment",
-    "office.appeals.status",
-  ]),
-  secretary: new Set<Capability>([
-    "cabinet.access",
-    "office.access",
-    "office.announcements.read",
-    "office.announcements.write",
-    "office.announcements.edit",
-    "office.appeals.read",
-    "office.appeals.comment",
-  ]),
-  accountant: new Set<Capability>([
-    "cabinet.access",
-    "office.access",
-    "office.finance.view",
-    "office.finance.read",
-    "office.appeals.read",
-  ]),
-  admin: new Set<Capability>([
-    "admin.access",
-    "admin.qa",
-    "cabinet.access",
-    "office.access",
-    "office.finance.view",
-    "office.finance.read",
-    "office.announcements.read",
-    "office.announcements.write",
-    "office.announcements.edit",
-    "office.appeals.read",
-    "office.appeals.comment",
-    "office.appeals.status",
-  ]),
+  const v = String(rawRole).trim().toLowerCase();
+
+  // Маппинг администратора
+  if (["admin", "administrator", "администратор", "админ"].includes(v)) {
+    return "admin";
+  }
+
+  // Маппинг председателя - ВАЖНО: ДО проверки resident/user
+  if (["chairman", "председатель", "пред"].includes(v)) {
+    return "chairman";
+  }
+
+  // Маппинг секретаря - ВАЖНО: ДО проверки resident/user
+  if (["secretary", "секретарь", "сек"].includes(v)) {
+    return "secretary";
+  }
+
+  // Маппинг бухгалтера - ВАЖНО: ДО проверки resident/user
+  if (["accountant", "бухгалтер", "бух"].includes(v)) {
+    return "accountant";
+  }
+
+  // Маппинг жителя - ПОСЛЕ проверки office ролей
+  if (["resident", "user", "житель", "член снт", "member", "resident_debtor"].includes(v)) {
+    return "resident";
+  }
+
+  // КРИТИЧНО: Неизвестные значения -> "guest", НЕ "resident"
+  // Это предотвращает превращение office ролей в resident
+  return "guest";
+}
+
+export const isOfficeRole = (role: string | null | undefined): role is OfficeRole => {
+  const normalized = normalizeRole(role);
+  return normalized === "chairman" || normalized === "secretary" || normalized === "accountant" || normalized === "admin";
 };
 
-// Новый API: canAccess / forbiddenReason
+export const isAdminRole = (role: string | null | undefined): role is AdminRole => {
+  return normalizeRole(role) === "admin";
+};
 
-export function canAccess(role: Role | null | undefined, capability: Capability): boolean {
-  const normalizedRole: Role = role ?? "guest";
-  return capabilityMatrix[normalizedRole]?.has(capability) ?? false;
-}
+export const isResidentRole = (role: string | null | undefined): boolean => {
+  return normalizeRole(role) === "resident";
+};
 
-// Короткие русские причины, пригодные для отображения пользователю
-export function forbiddenReason(role: Role | null | undefined, capability: Capability): string {
-  const normalizedRole: Role = role ?? "guest";
+export const assertOfficeRole = (role: string | null | undefined): OfficeRole => {
+  if (isOfficeRole(role)) return role;
+  throw new Error("FORBIDDEN");
+};
 
-  if (capability === "admin.access") {
-    if (normalizedRole === "guest" || normalizedRole === "resident") {
-      return "Админ-панель доступна только администраторам";
-    }
-    return "Нет прав администратора";
-  }
+export const assertAdminRole = (role: string | null | undefined): AdminRole => {
+  const normalized = normalizeRole(role);
+  if (normalized === "admin") return "admin";
+  throw new Error("FORBIDDEN");
+};
 
-  if (capability === "admin.qa") {
-    return "Нет доступа к QA-инструментам";
-  }
+export const assertResidentRole = (role: string | null | undefined): "resident" => {
+  const normalized = normalizeRole(role);
+  if (normalized === "resident") return "resident";
+  throw new Error("FORBIDDEN");
+};
 
-  if (capability === "office.access") {
-    if (normalizedRole === "guest" || normalizedRole === "resident") {
-      return "Нет доступа в офис СНТ";
-    }
-    return "Раздел офиса недоступен для этой роли";
-  }
+export type Permission =
+  | "office.view"
+  | "appeals.view"
+  | "appeals.manage"
+  | "announcements.view"
+  | "announcements.manage"
+  | "registry.view"
+  | "finance.view"
+  | "finance.export"
+  | "finance.manage";
 
-  if (capability === "office.finance.view" || capability === "office.finance.read") {
-    return "Нет доступа к финансовому разделу";
-  }
+const permissionMatrix: Record<Role, Permission[]> = {
+  admin: [
+    "office.view",
+    "appeals.view",
+    "appeals.manage",
+    "announcements.view",
+    "announcements.manage",
+    "registry.view",
+    "finance.view",
+    "finance.export",
+    "finance.manage",
+  ],
+  chairman: [
+    "office.view",
+    "appeals.view",
+    "appeals.manage",
+    "announcements.view",
+    "announcements.manage",
+    "registry.view",
+    "finance.view",
+  ],
+  secretary: [
+    "office.view",
+    "appeals.view",
+    "appeals.manage",
+    "announcements.view",
+    "announcements.manage",
+    "registry.view",
+    "finance.view",
+  ],
+  accountant: [
+    "office.view",
+    "appeals.view",
+    "announcements.view",
+    "registry.view",
+    "finance.view",
+    "finance.export",
+    "finance.manage",
+  ],
+  resident: [],
+};
 
-  if (capability === "office.announcements.read" || capability === "office.announcements.write") {
-    return "Нет доступа к объявлениям";
-  }
+export const hasPermission = (role: Role | null | undefined, permission: Permission): boolean => {
+  if (!role) return false;
+  const perms = permissionMatrix[role];
+  if (!perms) return false;
+  if (permission === "office.view") return perms.includes("office.view");
+  return perms.includes(permission);
+};
 
-  if (capability === "office.appeals.read" || capability === "office.appeals.comment" || capability === "office.appeals.status") {
-    return "Нет доступа к обращениям жителей";
-  }
+export const assertPermission = (role: Role | null | undefined, permission: Permission) => {
+  if (!hasPermission(role, permission)) throw new Error("FORBIDDEN");
+};
 
+export const can = (role: Role, capability: string): boolean => {
   if (capability === "cabinet.access") {
-    if (normalizedRole === "guest") {
-      return "Войдите, чтобы открыть кабинет";
-    }
-    return "Этот кабинет недоступен для вашей роли";
+    return (
+      role === "resident" ||
+      role === "admin" ||
+      role === "chairman" ||
+      role === "accountant" ||
+      role === "secretary"
+    );
   }
+  if (capability === "admin.access") {
+    return role === "admin";
+  }
+  if (capability === "office.access") {
+    return role === "admin" || role === "chairman" || role === "accountant" || role === "secretary";
+  }
+  return canPermission(role, capability);
+};
 
-  return "Недостаточно прав для доступа";
-}
+export const canAccess = can;
 
-// Старый API, сохранён для обратной совместимости с существующим кодом
+export const getForbiddenReason = (role: Role | null | undefined, capability?: string): string => {
+  if (!role) return "auth.required";
+  if (capability === "admin.access") return "admin.only";
+  if (capability === "office.access") return "office.only";
+  if (capability === "cabinet.access") return "cabinet.only";
+  return "forbidden";
+};
 
-export function can(role: Role, capability: Capability): boolean {
-  return canAccess(role, capability);
-}
-
-export function defaultPathForRole(role: Role): string {
-  if (role === "guest") return "/";
+export const defaultPathForRole = (role: Role): string => {
   if (role === "admin") return "/admin";
-  if (role === "chairman" || role === "accountant" || role === "secretary") return "/office";
-  return "/cabinet";
-}
-
-export const getDefaultRouteForRole = defaultPathForRole;
-
-// Машинные коды причин для передачи в /forbidden?reason=...
-export function getForbiddenReason(role: Role, capability: Capability): string {
-  if (capability === "admin.access") {
-    if (role === "guest" || role === "resident") return "admin.resident";
-    if (role === "chairman" || role === "accountant" || role === "secretary") return "admin.staff";
-    return "admin.unknown";
-  }
-  if (capability === "office.access") {
-    if (role === "guest" || role === "resident") return "office.resident";
-    return "office.unknown";
-  }
-  if (capability === "cabinet.access") {
-    if (role === "resident") return "cabinet.unknown";
-    if (role === "chairman" || role === "accountant" || role === "secretary" || role === "admin") {
-      return "cabinet.staff";
-    }
-    return "cabinet.unknown";
-  }
-  if (capability === "office.finance.view" || capability === "office.finance.read") {
-    return "office.finance.forbidden";
-  }
-  if (capability === "office.announcements.read" || capability === "office.announcements.write") {
-    return "office.announcements.forbidden";
-  }
-  if (capability === "office.appeals.read" || capability === "office.appeals.comment" || capability === "office.appeals.status") {
-    return "office.appeals.forbidden";
-  }
-  if (capability === "admin.qa") {
-    return "admin.qa.forbidden";
-  }
-  return "permission.denied";
-}
+  if (role === "resident") return "/cabinet";
+  return "/office";
+};

@@ -11,7 +11,7 @@ export default async function AdminSettingsPage({
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   const settings = getSntSettings();
   const saved = typeof params.saved === "string";
@@ -19,7 +19,7 @@ export default async function AdminSettingsPage({
   async function saveSettings(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!hasAdminAccess(session)) redirect("/login?next=/admin");
+    if (!hasAdminAccess(session)) redirect("/staff/login?next=/admin");
 
     const parseNumber = (value: FormDataEntryValue | null, fallback: number) => {
       const raw = typeof value === "string" ? value.trim() : "";

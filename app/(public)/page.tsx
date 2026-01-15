@@ -1,12 +1,15 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
 import HomeOld from "./home/HomeOld";
 import HomeNew from "./home/HomeNew";
 import { getFeatureFlags, isFeatureEnabled, type FeatureFlags } from "@/lib/featureFlags";
-import { incrementHomeView, type HomeViewKey } from "@/lib/homeViews";
 import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
 import { getPublicContent } from "@/lib/publicContentStore";
 
-export const dynamic = "force-dynamic";
+// Убрано force-dynamic для оптимизации TTFB
+// Страница может быть статичной с ISR (Incremental Static Regeneration)
+// export const dynamic = "force-dynamic";
+export const revalidate = 60; // Revalidate каждые 60 секунд
 export const metadata = {
   alternates: {
     canonical: "/",
@@ -22,48 +25,65 @@ const fallbackFlags: FeatureFlags = {
   ai_personal_enabled: false,
 };
 
-export default async function Home() {
+// Fallback для первого экрана - показываем сразу без данных
+function HomeFallback() {
+  return <HomeOld content={PUBLIC_CONTENT_DEFAULTS} />;
+}
+
+// Динамический контент под Suspense - не блокирует TTFB
+async function HomeContent() {
+  // Параллельные async вызовы для уменьшения TTFB
+  const [contentResult, flagsResult] = await Promise.allSettled([
+    getPublicContent(),
+    getFeatureFlags(),
+  ]);
+
   let content = PUBLIC_CONTENT_DEFAULTS;
   let flags = fallbackFlags;
-  try {
-    content = await getPublicContent();
-  } catch (error) {
+
+  if (contentResult.status === "fulfilled") {
+    content = contentResult.value;
+  } else {
     if (process.env.NODE_ENV !== "production") {
-      console.warn("[home] public content fallback", error);
+      console.warn("[home] public content fallback", contentResult.reason);
     }
-  }
-  try {
-    flags = await getFeatureFlags();
-  } catch (error) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("[home] feature flags fallback", error);
-    }
-  }
-  const flagOn = isFeatureEnabled(flags, "newPublicHome");
-  const forceNew = isFeatureEnabled(flags, "forceNewHome");
-  const safeIncrement = async (key: HomeViewKey) => {
-    try {
-      await incrementHomeView(key);
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[home] view increment failed", error);
-      }
-    }
-  };
-  if (!flagOn) return <HomeOld content={content} />;
-  if (forceNew) {
-    await safeIncrement("homeNew");
-    return <HomeNew content={content} />;
   }
 
+  if (flagsResult.status === "fulfilled") {
+    flags = flagsResult.value;
+  } else {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[home] feature flags fallback", flagsResult.reason);
+    }
+  }
+  
+  const flagOn = isFeatureEnabled(flags, "newPublicHome");
+  const forceNew = isFeatureEnabled(flags, "forceNewHome");
+  
+  // Читаем cookie для beta_home (быстро, не блокирует)
   const cookieStore = await Promise.resolve(cookies());
   const betaCookie = cookieStore.get("beta_home")?.value;
   const useNew = betaCookie === "1";
 
-  if (useNew) {
-    await safeIncrement("homeNew");
+  // Определяем, какую версию показывать
+  if (!flagOn) {
+    return <HomeOld content={content} />;
+  }
+  if (forceNew) {
     return <HomeNew content={content} />;
   }
-  await safeIncrement("homeOld");
+  if (useNew) {
+    return <HomeNew content={content} />;
+  }
   return <HomeOld content={content} />;
+}
+
+export default function Home() {
+  // Выносим данные под Suspense - не блокирует TTFB
+  // Показываем fallback сразу, данные подгрузятся асинхронно
+  return (
+    <Suspense fallback={<HomeFallback />}>
+      <HomeContent />
+    </Suspense>
+  );
 }

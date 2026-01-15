@@ -49,6 +49,7 @@ test-results/
 # Playwright auth state
 playwright/.auth/
 playwright/.auth/state.json
+tests/e2e/.auth/*.json
 
 test-results/
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
-import { sanitizeNext } from "@/lib/sanitizeNext";
+import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 
 const roleOptions = [
   { value: "admin", label: "Админ" },
@@ -12,7 +12,7 @@ const roleOptions = [
   { value: "secretary", label: "Секретарь" },
 ];
 
-export default function StaffLoginForm() {
+export default function StaffLoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [role, setRole] = useState("");
@@ -22,7 +22,7 @@ export default function StaffLoginForm() {
 
   const sanitizedNext = useMemo(() => {
     const raw = searchParams?.get("next") ?? null;
-    return sanitizeNext(raw) ?? null;
+    return sanitizeNextUrl(raw);
   }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -45,7 +45,8 @@ export default function StaffLoginForm() {
         setError("Неверный логин или пароль.");
         return;
       }
-      const redirectTo = (data?.redirectTo as string) || "/office";
+      const redirectToRaw = (data?.redirectTo as string) || "/office";
+      const redirectTo = sanitizeNextUrl(redirectToRaw) ?? "/office";
       router.push(redirectTo);
     } catch {
       setError("Ошибка входа. Попробуйте позже.");

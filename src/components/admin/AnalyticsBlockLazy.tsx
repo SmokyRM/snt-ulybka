@@ -9,9 +9,12 @@ type AnalyticsPoint = {
   electricity: { accrued: number; paid: number; debt: number };
 };
 
-const AnalyticsBlockClient = dynamic<{ points: AnalyticsPoint[] }>(() => import("./AnalyticsBlockClient"), {
-  ssr: false,
-});
+const AnalyticsBlockClient = dynamic<{ points: AnalyticsPoint[] }>(
+  () => import("./AnalyticsBlockClient"),
+  {
+    ssr: false,
+  }
+);
 
 type Props = { points: AnalyticsPoint[] };
 

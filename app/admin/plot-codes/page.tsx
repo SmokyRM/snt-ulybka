@@ -15,7 +15,7 @@ import ConfirmActionForm from "./ConfirmActionForm";
 async function generate(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     const code = await generateInviteCode(plotId, user?.id ?? null);
@@ -29,7 +29,7 @@ async function generate(formData: FormData) {
 async function resetOwner(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await resetPlotOwner(plotId, user?.id ?? null);
@@ -41,7 +41,7 @@ async function resetOwner(formData: FormData) {
 async function verify(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await verifyPlot(plotId);
@@ -52,7 +52,7 @@ async function verify(formData: FormData) {
 async function clearCode(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await clearInviteCode(plotId, user?.id ?? null);
@@ -64,7 +64,7 @@ async function clearCode(formData: FormData) {
 async function approveProposal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await approvePlotProposal(plotId);
@@ -75,7 +75,7 @@ async function approveProposal(formData: FormData) {
 async function rejectProposal(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plotId = (formData.get("plotId") as string | null) ?? "";
   if (plotId) {
     await rejectPlotProposal(plotId);
@@ -90,7 +90,7 @@ export default async function PlotCodesPage({
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const plots = await getPlots();
   const code = typeof params.code === "string" ? params.code : null;
   const plotParam = typeof params.plot === "string" ? params.plot : null;

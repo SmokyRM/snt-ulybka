@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { sanitizeNext } from "@/lib/sanitizeNext";
+import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { upsertUserById } from "@/lib/mockDb";
 
 const SESSION_COOKIE = "snt_session";
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   const mode = (body.mode as string | undefined)?.trim();
   const url = new URL(request.url);
   const nextRaw = url.searchParams.get("next") || (body.next as string | undefined) || "";
-  const sanitizedNext = sanitizeNext(nextRaw);
+  const sanitizedNext = sanitizeNextUrl(nextRaw);
 
   // Staff login (separate form)
   if (mode === "staff") {

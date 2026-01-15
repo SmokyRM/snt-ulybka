@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import AppLink from "@/components/AppLink";
-import { getSessionUser } from "@/lib/session.server";
-import { can, type Role } from "@/lib/permissions";
-import { listAppeals, type AppealStatus } from "@/lib/appeals.store";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import type { Role } from "@/lib/permissions";
+import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import { listAppeals, type AppealStatus } from "@/lib/office/appeals.server";
 
 const statusLabels: Record<AppealStatus, string> = {
   new: "Новое",
@@ -24,10 +25,13 @@ type Props = {
 };
 
 export default async function OfficeAppealsPage({ searchParams }: Props) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?next=/office/appeals");
+  const user = await getEffectiveSessionUser();
+  if (!user) redirect("/staff-login?next=/office/appeals");
   const role = (user.role as Role | undefined) ?? "resident";
-  if (!can(role === "admin" ? "chairman" : role, "office.appeals.manage")) {
+  if (!isOfficeRole(role)) {
+    redirect("/forbidden");
+  }
+  if (!hasPermission(role, "appeals.view")) {
     redirect("/forbidden");
   }
 
@@ -50,7 +54,7 @@ export default async function OfficeAppealsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-4 grid gap-3" data-testid="office-appeals-list">
         {appeals.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-6 text-sm text-zinc-600">
             Обращений по выбранным фильтрам пока нет.
@@ -61,7 +65,7 @@ export default async function OfficeAppealsPage({ searchParams }: Props) {
               key={appeal.id}
               href={`/office/appeals/${appeal.id}`}
               className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              data-testid="appeals-list-item"
+              data-testid={`office-appeals-item-${appeal.id}`}
             >
               <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${statusClass[appeal.status]}`}>

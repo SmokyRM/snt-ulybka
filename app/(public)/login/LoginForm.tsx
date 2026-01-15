@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useAppRouter } from "@/hooks/useAppRouter";
-import AppLink from "@/components/AppLink";
 import { getSessionClient } from "@/lib/session";
-import { sanitizeNext } from "@/lib/sanitizeNext";
+import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 
 const showTestCodes = process.env.NEXT_PUBLIC_SHOW_TEST_CODES === "true";
 const testUserCode = process.env.NEXT_PUBLIC_USER_ACCESS_CODE || "USER_CODE";
@@ -33,10 +31,18 @@ const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) 
   return path.startsWith("/cabinet");
 };
 
+// Тестовые коды для предзаполнения через ?as=role
+const ROLE_TEST_CODES: Record<string, string> = {
+  resident: testUserCode,
+  admin: testAdminCode,
+};
+
 export default function LoginForm({ nextParam }: LoginFormProps) {
-  const router = useAppRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [code, setCode] = useState("");
+  const asRole = searchParams?.get("as");
+  const initialCode = asRole && ROLE_TEST_CODES[asRole] ? ROLE_TEST_CODES[asRole] : "";
+  const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -45,7 +51,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
   const sanitizedNext = useMemo(() => {
     const fromUrl = searchParams?.get("next") ?? null;
     // Manual test: /login?next=/cabinet/appeals + верный код -> редирект на /cabinet/appeals.
-    const safe = sanitizeNext(fromUrl ?? nextParam);
+    const safe = sanitizeNextUrl(fromUrl ?? nextParam ?? null);
     return safe ?? "/cabinet";
   }, [nextParam, searchParams]);
 
@@ -55,9 +61,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     if (!session?.role) return;
     const role = (session.role as LoginRole) ?? "user";
     const target = isPathAllowedForRole(role, sanitizedNext) ? sanitizedNext : defaultPathForRole(role);
+    // Используем push вместо replace для более быстрого перехода
     queueMicrotask(() => {
-      router.replace(target);
-      router.refresh();
+      router.push(target);
     });
   }, [router, sanitizedNext]);
 
@@ -84,8 +90,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
       }
       const role: LoginRole = (data.role as LoginRole) ?? "user";
       const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
-      router.replace(target);
-      router.refresh();
+      // Используем push вместо replace для более быстрого перехода
+      // prefetch уже включен по умолчанию в Next.js для Link компонентов
+      router.push(target);
     } catch {
       setError("Ошибка входа, попробуйте позже");
     } finally {
@@ -98,9 +105,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Вход</h1>
-        <AppLink href="/" className="text-sm font-medium text-[#5E704F] hover:underline">
+        <Link href="/" className="text-sm font-medium text-[#5E704F] hover:underline">
           На главную
-        </AppLink>
+        </Link>
       </div>
       <p className="mt-2 text-sm text-zinc-600">
         Введите код доступа, полученный от правления.

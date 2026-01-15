@@ -4,7 +4,7 @@ import SeedTestDataClient from "./SeedTestDataClient";
 
 export default async function AdminSeedPage() {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   if (process.env.NODE_ENV === "production") {
     return (

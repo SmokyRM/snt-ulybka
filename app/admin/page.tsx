@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import dynamicImport from "next/dynamic";
 
 export const dynamic = "force-dynamic";
 import { getHomeViews } from "@/lib/homeViews";
@@ -10,7 +11,10 @@ import { startTestScenario } from "./impersonationActions";
 import type { ReactNode } from "react";
 import { getAdminDashboardData, type DashboardData } from "@/lib/adminDashboard";
 import { getCollectionsAnalytics, type CollectionPoint } from "@/lib/analytics";
-import AnalyticsBlockLazy from "./_components/AnalyticsBlockLazy";
+
+// Динамический импорт тяжёлого компонента аналитики только для admin
+// Компонент уже использует dynamic внутри, поэтому ssr: false не нужен здесь
+const AnalyticsBlockLazy = dynamicImport(() => import("@/components/admin/AnalyticsBlockLazy"));
 
 const getAnalyticsPoints = (): CollectionPoint[] => {
   const now = new Date();
@@ -46,7 +50,7 @@ const loadBlock = async <T,>(block: string, loader: () => Promise<T>): Promise<L
 export default async function AdminDashboard() {
   const user = await getSessionUser();
   if (!user) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   const role = (user.role as "admin" | "chairman" | "secretary" | "accountant" | "resident" | undefined) ?? "resident";
   const { can } = await import("@/lib/rbac");
@@ -81,7 +85,7 @@ export default async function AdminDashboard() {
   ].filter(Boolean) as Array<{ label: string; message: string }>;
 
   return (
-    <div className="space-y-6" data-testid="admin-root">
+    <div className="space-y-6" data-testid="admin-shell">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Админ-панель</h1>
         <span className="rounded-full bg-[#2F3827]/10 px-3 py-1 text-xs font-semibold text-[#2F3827]">
@@ -89,6 +93,37 @@ export default async function AdminDashboard() {
         </span>
       </div>
       <div className="text-xs text-zinc-700">Home views: Old — {homeViews.homeOld} | New — {homeViews.homeNew}</div>
+
+      {/* Quick Actions */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="admin-quick-actions">
+        <h2 className="mb-3 text-sm font-semibold text-zinc-700">Быстрые действия</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Link
+            href="/admin/plots"
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
+          >
+            Реестр участков
+          </Link>
+          <Link
+            href="/admin/imports/plots"
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
+          >
+            Импорт реестра
+          </Link>
+          <Link
+            href="/admin/notifications/debtors"
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
+          >
+            Должники
+          </Link>
+          <Link
+            href="/admin/appeals"
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
+          >
+            Обращения
+          </Link>
+        </div>
+      </div>
 
       {errors.length > 0 && (
         <div className="space-y-2">
@@ -241,6 +276,23 @@ export default async function AdminDashboard() {
               />
             </Card>
 
+            <Card title="Должники">
+              <div className="space-y-1 text-sm text-zinc-800">
+                <div>
+                  Членские: {dashboardData.debtors.membership.count} шт., долг {formatAmount(dashboardData.debtors.membership.sumDebt)} ₽
+                </div>
+                <div>
+                  Электро: {dashboardData.debtors.electricity.count} шт., долг {formatAmount(dashboardData.debtors.electricity.sumDebt)} ₽
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <LinkBtn href="/admin/notifications/debtors?type=membership">Членские</LinkBtn>
+                <LinkBtn href="/admin/notifications/debtors?type=electricity" variant="secondary">
+                  Электро
+                </LinkBtn>
+              </div>
+            </Card>
+
             <Card title="Аналитика (accrued vs paid)">
               <AnalyticsBlockLazy points={analytics} />
             </Card>
@@ -263,33 +315,6 @@ export default async function AdminDashboard() {
                 <LinkBtn href="/admin/electricity/readings">Показания</LinkBtn>
                 <LinkBtn href="/admin/electricity/report" variant="secondary">
                   Отчёт
-                </LinkBtn>
-              </div>
-            </Card>
-          </Section>
-
-          <Section title="Обращения">
-            <Card title="Тикеты">
-              <div className="space-y-1 text-sm text-zinc-800">
-                <div>Управление обращениями жителей</div>
-                <div>Проверка статусов и ответы</div>
-              </div>
-              <LinkBtn href="/admin/tickets">Перейти</LinkBtn>
-            </Card>
-
-            <Card title="Должники">
-              <div className="space-y-1 text-sm text-zinc-800">
-                <div>
-                  Членские: {dashboardData.debtors.membership.count} шт., долг {formatAmount(dashboardData.debtors.membership.sumDebt)} ₽
-                </div>
-                <div>
-                  Электро: {dashboardData.debtors.electricity.count} шт., долг {formatAmount(dashboardData.debtors.electricity.sumDebt)} ₽
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <LinkBtn href="/admin/notifications/debtors?type=membership">Членские</LinkBtn>
-                <LinkBtn href="/admin/notifications/debtors?type=electricity" variant="secondary">
-                  Электро
                 </LinkBtn>
               </div>
             </Card>

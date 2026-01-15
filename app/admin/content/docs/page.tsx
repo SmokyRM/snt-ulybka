@@ -7,7 +7,7 @@ import DocsManagerClient from "./DocsManagerClient";
 export default async function AdminDocsContentPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin/content/docs");
+    redirect("/staff/login?next=/admin/content/docs");
   }
   const documents = await listDocuments();
 

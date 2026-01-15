@@ -6,7 +6,7 @@ import { getDecisions } from "@/lib/decisions";
 async function createCharge(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
   const userId = (formData.get("userId") as string | null) ?? "";
   const type = (formData.get("type") as Charge["type"]) ?? "membership";
   const amount = Number(formData.get("amount"));
@@ -19,7 +19,7 @@ async function createCharge(formData: FormData) {
 async function setPaid(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
   const id = (formData.get("id") as string | null) ?? "";
   await markChargePaid(id);
   redirect("/admin/charges");
@@ -27,7 +27,7 @@ async function setPaid(formData: FormData) {
 
 export default async function ChargesPage() {
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
 
   const charges = await getAllCharges();
   const decisions = await getDecisions();

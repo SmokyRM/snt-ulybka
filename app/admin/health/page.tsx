@@ -36,7 +36,7 @@ const fetchHealth = async (): Promise<HealthResponse | null> => {
 export default async function AdminHealthPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   const health = await fetchHealth();
 

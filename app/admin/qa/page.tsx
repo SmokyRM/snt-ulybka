@@ -1,270 +1,455 @@
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import QaCleanerClient from "../_components/QaCleanerClient";
-import { getSessionUser } from "@/lib/session.server";
-import { qaEnabled, type QaScenario } from "@/lib/qaScenario";
-import {
-  getQaScenarioFromCookies,
-  writeQaScenarioCookie,
-} from "@/lib/qaScenario.server";
-
-const qaOptions: QaScenario[] = [
-  "guest",
-  "resident_ok",
-  "resident_debtor",
-  "admin",
-  "chairman",
-  "accountant",
-  "secretary",
-];
+import { getSessionUser, getEffectiveSessionUser } from "@/lib/session.server";
+import { qaEnabled } from "@/lib/qaScenario";
+import { qaText } from "@/lib/qaText";
+import QaStatusCard from "../_components/QaStatusCard";
+import QaChecksCard from "../_components/QaChecksCard";
+import QaDebugActions from "../_components/QaDebugActions";
+import QaSeedCard from "../_components/QaSeedCard";
+import QaMatrixCard from "../_components/QaMatrixCard";
+import QaDeadendsCard from "../_components/QaDeadendsCard";
+import QaBugReportBuilder from "../_components/QaBugReportBuilder";
+import QaBugReportCard from "../_components/QaBugReportCard";
+import QaTestPlanCard from "../_components/QaTestPlanCard";
+import QaTestRunCard from "../_components/QaTestRunCard";
+import QaComboReport from "../_components/QaComboReport";
+import QaTestDataCard from "../_components/QaTestDataCard";
+import QaSnapshotCard from "../_components/QaSnapshotCard";
+import QaTicketBuilder from "../_components/QaTicketBuilder";
+import QaStateBar from "../_components/QaStateBar";
 
 export const metadata = {
-  title: "QA-инструменты — СНТ «Улыбка»",
+  title: "Пульт тестировщика — СНТ «Улыбка»",
   alternates: { canonical: "/admin/qa" },
 };
 
+type Role = "resident" | "chairman" | "secretary" | "accountant" | "admin";
+type NextPath = "/cabinet" | "/office" | "/admin";
+
+const ROLES: Array<{ value: Role; label: string; loginType: "code" | "staff" }> = [
+  { value: "resident", label: qaText.roles.resident, loginType: "code" },
+  { value: "chairman", label: qaText.roles.chairman, loginType: "staff" },
+  { value: "secretary", label: qaText.roles.secretary, loginType: "staff" },
+  { value: "accountant", label: qaText.roles.accountant, loginType: "staff" },
+  { value: "admin", label: qaText.roles.admin, loginType: "code" },
+];
+
+const NEXT_PATHS: Array<{ value: NextPath; label: string }> = [
+  { value: "/cabinet", label: qaText.paths.cabinet },
+  { value: "/office", label: qaText.paths.office },
+  { value: "/admin", label: qaText.paths.admin },
+];
+
+// Базовые данные для тест-данных (логины и комментарии)
+const TEST_DATA_BASE: Record<Role, { login: string; comment: string }> = {
+  resident: {
+    login: "1111",
+    comment: qaText.testDataComments.resident,
+  },
+  chairman: {
+    login: "председатель",
+    comment: qaText.testDataComments.chairman,
+  },
+  secretary: {
+    login: "секретарь",
+    comment: qaText.testDataComments.secretary,
+  },
+  accountant: {
+    login: "бухгалтер",
+    comment: qaText.testDataComments.accountant,
+  },
+  admin: {
+    login: "1233",
+    comment: qaText.testDataComments.admin,
+  },
+};
+
+const QUICK_LINKS = [
+  { href: "/login", label: qaText.quickLinks.login },
+  { href: "/staff-login", label: qaText.quickLinks.staffLogin },
+  { href: "/cabinet", label: qaText.quickLinks.cabinet },
+  { href: "/office", label: qaText.quickLinks.office },
+  { href: "/admin", label: qaText.quickLinks.admin },
+  { href: "/forbidden", label: qaText.quickLinks.forbidden },
+];
+
 export default async function QaPage() {
+  // Защита от production: если NODE_ENV==="production" и ENABLE_QA!="true" — показываем 404
+  if (!qaEnabled()) {
+    notFound();
+  }
+
   const session = await getSessionUser();
   if (!session || (session.role !== "admin" && session.role !== "board")) {
-    redirect("/login?next=/admin/qa");
-  }
-  if (!qaEnabled()) {
-    redirect("/admin");
+    redirect("/staff/login?next=/admin/qa");
   }
 
-  const cookieStore = await cookies();
-  const current = await getQaScenarioFromCookies(cookieStore);
+  const effectiveSession = await getEffectiveSessionUser();
 
-  async function setScenario(formData: FormData) {
-    "use server";
-    const value = (formData.get("scenario") as string | null) as QaScenario | null;
-    if (value && qaOptions.includes(value)) {
-      await writeQaScenarioCookie(value);
-    } else {
-      await writeQaScenarioCookie(null);
+  // Безопасное получение паролей из env (только dev + ENABLE_QA + admin)
+  const canShowPasswords =
+    process.env.NODE_ENV !== "production" &&
+    process.env.ENABLE_QA === "true" &&
+    session?.role === "admin";
+
+  // Получаем пароли из env переменных
+  const getPasswordForRole = (role: Role): string | null => {
+    if (!canShowPasswords) {
+      return null;
     }
-  }
 
-  async function clearScenario() {
-    "use server";
-    await writeQaScenarioCookie(null);
-  }
+    switch (role) {
+      case "chairman":
+        return process.env.AUTH_PASS_CHAIRMAN || null;
+      case "secretary":
+        return process.env.AUTH_PASS_SECRETARY || null;
+      case "accountant":
+        return process.env.AUTH_PASS_ACCOUNTANT || null;
+      case "resident":
+        // Можно использовать env или оставить дефолтное значение
+        return process.env.AUTH_PASS_RESIDENT || "1111";
+      case "admin":
+        // Можно использовать env или оставить дефолтное значение
+        return process.env.AUTH_PASS_ADMIN || "1233";
+      default:
+        return null;
+    }
+  };
+
+  // Формируем данные для тест-данных
+  const testData: Record<
+    Role,
+    {
+      login: string;
+      password: string | null;
+      comment: string;
+      passwordEnvVar?: string;
+    }
+  > = {
+    resident: {
+      ...TEST_DATA_BASE.resident,
+      password: getPasswordForRole("resident"),
+      passwordEnvVar: "AUTH_PASS_RESIDENT",
+    },
+    chairman: {
+      ...TEST_DATA_BASE.chairman,
+      password: getPasswordForRole("chairman"),
+      passwordEnvVar: "AUTH_PASS_CHAIRMAN",
+    },
+    secretary: {
+      ...TEST_DATA_BASE.secretary,
+      password: getPasswordForRole("secretary"),
+      passwordEnvVar: "AUTH_PASS_SECRETARY",
+    },
+    accountant: {
+      ...TEST_DATA_BASE.accountant,
+      password: getPasswordForRole("accountant"),
+      passwordEnvVar: "AUTH_PASS_ACCOUNTANT",
+    },
+    admin: {
+      ...TEST_DATA_BASE.admin,
+      password: getPasswordForRole("admin"),
+      passwordEnvVar: "AUTH_PASS_ADMIN",
+    },
+  };
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6">
-      <div className="mx-auto w-full max-w-4xl space-y-6">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="font-semibold">QA-режим (только dev)</div>
-            {current ? (
-              <span className="rounded-full bg-amber-200 px-3 py-1 text-xs font-semibold text-amber-900">
-                Активен: {current}
-              </span>
-            ) : null}
-            {current ? (
-              <form action={clearScenario}>
-                <button
-                  type="submit"
-                  className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-900 hover:border-amber-400"
-                >
-                  Сбросить сценарий
-                </button>
-              </form>
-            ) : null}
-          </div>
-          <p className="mt-1 text-xs text-amber-800">
-            Сценарии меняют только отображение в тестовом окружении и не затрагивают реальные данные.
-          </p>
-        </div>
-
+    <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6" data-testid="qa-root">
+      <div className="mx-auto w-full max-w-6xl space-y-6">
         <header className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">QA</p>
-          <h1 className="text-2xl font-semibold">Инструменты тестирования</h1>
-          <p className="text-sm text-zinc-700">
-            Доступно только в dev/staging и только для admin/board. Сценарий хранится в cookie.
-          </p>
-          <div className="text-xs text-zinc-500">Текущий сценарий: {current ?? "не задан"}</div>
+          <h1 className="text-2xl font-semibold">{qaText.headers.pageTitle}</h1>
+          <p className="text-sm text-zinc-700">{qaText.misc.pageDescription}</p>
+          <div className="flex flex-wrap gap-2">
+            <QaDebugActions
+              envInfo={{
+                NODE_ENV: process.env.NODE_ENV,
+                ENABLE_QA: process.env.ENABLE_QA,
+                NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+                GIT_SHA: process.env.GIT_SHA,
+              }}
+              sessionSnapshot={{
+                role: effectiveSession?.role,
+                userId: effectiveSession?.id,
+                fullName: effectiveSession?.fullName,
+                email: effectiveSession?.email,
+                phone: effectiveSession?.phone,
+                isQaOverride: effectiveSession?.isQaOverride,
+                qaScenario: effectiveSession?.qaScenario ?? null,
+                realRole: effectiveSession?.realRole,
+                isImpersonating: effectiveSession?.isImpersonating,
+              }}
+            />
+            <QaBugReportBuilder
+              envInfo={{
+                NODE_ENV: process.env.NODE_ENV,
+                ENABLE_QA: process.env.ENABLE_QA,
+                NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+                GIT_SHA: process.env.GIT_SHA,
+              }}
+              sessionSnapshot={{
+                role: effectiveSession?.role,
+                userId: effectiveSession?.id,
+                isQaOverride: effectiveSession?.isQaOverride,
+              }}
+            />
+            <QaComboReport
+              envInfo={{
+                NODE_ENV: process.env.NODE_ENV,
+                ENABLE_QA: process.env.ENABLE_QA,
+                NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+                GIT_SHA: process.env.GIT_SHA,
+              }}
+              sessionSnapshot={{
+                role: effectiveSession?.role,
+                userId: effectiveSession?.id,
+                isQaOverride: effectiveSession?.isQaOverride,
+              }}
+            />
+          </div>
         </header>
 
-        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Открыть в новом окне</div>
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Link
-              href="/cabinet?qa=resident_ok"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Житель (без долга)
-            </Link>
-            <Link
-              href="/cabinet?qa=resident_debtor"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Житель (должник)
-            </Link>
-            <Link
-              href="/cabinet/announcements"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Объявления
-            </Link>
-            <Link
-              href="/cabinet/templates"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Шаблоны
-            </Link>
-            <Link
-              href="/office"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Офис
-            </Link>
-            <Link
-              href="/?qa=guest"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Гость (главная)
-            </Link>
-            <Link
-              href="/login"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Логин
-            </Link>
-            <Link
-              href="/admin"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Админка
-            </Link>
-          </div>
-        </section>
+        {/* Панель состояния QA */}
+        <QaStateBar
+          enabled={process.env.NODE_ENV !== "production" && process.env.ENABLE_QA === "true"}
+          envInfo={{
+            NODE_ENV: process.env.NODE_ENV,
+            ENABLE_QA: process.env.ENABLE_QA,
+            NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+            GIT_SHA: process.env.GIT_SHA,
+          }}
+          sessionSnapshot={{
+            role: effectiveSession?.role,
+            userId: effectiveSession?.id,
+            username: effectiveSession?.fullName,
+            isQaOverride: effectiveSession?.isQaOverride,
+          }}
+        />
 
-        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Открыть офис как роль</div>
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Link
-              href="/office?qa=chairman"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Председатель
-            </Link>
-            <Link
-              href="/office?qa=accountant"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Бухгалтер
-            </Link>
-            <Link
-              href="/office?qa=secretary"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Секретарь
-            </Link>
-            <form action={clearScenario}>
-              <button
-                type="submit"
-                className="rounded-full border border-amber-300 px-4 py-2 font-semibold text-amber-900 hover:border-amber-400"
-              >
-                Вернуться в админ-режим
-              </button>
-            </form>
+        {/* Инструкция тестировщику */}
+        <details
+          className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+          data-testid="qa-tester-guide"
+        >
+          <summary className="cursor-pointer text-lg font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#5E704F] focus:ring-offset-1 rounded p-1 -m-1">
+            {qaText.headers.testerGuide}
+          </summary>
+          <div className="mt-4 space-y-4 text-sm text-zinc-700">
+            <p>{qaText.misc.pageDescription}</p>
+            <div className="space-y-3">
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.quickLogin}</h3>
+                <p className="text-zinc-600">{qaText.guide.quickLogin}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.quickLinks}</h3>
+                <p className="text-zinc-600">{qaText.guide.quickLinks}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.status}</h3>
+                <p className="text-zinc-600">{qaText.guide.status}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.checks}</h3>
+                <p className="text-zinc-600">{qaText.guide.checks}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.testDataGenerator}</h3>
+                <p className="text-zinc-600">{qaText.guide.seed}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.deadendScan}</h3>
+                <p className="text-zinc-600">{qaText.guide.deadends}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">{qaText.headers.accessMatrix}</h3>
+                <p className="text-zinc-600">{qaText.guide.matrix}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-zinc-900">Копирование отчёта</h3>
+                <p className="text-zinc-600">{qaText.guide.report}</p>
+              </div>
+            </div>
           </div>
-        </section>
+        </details>
 
-        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Быстрый вход (prefill)</div>
-          <p className="text-xs text-zinc-600">
-            Открывает страницу логина с заполненным полем логина. Пароль нужно ввести вручную.
+        {/* Карточка: Статус */}
+        <QaStatusCard />
+
+        {/* Карточка: Быстрый вход */}
+        <section
+          className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+          data-testid="qa-login-card"
+        >
+          <h2 className="mb-2 text-lg font-semibold text-zinc-900">{qaText.headers.quickLogin}</h2>
+          <p className="mb-4 text-xs text-zinc-500" data-testid="qa-help-login">
+            {qaText.hints.quickLogin}
           </p>
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Link
-              href="/login?as=chairman"
-              target="_blank"
-              data-testid="qa-login-chairman"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Войти как Председатель
-            </Link>
-            <Link
-              href="/login?as=accountant"
-              target="_blank"
-              data-testid="qa-login-accountant"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Войти как Бухгалтер
-            </Link>
-            <Link
-              href="/login?as=secretary"
-              target="_blank"
-              data-testid="qa-login-secretary"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Войти как Секретарь
-            </Link>
-            <Link
-              href="/login?as=resident"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Войти как Житель
-            </Link>
-            <Link
-              href="/login?as=admin"
-              target="_blank"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-[#5E704F] hover:border-[#5E704F]"
-            >
-              Войти как Админ
-            </Link>
+          <p className="mb-4 text-sm text-zinc-600">{qaText.misc.selectRole}</p>
+          <div className="space-y-4">
+            {ROLES.map((role) => {
+              const loginUrl = role.loginType === "code" ? "/login" : "/staff-login";
+              return (
+                <div key={role.value} className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-zinc-800">{role.label}:</span>
+                    <div className="flex flex-wrap gap-2">
+                      {NEXT_PATHS.map((next) => {
+                        // Для staff ролей только /office и /admin, для resident только /cabinet, для admin только /admin
+                        const isAllowed =
+                          (role.value === "resident" && next.value === "/cabinet") ||
+                          (role.value === "admin" && next.value === "/admin") ||
+                          (["chairman", "secretary", "accountant"].includes(role.value) &&
+                            (next.value === "/office" || next.value === "/admin"));
+                        if (!isAllowed) return null;
+
+                        const href = `${loginUrl}?as=${role.value}&next=${encodeURIComponent(next.value)}`;
+                        // Определяем дефолтный путь для роли
+                        const defaultPath =
+                          role.value === "resident"
+                            ? "/cabinet"
+                            : role.value === "admin"
+                              ? "/admin"
+                              : "/office";
+                        const isDefault = next.value === defaultPath;
+                        const nextSlug = next.value.replace("/", "") || "home";
+                        const testId = isDefault
+                          ? `qa-login-btn-${role.value}`
+                          : `qa-login-btn-${role.value}-${nextSlug}`;
+                        return (
+                          <Link
+                            key={next.value}
+                            href={href}
+                            data-testid={testId}
+                            className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-[#5E704F] hover:bg-[#5E704F]/5 hover:text-[#5E704F] focus:outline-none focus:ring-2 focus:ring-[#5E704F] focus:ring-offset-1"
+                            aria-label={`Войти как ${role.label} и перейти в ${next.label}`}
+                          >
+                            {role.label} → {next.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold text-zinc-900">Выбрать сценарий</div>
-          <form action={setScenario} className="flex flex-wrap items-center gap-3 text-sm">
-            <select
-              name="scenario"
-              defaultValue={current ?? ""}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-            >
-              <option value="">— Не задан —</option>
-              <option value="guest">Гость</option>
-              <option value="resident_ok">Житель без долга</option>
-              <option value="resident_debtor">Житель с долгом</option>
-              <option value="admin">Админ</option>
-              <option value="chairman">Председатель</option>
-              <option value="accountant">Бухгалтер</option>
-              <option value="secretary">Секретарь</option>
-            </select>
-            <button
-              type="submit"
-              className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4b5b40]"
-            >
-              Сохранить
-            </button>
-          </form>
-          <form action={clearScenario} className="text-sm">
-            <button
-              type="submit"
-              className="rounded-full border border-zinc-200 px-4 py-2 font-semibold text-zinc-800 hover:border-[#5E704F] hover:text-[#5E704F]"
-            >
-              Очистить тестовые состояния
-            </button>
-          </form>
-          <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-3">
-            <QaCleanerClient />
+        {/* Карточка: Тест-данные */}
+        <QaTestDataCard roles={ROLES} testData={testData} canShowPasswords={canShowPasswords} />
+
+        {/* Карточка: Проверки */}
+        <QaChecksCard
+          enableQa={process.env.ENABLE_QA === "true"}
+          nodeEnv={process.env.NODE_ENV}
+        />
+
+        {/* Карточка: Access Matrix */}
+        <QaMatrixCard
+          enableQa={process.env.ENABLE_QA === "true"}
+          nodeEnv={process.env.NODE_ENV}
+        />
+
+        {/* Карточка: Dead-end scan */}
+        <QaDeadendsCard />
+
+        {/* Карточка: Test data generator */}
+        <QaSeedCard />
+
+        {/* Карточка: Снимок среды */}
+        <QaSnapshotCard
+          envInfo={{
+            NODE_ENV: process.env.NODE_ENV,
+            ENABLE_QA: process.env.ENABLE_QA,
+            NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+            GIT_SHA: process.env.GIT_SHA,
+          }}
+          sessionSnapshot={{
+            role: effectiveSession?.role,
+            userId: effectiveSession?.id,
+            username: effectiveSession?.fullName,
+            isQaOverride: effectiveSession?.isQaOverride,
+          }}
+        />
+
+        {/* Карточка: Баг-репорт */}
+        <QaBugReportCard
+          envInfo={{
+            NODE_ENV: process.env.NODE_ENV,
+            ENABLE_QA: process.env.ENABLE_QA,
+            NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+            GIT_SHA: process.env.GIT_SHA,
+          }}
+          sessionSnapshot={{
+            role: effectiveSession?.role,
+            userId: effectiveSession?.id,
+            isQaOverride: effectiveSession?.isQaOverride,
+          }}
+        />
+
+        {/* Карточка: Задача для трекера */}
+        <QaTicketBuilder
+          envInfo={{
+            NODE_ENV: process.env.NODE_ENV,
+            ENABLE_QA: process.env.ENABLE_QA,
+            NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+            GIT_SHA: process.env.GIT_SHA,
+          }}
+          sessionSnapshot={{
+            role: effectiveSession?.role,
+            userId: effectiveSession?.id,
+            isQaOverride: effectiveSession?.isQaOverride,
+          }}
+        />
+
+        {/* Карточка: Сценарии тестирования */}
+        <QaTestPlanCard />
+
+        {/* Карточка: Отчёт прогона */}
+        <QaTestRunCard
+          envInfo={{
+            NODE_ENV: process.env.NODE_ENV,
+            ENABLE_QA: process.env.ENABLE_QA,
+            NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+            GIT_SHA: process.env.GIT_SHA,
+          }}
+          sessionSnapshot={{
+            role: effectiveSession?.role,
+            userId: effectiveSession?.id,
+            isQaOverride: effectiveSession?.isQaOverride,
+          }}
+        />
+
+        {/* Карточка: Быстрые ссылки */}
+        <section
+          className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+          data-testid="qa-links-card"
+        >
+          <h2 className="mb-2 text-lg font-semibold text-zinc-900">{qaText.headers.quickLinks}</h2>
+          <p className="mb-4 text-xs text-zinc-500" data-testid="qa-help-links">
+            {qaText.hints.quickLinks}
+          </p>
+          <p className="mb-4 text-sm text-zinc-600">Прямые ссылки на основные страницы приложения.</p>
+          <div className="flex flex-wrap gap-2">
+            {QUICK_LINKS.map((link) => {
+              // КРИТИЧНО: Отключаем prefetch для /forbidden чтобы не вызывать лишние запросы
+              const prefetchDisabled = link.href === "/forbidden";
+              const slug = link.href.replace("/", "").replace("-", "-") || "home";
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  prefetch={prefetchDisabled ? false : undefined}
+                  data-testid={`qa-link-${slug}`}
+                  className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:border-[#5E704F] hover:bg-[#5E704F]/5 hover:text-[#5E704F] focus:outline-none focus:ring-2 focus:ring-[#5E704F] focus:ring-offset-1"
+                  aria-label={`Перейти на страницу: ${link.label}`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </div>
         </section>
       </div>

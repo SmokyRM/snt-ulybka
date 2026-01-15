@@ -4,7 +4,10 @@ import { getSessionUser } from "@/lib/session.server";
 import { getOnboardingStatus } from "@/lib/onboardingStatus";
 import OnboardingBlock from "@/components/OnboardingBlock";
 
-export const dynamic = "force-dynamic";
+// Кешируем статичные данные для public страницы
+// Убрали force-dynamic для оптимизации TTFB
+export const revalidate = 300; // 5 минут
+
 export const metadata = {
   alternates: {
     canonical: "/docs",

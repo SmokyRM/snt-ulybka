@@ -1,9 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import { RouteLoaderProvider } from "@/components/RouteLoaderProvider";
 import { ensureMockDbFromFile } from "@/lib/mockDbFile";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { siteCity, siteName } from "@/config/site";
 import "./globals.css";
+
+// Оптимизированная загрузка шрифта через next/font
+// Используем только необходимые начертания (400, 500, 600, 700)
+// display: 'swap' включен по умолчанию в next/font
+// preload: true для быстрой загрузки основных начертаний
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600", "700"], // 400=normal, 500=medium, 600=semibold, 700=bold
+  display: "swap", // font-display: swap для предотвращения FOIT
+  preload: true, // Preload основных начертаний для LCP
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: `${siteName} — официальный сайт | ${siteCity}`,
@@ -34,8 +47,8 @@ export default async function RootLayout({
   await ensureMockDbFromFile();
   const enableUx = process.env.NEXT_PUBLIC_ENABLE_UX === "1" || process.env.NODE_ENV !== "production";
   return (
-    <html lang="ru">
-      <body className="antialiased bg-[#F8F1E9] text-zinc-900">
+    <html lang="ru" className={inter.variable}>
+      <body className="antialiased bg-[#F8F1E9] text-zinc-900 font-sans">
         {enableUx ? (
           <RouteLoaderProvider>
             {children}

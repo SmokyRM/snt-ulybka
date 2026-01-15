@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 export default async function AdminSocialHistory() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   const channels = getOfficialChannelsSettingServer();

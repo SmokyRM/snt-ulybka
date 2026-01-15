@@ -31,7 +31,7 @@ export default async function VerificationsPage({
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin/verifications");
+    redirect("/staff/login?next=/admin/verifications");
   }
   const statusParam = typeof params.status === "string" ? params.status : "sent";
   const allowedStatuses = ["sent", "rejected", "approved", "draft"] as const;

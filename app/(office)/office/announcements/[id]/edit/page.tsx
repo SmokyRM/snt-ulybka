@@ -1,60 +1,71 @@
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session.server";
-import { can, type Role } from "@/lib/permissions";
-import { getOfficeAnnouncement, updateOfficeAnnouncement } from "@/lib/office/announcements.store";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import type { Role } from "@/lib/permissions";
+import {
+  getAnnouncement,
+  updateAnnouncement,
+  setAnnouncementPublished,
+  type OfficeAnnouncementStatus,
+} from "@/lib/office/announcements.server";
 
-export default async function OfficeAnnouncementEditPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const session = await getSessionUser();
-  if (!session) redirect(`/login?next=/office/announcements/${params.id}/edit`);
+export default async function OfficeAnnouncementEditPage({ params }: { params: { id: string } }) {
+  const session = await getEffectiveSessionUser();
+  if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
   const role = (session.role as Role | undefined) ?? "resident";
-  const normalizedRole = role === "admin" ? "chairman" : role;
-  if (!can(normalizedRole, "office.announcements.manage")) {
-    redirect("/forbidden");
-  }
+  if (!isOfficeRole(role)) redirect("/forbidden");
+  const canManage = hasPermission(role, "announcements.manage");
+  if (!canManage) redirect("/forbidden");
 
-  const announcement = getOfficeAnnouncement(params.id);
-  if (!announcement) notFound();
-  const existing = announcement;
+  const announcement = getAnnouncement(params.id);
+  if (!announcement) redirect("/office/announcements");
 
   async function save(formData: FormData) {
     "use server";
+    const session = await getEffectiveSessionUser();
+    if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
+    const sessionRole = (session.role as Role | undefined) ?? "resident";
+    if (!hasPermission(sessionRole, "announcements.manage")) redirect("/forbidden");
     const title = String(formData.get("title") ?? "").trim();
     const body = String(formData.get("body") ?? "").trim();
-    const status = (formData.get("status") as "draft" | "published" | null) ?? "draft";
-    updateOfficeAnnouncement(existing.id, {
-      title: title || "Без названия",
-      body: body || "Текст объявления не указан",
-      status: status === "published" ? "published" : "draft",
-    });
+    const status = (formData.get("status") as OfficeAnnouncementStatus | null) ?? "draft";
+    if (!title || !body) return;
+    updateAnnouncement(params.id, { title, body, status });
+    if (status === "published") setAnnouncementPublished(params.id, true);
     revalidatePath("/office/announcements");
-    revalidatePath(`/office/announcements/${existing.id}`);
-    redirect(`/office/announcements/${existing.id}`);
+    revalidatePath(`/office/announcements/${params.id}`);
+    redirect(`/office/announcements/${params.id}`);
+  }
+
+  async function togglePublish(published: boolean) {
+    "use server";
+    const session = await getEffectiveSessionUser();
+    if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
+    const sessionRole = (session.role as Role | undefined) ?? "resident";
+    if (!hasPermission(sessionRole, "announcements.manage")) redirect("/forbidden");
+    setAnnouncementPublished(params.id, published);
+    revalidatePath("/office/announcements");
+    revalidatePath(`/office/announcements/${params.id}`);
   }
 
   return (
-    <div className="space-y-4" data-testid="office-announcement-edit-form">
-      <div className="flex items-center justify-between gap-2">
+    <div className="space-y-4" data-testid="office-announcement-form">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Редактировать объявление</h1>
-          <p className="text-sm text-zinc-600">Измените текст и статус публикации</p>
+          <p className="text-sm text-zinc-600">Обновите текст или статус публикации</p>
         </div>
         <Link
-          href={`/office/announcements/${existing.id}`}
+          href={`/office/announcements/${params.id}`}
           className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
         >
           К объявлению
         </Link>
       </div>
-      <form
-        action={save}
-        className="space-y-3 rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm"
-      >
+
+      <form action={save} className="space-y-3 rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm">
         <div className="space-y-1">
           <label className="text-sm font-semibold text-zinc-800" htmlFor="title">
             Заголовок
@@ -62,8 +73,8 @@ export default async function OfficeAnnouncementEditPage({
           <input
             id="title"
             name="title"
-            defaultValue={existing.title}
             required
+            defaultValue={announcement.title}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-[#5E704F]"
           />
         </div>
@@ -74,9 +85,9 @@ export default async function OfficeAnnouncementEditPage({
           <textarea
             id="body"
             name="body"
-            rows={8}
-            defaultValue={existing.body}
+            rows={6}
             required
+            defaultValue={announcement.body}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-[#5E704F]"
           />
         </div>
@@ -87,29 +98,46 @@ export default async function OfficeAnnouncementEditPage({
           <select
             id="status"
             name="status"
-            defaultValue={existing.status}
+            defaultValue={announcement.status}
             className="w-40 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 outline-none focus:border-[#5E704F]"
           >
             <option value="draft">Черновик</option>
             <option value="published">Опубликовано</option>
           </select>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <button
             type="submit"
             className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#4b5b40]"
-            data-testid="announcement-save"
+            data-testid="office-announcement-form-save"
           >
             Сохранить
           </button>
-          <Link
-            href={`/office/announcements/${existing.id}`}
-            className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
-          >
-            Отмена
-          </Link>
         </div>
       </form>
+      <div className="flex gap-2">
+        {announcement.status === "published" ? (
+          <form action={async () => togglePublish(false)}>
+            <button
+              type="submit"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+              data-testid="office-announcement-toggle-publish"
+            >
+              В черновик
+            </button>
+          </form>
+        ) : (
+          <form action={async () => togglePublish(true)}>
+            <button
+              type="submit"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+              data-testid="office-announcement-toggle-publish"
+            >
+              Опубликовать
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

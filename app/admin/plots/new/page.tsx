@@ -6,7 +6,7 @@ import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 export default async function NewPlotPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (

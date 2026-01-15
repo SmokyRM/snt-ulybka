@@ -9,11 +9,11 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
-    screenshot: "off",
-    video: "off",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
     navigationTimeout: 120_000,
     actionTimeout: 20_000,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
@@ -27,7 +27,7 @@ export default defineConfig({
   projects: [
     {
       name: "setup",
-      testMatch: /(auth|warmup)\.setup\.ts/,
+      testMatch: /(auth|warmup|roleStates)\.setup\.ts/,
     },
     {
       name: "chromium",
@@ -44,6 +44,18 @@ export default defineConfig({
         /cabinet\.spec\.ts$/,
         /smoke-qa-cabinet-and-appeals\.spec\.ts$/,
       ],
+    },
+    {
+      name: "access-matrix",
+      // Dedicated project for access matrix tests - uses role-specific storage states
+      testMatch: /access-matrix\.spec\.ts$/,
+      dependencies: ["setup"],
+    },
+    {
+      name: "smoke-routes",
+      // Smoke routes tests - не требуют auth setup, работают с QA override или без
+      testMatch: /smoke\.routes\.spec\.ts$/,
+      dependencies: [], // Не требует setup - работает без auth
     },
   ],
 });
