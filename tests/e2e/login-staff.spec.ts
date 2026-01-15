@@ -1,9 +1,19 @@
 import { test, expect } from "@playwright/test";
 
+test.use({ storageState: undefined });
+
 test("login page links to staff login", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByRole("link", { name: /Войти для сотрудников/i }).click();
-  await expect(page).toHaveURL(/\/staff-login/);
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  
+  const link = page.getByRole("link", { name: /Войти для сотрудников/i });
+  await expect(link).toBeVisible();
+  
+  // Use Promise.all to handle navigation properly
+  await Promise.all([
+    page.waitForURL(/\/staff-login/, { timeout: 15000 }),
+    link.click(),
+  ]);
+  
   await expect(page.getByTestId("staff-login-root")).toBeVisible();
 });
 

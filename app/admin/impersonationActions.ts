@@ -8,7 +8,7 @@ import { ensureTestUsers } from "@/lib/testSeeds";
 export async function startImpersonation(formData: FormData) {
   const payload = await getSessionPayload();
   if (!isAdminPayload(payload)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   const rawUserId = (formData.get("userId") as string | null)?.trim();
@@ -34,7 +34,7 @@ export async function startImpersonation(formData: FormData) {
 export async function stopImpersonation() {
   const payload = await getSessionPayload();
   if (!isAdminPayload(payload)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   await updateSessionPayload({
     impersonateUserId: undefined,
@@ -46,7 +46,7 @@ export async function stopImpersonation() {
 export async function startTestScenario(formData: FormData) {
   const payload = await getSessionPayload();
   if (!isAdminPayload(payload)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   if (process.env.NODE_ENV !== "development") {
     redirect("/admin?impersonation=disabled");

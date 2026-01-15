@@ -21,7 +21,7 @@ export default async function OfficeDashboardPage() {
   const allowedTiles = tiles.filter((tile) => can(role === "admin" ? "chairman" : role, tile.capability));
 
   return (
-    <div className="space-y-4" data-testid="office-dashboard-root">
+    <div className="space-y-4" data-testid="office-shell">
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900">Офис СНТ</h1>
         <p className="text-sm text-zinc-600">Быстрый доступ к рабочим разделам</p>
@@ -31,12 +31,11 @@ export default async function OfficeDashboardPage() {
           Нет доступных разделов.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2" data-testid="office-quick-actions">
           {allowedTiles.map((tile) => (
             <Link
               key={tile.href}
               href={tile.href}
-              data-testid={`office-dashboard-tile-${tile.href.replace("/office/", "")}`}
               className="rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm transition hover:border-[#5E704F]"
             >
               <div className="text-lg font-semibold text-zinc-900">{tile.label}</div>

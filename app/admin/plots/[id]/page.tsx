@@ -4,10 +4,11 @@ import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlots } from "@/lib/plotsDb";
 import { listPayments, listAccrualItems, listAccrualPeriods } from "@/lib/mockDb";
 import { membershipLabel } from "@/lib/membershipLabels";
+import BackToListLink from "@/components/BackToListLink";
 
 export default async function PlotDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   const { id } = await params;
   const plot = listPlots().find((p) => p.id === id);
@@ -23,12 +24,7 @@ export default async function PlotDetailsPage({ params }: { params: Promise<{ id
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Участок {plot.street}, {plot.plotNumber}</h1>
-        <Link
-          href="/admin/plots"
-          className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-        >
-          Назад
-        </Link>
+        <BackToListLink href="/admin/plots" />
       </div>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">

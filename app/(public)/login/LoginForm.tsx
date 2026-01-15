@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useAppRouter } from "@/hooks/useAppRouter";
-import AppLink from "@/components/AppLink";
 import { getSessionClient } from "@/lib/session";
-import { sanitizeNext } from "@/lib/sanitizeNext";
+import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 
 const showTestCodes = process.env.NEXT_PUBLIC_SHOW_TEST_CODES === "true";
 const testUserCode = process.env.NEXT_PUBLIC_USER_ACCESS_CODE || "USER_CODE";
@@ -18,12 +16,33 @@ type LoginFormProps = {
 
 type LoginRole = "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
 
-import { getSafeRedirectUrl } from "@/lib/safeRedirect";
+const defaultPathForRole = (role: LoginRole) => {
+  if (role === "admin") return "/admin";
+  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") return "/office";
+  return "/cabinet";
+};
+
+const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) => {
+  if (!path) return false;
+  if (role === "admin") return path.startsWith("/admin");
+  if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") {
+    return path.startsWith("/office");
+  }
+  return path.startsWith("/cabinet");
+};
+
+// Тестовые коды для предзаполнения через ?as=role
+const ROLE_TEST_CODES: Record<string, string> = {
+  resident: testUserCode,
+  admin: testAdminCode,
+};
 
 export default function LoginForm({ nextParam }: LoginFormProps) {
-  const router = useAppRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [code, setCode] = useState("");
+  const asRole = searchParams?.get("as");
+  const initialCode = asRole && ROLE_TEST_CODES[asRole] ? ROLE_TEST_CODES[asRole] : "";
+  const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -32,7 +51,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
   const sanitizedNext = useMemo(() => {
     const fromUrl = searchParams?.get("next") ?? null;
     // Manual test: /login?next=/cabinet/appeals + верный код -> редирект на /cabinet/appeals.
-    const safe = sanitizeNext(fromUrl ?? nextParam);
+    const safe = sanitizeNextUrl(fromUrl ?? nextParam ?? null);
     return safe ?? "/cabinet";
   }, [nextParam, searchParams]);
 
@@ -41,10 +60,10 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     if (isSubmittingRef.current) return;
     if (!session?.role) return;
     const role = (session.role as LoginRole) ?? "user";
-    const target = getSafeRedirectUrl(role, sanitizedNext);
+    const target = isPathAllowedForRole(role, sanitizedNext) ? sanitizedNext : defaultPathForRole(role);
+    // Используем push вместо replace для более быстрого перехода
     queueMicrotask(() => {
-      router.replace(target);
-      router.refresh();
+      router.push(target);
     });
   }, [router, sanitizedNext]);
 
@@ -70,9 +89,10 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         return;
       }
       const role: LoginRole = (data.role as LoginRole) ?? "user";
-      const target = getSafeRedirectUrl(role, sanitizedNext);
-      router.replace(target);
-      router.refresh();
+      const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
+      // Используем push вместо replace для более быстрого перехода
+      // prefetch уже включен по умолчанию в Next.js для Link компонентов
+      router.push(target);
     } catch {
       setError("Ошибка входа, попробуйте позже");
     } finally {
@@ -85,9 +105,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Вход</h1>
-        <AppLink href="/" className="text-sm font-medium text-[#5E704F] hover:underline">
+        <Link href="/" className="text-sm font-medium text-[#5E704F] hover:underline">
           На главную
-        </AppLink>
+        </Link>
       </div>
       <p className="mt-2 text-sm text-zinc-600">
         Введите код доступа, полученный от правления.
@@ -104,17 +124,13 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         data-testid="login-form"
       >
         <div className="space-y-2">
-          <label htmlFor="access-code" className="text-sm font-medium text-zinc-800">
-            Код доступа
-          </label>
+          <label className="text-sm font-medium text-zinc-800">Код доступа</label>
           <input
-            id="access-code"
             type="password"
             inputMode="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Введите код"
-            data-testid="login-access-code"
             className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
           />
         </div>
@@ -142,7 +158,6 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         <button
           type="submit"
           disabled={loading}
-          data-testid="login-submit"
           className="w-full rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Вход..." : "Войти"}
@@ -150,7 +165,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
         <div className="min-h-[76px]" data-testid="login-error-block">
           {error && (
             <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-              <div data-testid="login-error-text">{error}</div>
+              <div>{error}</div>
               <div className="flex flex-wrap gap-3 text-xs font-semibold text-[#5E704F]">
                 <Link href="/#get-access" className="hover:underline">
                   Как получить доступ
@@ -163,14 +178,6 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           )}
         </div>
       </form>
-      <div className="text-sm text-[#5E704F]">
-        <Link
-          href={sanitizedNext ? `/staff-login?next=${encodeURIComponent(sanitizedNext)}` : "/staff-login"}
-          className="font-semibold hover:underline"
-        >
-          Я сотрудник → Войти для сотрудников
-        </Link>
-      </div>
     </>
   );
 }

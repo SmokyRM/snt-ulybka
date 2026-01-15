@@ -1,6 +1,9 @@
 import TemplatesIndex from "@/components/templates/TemplatesIndex";
 import { getAllTemplates } from "@/lib/templates";
 
+// Кешируем статичные данные для public страницы
+export const revalidate = 300; // 5 минут
+
 export const metadata = {
   title: "Шаблоны документов — СНТ «Улыбка»",
   description: "Готовые тексты обращений и запросов с плейсхолдерами.",

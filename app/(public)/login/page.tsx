@@ -1,7 +1,8 @@
 import Link from "next/link";
 import LoginForm from "./LoginForm";
 
-export const dynamic = "force-dynamic";
+// Страница статична, не нужна динамика для TTFB
+// export const dynamic = "force-dynamic"; // Убрано для оптимизации TTFB
 
 type SearchParams = {
   next?: string | string[];

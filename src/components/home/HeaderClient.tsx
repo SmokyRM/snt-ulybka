@@ -161,7 +161,7 @@ export function HeaderClient({
         Жителям
       </AppLink>
       <AppLink
-        href="/staff-login"
+        href="/staff/login"
         className="flex-shrink-0 rounded-full border border-white/50 bg-transparent px-5 py-2 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/10"
       >
         Сотрудникам
@@ -285,6 +285,7 @@ export function HeaderClient({
             height={44}
             className="h-10 w-auto"
             priority
+            sizes="44px"
           />
           <span className="flex flex-col leading-tight">
             <span className="text-base font-semibold">{siteName}</span>

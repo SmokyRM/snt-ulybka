@@ -2,83 +2,77 @@
 
 import { useEffect, useState } from "react";
 
+type PreviewMeta = {
+  totalRows: number;
+  validCount: number;
+  invalidCount: number;
+  unmatchedCount: number;
+  duplicates: number;
+  warnings?: string[];
+  truncated?: boolean;
+  detectedDelimiter?: string;
+  detectedEncoding?: string;
+  headers?: string[];
+};
+
+type PreviewRow = {
+  rowIndex: number;
+  status: "OK" | "ERROR" | "DUPLICATE";
+  paidAtIso: string | null;
+  paidAtLocalFormatted: string | null;
+  amount: number | null;
+  purpose?: string | null;
+  streetRaw: string;
+  plotNumberRaw: string;
+  streetParsed?: string | null;
+  plotNumberParsed?: string | null;
+  plotIdMatched?: string | null;
+  reference?: string | null;
+  category?: string | null;
+  fingerprint?: string | null;
+  matchedTargetFundId?: string | null;
+  matchedTargetFundTitle?: string | null;
+  suggestedTargetFundId?: string | null;
+  suggestedTargetFundTitle?: string | null;
+  error?: string;
+  errors?: string[];
+  warning?: string;
+  rawRow: string;
+};
+
+type PreviewResult = {
+  meta: PreviewMeta;
+  rows: PreviewRow[];
+};
+
+type ImportTarget = {
+  id: string;
+  title: string;
+  status: string;
+};
+
 export default function ImportClient() {
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{
-    meta: {
-      totalRows: number;
-      okCount: number;
-      errorCount: number;
-      duplicateCount: number;
-      truncated?: boolean;
-      headers?: string[];
-      warnings?: string[];
-    };
-    rows: Array<{
-      rowIndex: number;
-      paidAtIso: string | null;
-      paidAtLocalFormatted: string | null;
-      amount: number | null;
-      purpose: string;
-      streetRaw: string;
-      plotNumberRaw: string;
-      streetParsed: string | null;
-      plotNumberParsed: string | null;
-      plotIdMatched: string | null;
-      reference: string | null;
-      status: "OK" | "ERROR" | "DUPLICATE";
-      error?: string;
-      errors?: string[];
-      isDuplicate?: boolean;
-      category?: string | null;
-      fingerprint?: string | null;
-      matchedTargetFundId?: string | null;
-      matchedTargetFundTitle?: string | null;
-      warning?: string;
-      suggestedTargetFundId?: string | null;
-      suggestedTargetFundTitle?: string | null;
-    }>;
-  } | null>(null);
+  const [result, setResult] = useState<PreviewResult | null>(null);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<{
-    paidAt?: string;
-    amount?: string;
-    purpose?: string;
-    street?: string;
-    plotNumber?: string;
-    reference?: string;
-  }>({});
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [importComment, setImportComment] = useState("");
-  const [commitLoading, setCommitLoading] = useState(false);
-  const [commitResult, setCommitResult] = useState<{
-    createdCount: number;
-    skippedCount: number;
-    skipped: Array<{ rowIndex: number; reason: string }>;
-  } | null>(null);
-  const [targets, setTargets] = useState<Array<{ id: string; title: string; status: string }>>([]);
   const [selectedTargetByRow, setSelectedTargetByRow] = useState<Record<number, string | null>>({});
-
-  const reset = () => {
-    setFile(null);
-    setResult(null);
-    setHeaders([]);
-    setMapping({});
-    setSelected([]);
-    setImportComment("");
-    setCommitResult(null);
-  };
+  const [targets, setTargets] = useState<ImportTarget[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [confirmResult, setConfirmResult] = useState<{ createdCount: number; skippedCount: number } | null>(null);
 
   useEffect(() => {
     const loadTargets = async () => {
       try {
         const res = await fetch("/api/admin/targets");
         if (!res.ok) return;
-        const data = (await res.json()) as { items?: Array<{ id: string; title: string; status: string }> };
+        const data = (await res.json()) as { items?: ImportTarget[] };
         if (data.items) {
-          setTargets(data.items.filter((t) => t.status === "active"));
+          setTargets(data.items.filter((item) => item.status === "active"));
         }
       } catch {
         // ignore
@@ -87,138 +81,190 @@ export default function ImportClient() {
     loadTargets();
   }, []);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const reset = () => {
+    setFile(null);
+    setResult(null);
+    setHeaders([]);
+    setMapping({});
+    setSelectedRows([]);
+    setImportComment("");
+    setSelectedTargetByRow({});
+    setConfirmResult(null);
+    setStatusMessage(null);
+  };
+
+  const mappingFields: Array<{ label: string; key: keyof typeof mapping }> = [
+    { label: "Дата", key: "paidAt" },
+    { label: "Сумма", key: "amount" },
+    { label: "Назначение", key: "purpose" },
+    { label: "Улица", key: "street" },
+    { label: "Участок", key: "plotNumber" },
+    { label: "Номер операции", key: "reference" },
+  ];
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0] ?? null;
     reset();
-    setFile(f);
+    if (selected) {
+      setFile(selected);
+    }
+  };
+
+  const toggleRowSelection = (rowIndex: number) => {
+    setSelectedRows((prev) =>
+      prev.includes(rowIndex) ? prev.filter((index) => index !== rowIndex) : [...prev, rowIndex]
+    );
+  };
+
+  const selectAllValid = () => {
+    if (!result) return;
+    const validIndexes = result.rows.filter((row) => row.status === "OK").map((row) => row.rowIndex);
+    setSelectedRows(validIndexes);
   };
 
   const handlePreview = async () => {
     if (!file) return;
-    setLoading(true);
-    setError(null);
+    setPreviewLoading(true);
+    setStatusMessage(null);
     setResult(null);
-    setCommitResult(null);
+    setConfirmResult(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
-      if (mapping && Object.keys(mapping).length > 0) {
+      if (Object.keys(mapping).length > 0) {
         formData.append("mapping", JSON.stringify(mapping));
       }
-      const res = await fetch("/api/admin/billing/import/preview", {
+      const response = await fetch("/api/admin/billing/import/preview", {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) {
-        const txt = await res.text();
-        setError(txt || "Ошибка загрузки");
+      if (!response.ok) {
+        let errorText = "Ошибка проверки файла";
+        try {
+          const payload = await response.json();
+          errorText = payload.error || errorText;
+        } catch {
+          const text = await response.text();
+          if (text) errorText = text;
+        }
+        setStatusMessage({ type: "error", text: errorText });
         return;
       }
-      const data = await res.json();
+      const data = (await response.json()) as PreviewResult;
       setResult(data);
-      if (data?.meta?.headers) {
-        setHeaders(data.meta.headers as string[]);
+      if (data.meta.headers) {
+        setHeaders(data.meta.headers);
       }
-      if (data?.rows) {
-        const okRows = (data.rows as Array<{ rowIndex: number; status: string }>).filter(
-          (r) => r.status === "OK"
-        );
-        setSelected(okRows.map((r) => r.rowIndex));
-      }
-    } catch (e) {
-      setError((e as Error).message);
+      const validIndexes = data.rows.filter((row) => row.status === "OK").map((row) => row.rowIndex);
+      setSelectedRows(validIndexes);
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        text: (error as Error).message || "Не удалось проверить файл",
+      });
     } finally {
-      setLoading(false);
+      setPreviewLoading(false);
     }
   };
 
-  const handleCommit = async () => {
+  const handleConfirm = async () => {
     if (!result) return;
-    const rowsToSend =
-      result.rows
-        ?.filter((r) => selected.includes(r.rowIndex) && r.status === "OK")
-        .map((r) => ({
-          rowIndex: r.rowIndex,
-          paidAtIso: r.paidAtIso,
-          amount: r.amount,
-          purpose: r.purpose,
-          plotIdMatched: r.plotIdMatched,
-          reference: r.reference,
-          category: r.category ?? null,
-          targetFundId:
-            selectedTargetByRow[r.rowIndex] ??
-            (r.category === "target_fee" ? r.suggestedTargetFundId ?? r.matchedTargetFundId ?? null : null),
-        })) ?? [];
-    if (!rowsToSend.length) return;
-    setCommitLoading(true);
-    setError(null);
-    setCommitResult(null);
+    const rowsToImport = result.rows
+      .filter((row) => selectedRows.includes(row.rowIndex) && row.status === "OK")
+      .map((row) => ({
+        rowIndex: row.rowIndex,
+        paidAtIso: row.paidAtIso ?? "",
+        amount: row.amount ?? 0,
+        purpose: row.purpose ?? null,
+        plotIdMatched: row.plotIdMatched ?? "",
+        reference: row.reference ?? null,
+        category: row.category ?? null,
+        targetFundId:
+          selectedTargetByRow[row.rowIndex] ??
+          row.suggestedTargetFundId ??
+          row.matchedTargetFundId ??
+          null,
+        fingerprint: row.fingerprint ?? null,
+      }));
+    if (!rowsToImport.length) {
+      setStatusMessage({ type: "error", text: "Выберите хотя бы одну строку для импорта" });
+      return;
+    }
+    setConfirmLoading(true);
+    setStatusMessage(null);
     try {
-      const res = await fetch("/api/admin/billing/import/commit", {
+      const response = await fetch("/api/admin/billing/import/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: rowsToSend, importComment, fileName: file?.name ?? null }),
+        body: JSON.stringify({
+          fileName: file?.name ?? null,
+          comment: importComment,
+          totals: result.meta,
+          warnings: result.meta.warnings,
+          previewRows: result.rows,
+          rows: rowsToImport,
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError((data as { error?: string }).error ?? "Ошибка импорта");
+      const payload = await response.json();
+      if (!response.ok) {
+        const errorText = payload.error ?? "Ошибка импорта";
+        setStatusMessage({ type: "error", text: errorText });
         return;
       }
-      setCommitResult(
-        data as { createdCount: number; skippedCount: number; skipped: Array<{ rowIndex: number; reason: string }> }
-      );
-      setResult((prev) =>
-        prev
-          ? {
-              ...prev,
-              rows: prev.rows.map((row) =>
-                selected.includes(row.rowIndex)
-                  ? { ...row, status: "DUPLICATE", error: "Импортировано" }
-                  : row
-              ),
-            }
-          : prev
-      );
-      setSelected([]);
-    } catch (e) {
-      setError((e as Error).message);
+      const createdCount = payload.createdCount ?? 0;
+      const skippedCount = payload.skippedCount ?? 0;
+      setConfirmResult({
+        createdCount,
+        skippedCount,
+      });
+      setStatusMessage({ 
+        type: "success", 
+        text: `Импорт завершён успешно. Создано платежей: ${createdCount}${skippedCount > 0 ? `, пропущено: ${skippedCount}` : ""}` 
+      });
+      setSelectedRows([]);
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        text: (error as Error).message || "Ошибка подтверждения импорта",
+      });
     } finally {
-      setCommitLoading(false);
+      setConfirmLoading(false);
     }
   };
 
-  const toggleRow = (rowIndex: number) => {
-    setSelected((prev) => (prev.includes(rowIndex) ? prev.filter((r) => r !== rowIndex) : [...prev, rowIndex]));
-  };
-
-  const selectAllOk = () => {
-    if (!result?.rows) return;
-    setSelected(result.rows.filter((r) => r.status === "OK").map((r) => r.rowIndex));
-  };
-
-  const deselectAll = () => setSelected([]);
-
-  const okCount = result?.rows?.filter((r) => r.status === "OK").length ?? 0;
+  const activeMeta = result?.meta;
+  const validCount = activeMeta?.validCount ?? 0;
+  const invalidCount = activeMeta?.invalidCount ?? 0;
+  const unmatchedCount = activeMeta?.unmatchedCount ?? 0;
+  const duplicateCount = activeMeta?.duplicates ?? 0;
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-4 text-sm shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <input type="file" accept=".csv,text/csv" onChange={handleFileChange} />
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleFileChange}
+              data-testid="billing-import-file-input"
+            />
+            {file ? <span className="text-xs text-zinc-500">{file.name}</span> : null}
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
-              className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handlePreview}
-              disabled={!file || loading}
+              disabled={!file || previewLoading}
+              data-testid="billing-import-preview-button"
+              className="rounded border border-zinc-300 px-3 py-1 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Проверить
+              {previewLoading ? "Проверяем…" : "Проверить"}
             </button>
             <button
               type="button"
-              className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={reset}
+              className="rounded border border-zinc-300 px-3 py-1 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
             >
               Очистить
             </button>
@@ -228,43 +274,37 @@ export default function ImportClient() {
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <div className="text-sm font-semibold text-zinc-800">Сопоставление колонок</div>
             <div className="space-y-2 sm:col-span-2">
-              {["Дата", "Сумма", "Назначение", "Улица", "Участок", "Номер операции"].map((label) => {
-                const keyMap: Record<string, keyof typeof mapping> = {
-                  Дата: "paidAt",
-                  Сумма: "amount",
-                  Назначение: "purpose",
-                  Улица: "street",
-                  Участок: "plotNumber",
-                  "Номер операции": "reference",
-                };
-                const key = keyMap[label];
-                return (
-                  <label key={label} className="flex items-center gap-2 text-sm text-zinc-700">
-                    <span className="min-w-[140px]">{label}</span>
-                    <select
-                      value={mapping[key] ?? ""}
-                      onChange={(e) =>
-                        setMapping((prev) => ({
-                          ...prev,
-                          [key]: e.target.value || undefined,
-                        }))
-                      }
-                      className="flex-1 rounded border border-zinc-300 px-2 py-1"
-                    >
-                      <option value="">Авто</option>
-                      {headers.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                );
-              })}
+              {mappingFields.map(({ label, key }) => (
+                <label key={label} className="flex items-center gap-2 text-sm text-zinc-700">
+                  <span className="min-w-[140px]">{label}</span>
+                  <select
+                    value={mapping[key] ?? ""}
+                    onChange={(event) =>
+                      setMapping((prev) => {
+                        const next = { ...prev };
+                        if (event.target.value) {
+                          next[key] = event.target.value;
+                        } else {
+                          delete next[key];
+                        }
+                        return next;
+                      })
+                    }
+                    className="flex-1 rounded border border-zinc-300 px-2 py-1"
+                  >
+                    <option value="">Авто</option>
+                    {headers.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
               <button
                 type="button"
-                className="rounded border border-zinc-300 px-3 py-1 text-xs hover:bg-zinc-100"
                 onClick={() => setMapping({})}
+                className="rounded border border-zinc-300 px-3 py-1 text-xs text-zinc-600 transition hover:bg-zinc-100"
               >
                 Сбросить сопоставление
               </button>
@@ -273,191 +313,215 @@ export default function ImportClient() {
         )}
       </div>
 
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
-      )}
+      {statusMessage ? (
+        <div
+          data-testid="billing-import-status"
+          role="alert"
+          className={`rounded border px-3 py-2 text-sm ${
+            statusMessage.type === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          {statusMessage.text}
+        </div>
+      ) : null}
 
-      {result && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-700">
-            <span>Всего: {result.meta.totalRows}</span>
-            <span className="text-green-700">OK: {result.meta.okCount}</span>
-            <span className="text-amber-700">Дубликаты: {result.meta.duplicateCount}</span>
-            <span className="text-red-700">Ошибки: {result.meta.errorCount}</span>
-            {result.meta.truncated && <span className="text-zinc-500">Показаны первые 200 строк</span>}
-            {result.meta.warnings?.length ? (
-              <span className="text-amber-700">
-                Предупреждения: {result.meta.warnings.join(", ")}
-              </span>
-            ) : null}
+      {result && activeMeta ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              <div className="text-sm text-zinc-900" data-testid="billing-import-total-count">
+                {activeMeta.totalRows}
+              </div>
+              Всего строк
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              <div className="text-sm text-green-700" data-testid="billing-import-valid-count">
+                {validCount}
+              </div>
+              Валидных
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              <div className="text-sm text-red-700" data-testid="billing-import-invalid-count">
+                {invalidCount}
+              </div>
+              Ошибок
+            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+              <div className="text-sm text-amber-700" data-testid="billing-import-unmatched-count">
+                {unmatchedCount}
+              </div>
+              Без участка
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <button
-                type="button"
-                onClick={selectAllOk}
-                className="rounded border border-zinc-300 px-2 py-1 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!okCount}
-              >
-                Выбрать все OK
-              </button>
-              <button
-                type="button"
-                onClick={deselectAll}
-                className="rounded border border-zinc-300 px-2 py-1 hover:bg-zinc-100"
-              >
-                Снять выбор
-              </button>
-              <span>Выбрано: {selected.length}</span>
-              <input
-                type="text"
-                placeholder="Комментарий к импорту"
-                value={importComment}
-                onChange={(e) => setImportComment(e.target.value)}
-                className="min-w-[240px] flex-1 rounded border border-zinc-300 px-2 py-1"
-              />
-              <button
-                type="button"
-                disabled={!selected.length || commitLoading}
-                onClick={handleCommit}
-                className="rounded bg-[#5E704F] px-3 py-1 text-sm font-semibold text-white hover:bg-[#4f5f42] disabled:cursor-not-allowed disabled:bg-zinc-400"
-              >
-                {commitLoading ? "Импортируем..." : "Импортировать выбранные"}
-              </button>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">
+            <button
+              type="button"
+              onClick={selectAllValid}
+              className="rounded border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+            >
+              Выбрать все валидные ({validCount})
+            </button>
+            <span>{duplicateCount} дубликатов</span>
+            {activeMeta.truncated ? (
+              <span className="text-xs text-zinc-500">Показаны первые {activeMeta.totalRows} строк</span>
+            ) : null}
+            <input
+              type="text"
+              placeholder="Комментарий к импорту"
+              className="min-w-[240px] rounded border border-zinc-300 px-2 py-1 text-xs"
+              value={importComment}
+              onChange={(event) => setImportComment(event.target.value)}
+            />
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={!selectedRows.length || confirmLoading}
+              data-testid="billing-import-confirm-button"
+              className="rounded bg-[#5E704F] px-3 py-1 text-sm font-semibold text-white transition hover:bg-[#4f5f42] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {confirmLoading ? "Импортируем…" : "Подтвердить импорт"}
+            </button>
+          </div>
+
+          {confirmResult ? (
+            <div className="rounded border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700" data-testid="billing-import-confirm-result">
+              <div>Создано платежей: <strong>{confirmResult.createdCount}</strong></div>
+              {confirmResult.skippedCount > 0 && (
+                <div>Пропущено: <strong>{confirmResult.skippedCount}</strong></div>
+              )}
             </div>
-            <div className="overflow-auto">
-              <table className="min-w-full divide-y divide-zinc-200 text-xs sm:text-sm">
-                <thead className="bg-zinc-50">
+          ) : null}
+
+          <div className="overflow-auto rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
+            <table className="min-w-full divide-y divide-zinc-200 text-xs sm:text-sm" data-testid="billing-import-preview-table">
+              <thead className="bg-zinc-50">
+                <tr>
+                  <th className="px-2 py-2 text-left">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
+                      checked={selectedRows.length === validCount && validCount > 0}
+                      onChange={(event) => (event.target.checked ? selectAllValid() : setSelectedRows([]))}
+                      data-testid="billing-import-select-all"
+                    />
+                  </th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Статус</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Дата</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Сумма</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Категория</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Цель</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Улица/участок</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Найден</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Reference</th>
+                  <th className="px-2 py-2 text-left font-semibold text-zinc-700">Ошибка</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {result.rows.length === 0 && (
                   <tr>
-                    <th className="px-2 py-2 text-left">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
-                        checked={selected.length > 0 && selected.length === okCount}
-                        onChange={(e) => (e.target.checked ? selectAllOk() : setSelected([]))}
-                      />
-                    </th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Статус</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Дата</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Сумма</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Категория</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Цель</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Улица/Участок</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Участок найден</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Reference</th>
-                    <th className="px-2 py-2 text-left font-semibold text-zinc-700">Ошибка</th>
+                    <td colSpan={10} className="px-4 py-6 text-center text-zinc-500">
+                      Нет данных
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {result.rows.map((row) => {
-                    const selectable = row.status === "OK";
-                    const isSelected = selected.includes(row.rowIndex);
-                    const statusColor =
-                      row.status === "OK"
-                        ? "text-green-700"
-                        : row.status === "DUPLICATE"
-                          ? "text-amber-700"
-                          : "text-red-700";
-                    return (
-                      <tr key={row.rowIndex} className="align-middle">
-                        <td className="px-2 py-1">
-                          {selectable && (
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
-                              checked={isSelected}
-                              onChange={() => toggleRow(row.rowIndex)}
-                            />
-                          )}
-                        </td>
-                        <td className={`px-2 py-1 font-semibold ${statusColor}`}>
-                          {row.status}
-                          {row.isDuplicate ? " (dup)" : ""}
-                        </td>
-                        <td className="px-2 py-1">{row.paidAtLocalFormatted ?? "—"}</td>
-                        <td className="px-2 py-1">{row.amount ?? "—"}</td>
-                        <td className="px-2 py-1">{row.category ?? "—"}</td>
-                        <td className="px-2 py-1">
-                          {row.suggestedTargetFundId ? (
-                            <div className="text-xs text-zinc-800">
-                              {row.suggestedTargetFundTitle ?? row.matchedTargetFundTitle ?? "Цель найдена"}
-                            </div>
-                          ) : (
-                            <select
-                              className="rounded border border-zinc-300 px-2 py-1 text-xs"
-                              value={selectedTargetByRow[row.rowIndex] ?? ""}
-                              onChange={(e) =>
-                                setSelectedTargetByRow((prev) => ({
-                                  ...prev,
-                                  [row.rowIndex]: e.target.value || null,
-                                }))
-                              }
-                            >
-                              <option value="">Не выбрано</option>
-                              {targets.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.title}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                          {row.warning === "target_fund_missing" ? (
-                            <div className="text-xs text-amber-700">Цель не определена</div>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-1">
-                          {row.matchedTargetFundTitle ?? "—"}
-                          {row.warning ? <div className="text-xs text-amber-700">{row.warning}</div> : null}
-                        </td>
-                        <td className="px-2 py-1">
-                          {row.streetRaw} / {row.plotNumberRaw}{" "}
-                          {row.streetParsed || row.plotNumberParsed ? (
-                            <span className="text-zinc-500">
-                              ({row.streetParsed ?? "?"} / {row.plotNumberParsed ?? "?"})
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-1">{row.plotIdMatched ?? "—"}</td>
-                        <td className="px-2 py-1">{row.reference ?? "—"}</td>
-                        <td className="px-2 py-1">
-                          {row.errors?.length ? row.errors.join(", ") : row.error ?? ""}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {result.rows.length === 0 && (
-                    <tr>
-                      <td className="px-2 py-3 text-center text-zinc-600" colSpan={8}>
-                        Нет данных
+                )}
+                {result.rows.map((row) => {
+                  const selectable = row.status === "OK";
+                  const isSelected = selectedRows.includes(row.rowIndex);
+                  const rowBg =
+                    row.status === "ERROR"
+                      ? "bg-red-50"
+                      : row.status === "DUPLICATE"
+                        ? "bg-amber-50"
+                        : "bg-white";
+                  const statusClass =
+                    row.status === "OK"
+                      ? "text-green-700"
+                      : row.status === "DUPLICATE"
+                        ? "text-amber-700"
+                        : "text-red-700";
+
+                  return (
+                    <tr 
+                      key={row.rowIndex} 
+                      className={`${rowBg}`}
+                      data-testid={`billing-import-row-${row.rowIndex}`}
+                      data-row-status={row.status}
+                    >
+                      <td className="px-2 py-1">
+                        {selectable && (
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-zinc-300 text-[#5E704F]"
+                            checked={isSelected}
+                            onChange={() => toggleRowSelection(row.rowIndex)}
+                            data-testid={`billing-import-row-checkbox-${row.rowIndex}`}
+                          />
+                        )}
+                      </td>
+                      <td className={`px-2 py-1 font-semibold ${statusClass}`} data-testid={`billing-import-row-status-${row.rowIndex}`}>{row.status}</td>
+                      <td className="px-2 py-1">{row.paidAtLocalFormatted ?? "—"}</td>
+                      <td className="px-2 py-1">{row.amount ?? "—"}</td>
+                      <td className="px-2 py-1">{row.category ?? "—"}</td>
+                      <td className="px-2 py-1">
+                        {row.suggestedTargetFundId ? (
+                          <div className="text-xs text-zinc-800">
+                            {row.suggestedTargetFundTitle ?? row.matchedTargetFundTitle ?? "Цель найдена"}
+                          </div>
+                        ) : (
+                          <select
+                            className="rounded border border-zinc-300 px-2 py-1 text-xs"
+                            value={selectedTargetByRow[row.rowIndex] ?? ""}
+                            onChange={(event) =>
+                              setSelectedTargetByRow((prev) => ({
+                                ...prev,
+                                [row.rowIndex]: event.target.value || null,
+                              }))
+                            }
+                          >
+                            <option value="">Не выбрано</option>
+                            {targets.map((target) => (
+                              <option key={target.id} value={target.id}>
+                                {target.title}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {row.warning === "target_fund_missing" ? (
+                          <div className="text-xs text-amber-700">Цель не определена</div>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-1">
+                        {row.streetRaw} / {row.plotNumberRaw}{" "}
+                        {row.streetParsed || row.plotNumberParsed ? (
+                          <span className="text-zinc-500">
+                            ({row.streetParsed ?? "?"} / {row.plotNumberParsed ?? "?"})
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-1">{row.plotIdMatched ?? "—"}</td>
+                      <td className="px-2 py-1">{row.reference ?? "—"}</td>
+                      <td className="px-2 py-1 text-xs text-red-700">
+                        {row.errors?.length ? row.errors.join(", ") : row.error ?? ""}
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        </>
+      ) : null}
 
-      {commitResult && (
-        <div className="rounded border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm">
-          <div>Создано платежей: {commitResult.createdCount}</div>
-          <div>Пропущено: {commitResult.skippedCount}</div>
-          {commitResult.skipped.length > 0 && (
-            <div className="mt-2 space-y-1">
-              <div className="font-semibold">Пропущенные строки:</div>
-              {commitResult.skipped.map((s) => (
-                <div key={s.rowIndex}>
-                  Строка {s.rowIndex}: {s.reason}
-                </div>
-              ))}
-            </div>
-          )}
+      {result?.meta?.warnings?.length ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Предупреждения: {result.meta.warnings.join(", ")}
         </div>
-      )}
+      ) : null}
 
-      {loading && <div className="text-sm text-zinc-600">Обрабатываем файл...</div>}
+      {previewLoading && <div className="text-sm text-zinc-600">Обрабатываем файл...</div>}
     </div>
   );
 }

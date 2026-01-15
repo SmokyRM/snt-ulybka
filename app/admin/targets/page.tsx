@@ -7,7 +7,7 @@ const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetsPage() {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const funds = listTargetFundsWithStats(false);
 
   return (

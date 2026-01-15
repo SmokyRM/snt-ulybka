@@ -32,6 +32,7 @@ export default function HomeNew({ content }: HomeNewProps) {
           </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
+              data-testid="home-cta-login"
               href="/login"
               className="rounded-full bg-[#5E704F] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41]"
             >

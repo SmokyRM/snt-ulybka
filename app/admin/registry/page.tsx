@@ -14,7 +14,7 @@ export default async function RegistryPage({
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   const query = typeof params.query === "string" ? params.query : "";

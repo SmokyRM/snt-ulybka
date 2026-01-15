@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import BackToListLink from "@/components/BackToListLink";
 import {
   findPlotById,
   listAccrualItems,
@@ -19,7 +20,7 @@ const formatCurrency = (value: number) => `${value.toFixed(2)} ₽`;
 
 export default async function RegistryDetail({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   const plot = findPlotById(params.id);
   if (!plot) {
@@ -92,12 +93,7 @@ export default async function RegistryDetail({ params }: { params: { id: string 
           <h1 className="text-2xl font-semibold">
             Участок {currentPlot.street}, {currentPlot.plotNumber}
           </h1>
-          <Link
-            href="/admin/registry"
-            className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-          >
-            Назад
-          </Link>
+          <BackToListLink href="/admin/registry" />
         </div>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 shadow-sm">

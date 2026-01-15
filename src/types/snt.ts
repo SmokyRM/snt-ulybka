@@ -224,6 +224,37 @@ export interface ImportBatch {
   warnings?: Array<{ reason: string; count: number }> | null;
 }
 
+export interface BillingImportTotals {
+  total: number;
+  valid: number;
+  invalid: number;
+  unmatched: number;
+  duplicates: number;
+}
+
+export interface BillingImport {
+  id: string;
+  batchId: string;
+  createdAt: string;
+  createdByUserId: string | null;
+  fileName?: string | null;
+  comment?: string | null;
+  totals: BillingImportTotals;
+  status: "completed" | "cancelled";
+  warnings?: string[] | null;
+  cancelledAt?: string | null;
+}
+
+export interface BillingImportError {
+  id: string;
+  billingImportId: string;
+  rowIndex: number;
+  type: "invalid" | "unmatched" | "duplicate";
+  reason: string;
+  rowText: string;
+  createdAt: string;
+}
+
 export interface ElectricityMeter {
   id: string;
   plotId: string;

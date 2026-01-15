@@ -5,10 +5,10 @@ import { getSessionUser, hasImportAccess } from "@/lib/session.server";
 export default async function AdminHelpPage() {
   const user = await getSessionUser();
   if (!user) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   if (!hasImportAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (

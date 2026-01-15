@@ -29,16 +29,32 @@ async function createAction(formData: FormData) {
 export default async function OfficeDocumentNew() {
   const user = await getEffectiveSessionUser();
   if (!user) redirect("/staff-login?next=/office/documents/new");
-  const role = (user.role as Role | undefined) ?? "resident";
-  if (!(role === "chairman" || role === "secretary" || role === "admin")) {
-    redirect("/forbidden");
+  const rawRole = user.role as import("@/lib/rbac").Role | "user" | "board" | undefined;
+  const { canAccess, getForbiddenReason } = await import("@/lib/rbac");
+  const normalizedRole: import("@/lib/rbac").Role =
+    rawRole === "user" || rawRole === "board" || !rawRole ? "resident" : rawRole;
+
+  // Guard: office.access
+  if (!canAccess(normalizedRole, "office.access")) {
+    const reason = getForbiddenReason(normalizedRole, "office.access");
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/documents/new")}`);
   }
+
+  // Guard: write permission (admin/chairman only)
+  const canWriteDocs = normalizedRole === "admin" || normalizedRole === "chairman";
+  if (!canWriteDocs) {
+    const reason = getForbiddenReason(normalizedRole, "office.access"); // Use office.access as fallback
+    redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/office/documents/new")}`);
+  }
+
+  // Get role label for authorRole
+  const roleLabel = normalizedRole === "admin" ? "admin" : normalizedRole === "chairman" ? "chairman" : "chairman";
 
   return (
     <div className="space-y-4" data-testid="office-documents-new-root">
       <h1 className="text-2xl font-semibold text-zinc-900">Новый документ</h1>
       <form action={createAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-        <input type="hidden" name="authorRole" value={role} />
+        <input type="hidden" name="authorRole" value={roleLabel} />
         <label className="block space-y-2 text-sm font-semibold text-zinc-900">
           Заголовок
           <input

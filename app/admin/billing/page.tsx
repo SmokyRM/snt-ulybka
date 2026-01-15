@@ -25,7 +25,7 @@ async function createPeriodAction(
 ): Promise<PeriodActionState> {
   "use server";
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
 
   const year = Number(formData.get("year"));
   const month = Number(formData.get("month"));
@@ -110,7 +110,7 @@ async function createPeriodAction(
 async function massAccrualAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
   const periodId = formData.get("periodId") as string;
   const amount = Number(formData.get("amount"));
   if (!periodId || !Number.isFinite(amount) || amount <= 0) return;
@@ -125,7 +125,7 @@ async function massAccrualAction(formData: FormData) {
 async function recalcElectricity(year: number, month: number) {
   "use server";
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
   const { accrueElectricityForPeriod } = await import("@/lib/mockDb");
   accrueElectricityForPeriod({ year, month });
 }
@@ -137,7 +137,7 @@ export default async function BillingPage({
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
 
   const typeParam = (typeof params.type === "string" ? params.type : "membership_fee") as PeriodType;
   const periods = listAccrualPeriods().filter((p) => p.type === typeParam);
@@ -181,7 +181,7 @@ export default async function BillingPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="admin-billing-page">
         <OnboardingHintBanner
           role={user?.role}
           storageKey="admin.onboarding.billing"

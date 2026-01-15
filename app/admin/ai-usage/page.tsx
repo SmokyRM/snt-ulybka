@@ -17,7 +17,7 @@ export default async function AdminAiUsagePage({
   // - Out-of-scope rate and avg latency show sane values.
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   const params = (await searchParams) ?? {};

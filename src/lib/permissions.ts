@@ -1,5 +1,8 @@
 export type Role = "chairman" | "secretary" | "accountant" | "resident" | "admin";
 
+export const isOfficeRole = (role: string | null | undefined): role is Role =>
+  role === "chairman" || role === "secretary" || role === "accountant" || role === "admin";
+
 const capabilityMap: Record<Role, Set<string>> = {
   chairman: new Set([
     "office.appeals.manage",

@@ -10,7 +10,7 @@ const normalizeKey = (street: string, number: string) =>
 export default async function ImportPlotsPage() {
   const user = await getSessionUser();
   if (!hasImportAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   const plots = listPlots();

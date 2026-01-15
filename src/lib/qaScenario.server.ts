@@ -29,7 +29,15 @@ export const writeQaScenarioCookie = async (scenario: QaScenario | null) => {
   if (!qaEnabled()) return;
   const jar = await cookies();
   if (!scenario) {
-    jar.set(QA_COOKIE, "", { path: "/", maxAge: 0 });
+    // Proper cookie deletion: maxAge=0 and expires
+    jar.set(QA_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+      httpOnly: false,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      expires: new Date(0),
+    });
     return;
   }
   jar.set(QA_COOKIE, scenario, {

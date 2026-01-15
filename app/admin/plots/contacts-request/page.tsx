@@ -19,7 +19,7 @@ export default async function ContactsRequestPage({
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   const q = typeof params.q === "string" ? params.q : undefined;

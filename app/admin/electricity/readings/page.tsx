@@ -5,7 +5,7 @@ import ClientTable from "./ClientTable";
 export default async function AdminMeterReadingsPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (

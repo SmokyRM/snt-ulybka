@@ -9,7 +9,7 @@ const MAX_AGE = 30 * 24 * 60 * 60; // 30 дней
 export async function enableBetaHome() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   const store = await Promise.resolve(cookies());
   store.set("beta_home", "1", {
@@ -24,7 +24,7 @@ export async function enableBetaHome() {
 export async function disableBetaHome() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
   const store = await Promise.resolve(cookies());
   store.set("beta_home", "0", {

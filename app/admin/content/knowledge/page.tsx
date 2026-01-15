@@ -8,7 +8,7 @@ import KnowledgeAdminClient from "./KnowledgeAdminClient";
 export default async function KnowledgeContentPage() {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin/content/knowledge");
+    redirect("/staff/login?next=/admin/content/knowledge");
   }
   const [articles, documents] = await Promise.all([
     listKnowledgeArticles(),

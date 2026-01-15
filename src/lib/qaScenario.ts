@@ -9,7 +9,13 @@ export type QaScenario =
 
 const QA_COOKIE = "qaScenario";
 
-export const qaEnabled = () =>
-  process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_QA_MODE === "1";
+export const qaEnabled = () => {
+  // В production доступен только если явно включен через ENABLE_QA
+  if (process.env.NODE_ENV === "production") {
+    return process.env.ENABLE_QA === "true";
+  }
+  // В dev/staging всегда доступен
+  return true;
+};
 
 export { QA_COOKIE };

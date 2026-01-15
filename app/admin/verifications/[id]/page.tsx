@@ -7,12 +7,13 @@ import {
   getPlots,
 } from "@/lib/plots";
 import { getUserProfile } from "@/lib/userProfiles";
+import BackToListLink from "@/components/BackToListLink";
 
 async function approveVerification(formData: FormData) {
   "use server";
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin/verifications");
+    redirect("/staff/login?next=/admin/verifications");
   }
   const id = (formData.get("id") as string | null) ?? "";
   if (!id) {
@@ -29,7 +30,7 @@ async function rejectVerification(formData: FormData) {
   "use server";
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin/verifications");
+    redirect("/staff/login?next=/admin/verifications");
   }
   const id = (formData.get("id") as string | null) ?? "";
   const note = ((formData.get("reviewNote") as string | null) ?? "").trim();
@@ -54,7 +55,7 @@ export default async function VerificationDetailPage({
   const query = (await searchParams) ?? {};
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    redirect("/login?next=/admin/verifications");
+    redirect("/staff/login?next=/admin/verifications");
   }
   const verification = await getOwnershipVerificationById(params.id);
   if (!verification) {
@@ -75,12 +76,7 @@ export default async function VerificationDetailPage({
       <div className="mx-auto w-full max-w-3xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Заявка на подтверждение</h1>
-          <Link
-            href="/admin/verifications?status=sent"
-            className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-          >
-            Назад
-          </Link>
+          <BackToListLink href="/admin/verifications?status=sent" />
         </div>
 
         {error === "note" ? (

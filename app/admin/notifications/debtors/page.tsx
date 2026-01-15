@@ -6,11 +6,11 @@ import OnboardingHintBanner from "../../_components/OnboardingHintBanner";
 export default async function DebtorsPage() {
   const user = await getSessionUser();
   if (!hasFinanceAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
+    <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6" data-testid="admin-debtors-page">
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Уведомления должникам</h1>

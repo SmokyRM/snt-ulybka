@@ -2,11 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppealStatus, getAppealById, updateAppealStatus } from "@/lib/appeals";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import BackToListLink from "@/components/BackToListLink";
 
 async function updateAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const id = (formData.get("id") as string | null) ?? "";
   const status = (formData.get("status") as AppealStatus | null) ?? "new";
   const reply = (formData.get("reply") as string | null) ?? undefined;
@@ -28,7 +29,7 @@ type Props = {
 
 export default async function AppealDetailPage({ params }: Props) {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const appeal = await getAppealById(params.id);
   if (!appeal) redirect("/admin/appeals");
 
@@ -40,9 +41,7 @@ export default async function AppealDetailPage({ params }: Props) {
             <h1 className="text-2xl font-semibold">Обращение</h1>
             <p className="text-sm text-zinc-600">ID: {appeal.id}</p>
           </div>
-          <Link href="/admin/appeals" className="text-sm font-semibold text-[#5E704F] hover:underline">
-            ← К списку
-          </Link>
+          <BackToListLink href="/admin/appeals" />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">

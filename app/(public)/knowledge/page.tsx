@@ -1,6 +1,9 @@
 import KnowledgeIndex from "@/components/knowledge/KnowledgeIndex";
 import { getAllArticles } from "@/lib/knowledge";
 
+// Кешируем статичные данные для public страницы
+export const revalidate = 300; // 5 минут
+
 export const metadata = {
   title: "База знаний — СНТ «Улыбка»",
   description: "Ответы на частые вопросы и краткие инструкции по порталу.",

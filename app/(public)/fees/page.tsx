@@ -1,6 +1,13 @@
 import CopyToClipboard from "@/components/CopyToClipboard";
-import FeesCalculator from "@/components/FeesCalculator";
-import FaqSearch from "@/components/FaqSearch";
+import dynamic from "next/dynamic";
+
+// Lazy load тяжелые компоненты
+const FeesCalculator = dynamic(() => import("@/components/FeesCalculator"), {
+  ssr: true, // SSR для SEO
+});
+const FaqSearch = dynamic(() => import("@/components/FaqSearch"), {
+  ssr: true,
+});
 import { FEES_FAQ } from "@/content/fees";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { getSntSettings } from "@/lib/sntSettings";
@@ -8,6 +15,9 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/session.server";
 import { getOnboardingStatus } from "@/lib/onboardingStatus";
 import OnboardingBlock from "@/components/OnboardingBlock";
+
+// Кешируем статичные данные для public страницы
+export const revalidate = 300; // 5 минут
 
 export const metadata = {
   title: "Взносы и долги — СНТ «Улыбка»",

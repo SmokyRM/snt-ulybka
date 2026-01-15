@@ -1,12 +1,12 @@
 import { getEffectiveSessionUser, getSessionUser, isAdmin } from "@/lib/session.server";
+import { isAdminRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import AdminSidebar from "./_components/AdminSidebar";
 import { serverFetchJson } from "@/lib/serverFetch";
-import { viewAsAdmin, viewAsUser } from "./adminViewActions";
+import { viewAsAdmin } from "./adminViewActions";
 import AdminSiteLink from "./AdminSiteLink";
 import AdminDirtyProvider from "./AdminDirtyProvider";
 import AdminNavigationProgressProvider from "./AdminNavigationProgress";
-import AdminViewAsUserButton from "./AdminViewAsUserButton";
 import AssistantWidget from "@/components/AssistantWidget";
 import { getFeatureFlags, isFeatureEnabled } from "@/lib/featureFlags";
 import QaFloatingIndicator from "./_components/QaFloatingIndicator";
@@ -16,9 +16,19 @@ import AdminQaBanner from "./_components/AdminQaBanner";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
   if (!user) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
-  if (user.role !== "admin") {
+  // КРИТИЧНО: Проверяем что роль admin через isAdminRole
+  // Это гарантирует что только admin может попасть в /admin
+  if (!isAdminRole(user.role)) {
+    // Debug log в dev режиме
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[admin-layout] Доступ запрещен:", {
+        userId: user.id,
+        role: user.role,
+        isAdminRole: isAdminRole(user.role),
+      });
+    }
     redirect("/forbidden");
   }
   const effectiveUser = await getEffectiveSessionUser();
@@ -64,17 +74,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {admin ? (
-                  <>
-                    <form action={viewAsAdmin}>
-                      <button
-                        type="submit"
-                        className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-                      >
-                        Смотреть как администратор
-                      </button>
-                    </form>
-                    <AdminViewAsUserButton action={viewAsUser} />
-                  </>
+                  <form action={viewAsAdmin}>
+                    <button
+                      type="submit"
+                      className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
+                    >
+                      Смотреть как администратор
+                    </button>
+                  </form>
                 ) : null}
                 <AdminSiteLink />
               </div>
@@ -95,7 +102,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             aiPersonalEnabled={flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false}
           />
         ) : null}
-        <QaFloatingIndicator role={effectiveRole ?? null} />
+        {/* QA компоненты только в dev или если ENABLE_QA=true в prod */}
+        {process.env.NODE_ENV !== "production" || process.env.ENABLE_QA === "true" ? (
+          <QaFloatingIndicator role={effectiveRole ?? null} />
+        ) : null}
       </AdminNavigationProgressProvider>
     </AdminDirtyProvider>
   );

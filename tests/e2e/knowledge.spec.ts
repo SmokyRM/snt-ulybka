@@ -7,7 +7,8 @@ test("knowledge list and article do not crash", async ({ page }: { page: Page })
   const firstArticleLink = page.locator('[data-testid^="knowledge-article-link-"]').first();
   await expect(firstArticleLink).toBeVisible();
   await firstArticleLink.click();
-  await page.waitForLoadState("networkidle");
+  // Wait for article page to load
+  await page.waitForURL((url) => url.pathname.startsWith("/knowledge/"), { timeout: 10000 });
   await expect(
     page.locator('[data-testid="knowledge-article-root"], [data-testid="knowledge-article-fallback"]'),
   ).toBeVisible();

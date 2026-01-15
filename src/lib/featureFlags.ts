@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { unstable_cache } from "next/cache";
 import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
 
 export type FeatureFlagKey =
@@ -95,7 +96,8 @@ async function writeFlags(flags: FeatureFlags) {
   await fs.rename(tmpPath, flagsPath);
 }
 
-export async function getFeatureFlags(): Promise<FeatureFlags> {
+// Внутренняя функция без кеширования
+async function _getFeatureFlagsUncached(): Promise<FeatureFlags> {
   if (isKvConfigured()) {
     const kvFlags = await readFlagsFromKv();
     if (kvFlags) {
@@ -109,6 +111,19 @@ export async function getFeatureFlags(): Promise<FeatureFlags> {
     return defaultFlags;
   }
   return ensureFile();
+}
+
+// Кешированная версия для оптимизации TTFB
+// Revalidate каждые 60 секунд - feature flags меняются редко
+export async function getFeatureFlags(): Promise<FeatureFlags> {
+  return unstable_cache(
+    async () => _getFeatureFlagsUncached(),
+    ["feature-flags"],
+    {
+      revalidate: 60, // 60 секунд
+      tags: ["feature-flags"],
+    }
+  )();
 }
 
 export async function setFeatureFlag(key: FeatureFlagKey, value: boolean): Promise<FeatureFlags> {

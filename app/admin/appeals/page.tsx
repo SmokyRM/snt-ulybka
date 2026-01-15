@@ -5,7 +5,7 @@ import { AppealStatus, getAllAppeals, updateAppealStatus } from "@/lib/appeals";
 async function updateAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin/appeals");
   const id = (formData.get("id") as string | null) ?? "";
   const status = (formData.get("status") as AppealStatus | null) ?? "new";
   const reply = (formData.get("reply") as string | null) ?? undefined;
@@ -27,7 +27,7 @@ type Props = {
 
 export default async function AdminAppealsPage({ searchParams }: Props) {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin/appeals");
   const params = (await Promise.resolve(searchParams)) ?? {};
   const statusFilter = typeof params.status === "string" ? params.status : "";
   const topicFilter = typeof params.topic === "string" ? params.topic : "";

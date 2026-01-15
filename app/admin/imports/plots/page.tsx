@@ -6,7 +6,7 @@ import ImportPlotsClient from "./ImportPlotsClient";
 export default async function PlotsImportPage() {
   const user = await getSessionUser();
   if (!hasImportAccess(user)) {
-    redirect("/login?next=/admin");
+    redirect("/staff/login?next=/admin");
   }
 
   return (

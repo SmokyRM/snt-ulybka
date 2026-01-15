@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { sanitizeNext } from "@/lib/sanitizeNext";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useMemo, useState } from "react";
+import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { getSafeRedirectUrl } from "@/lib/safeRedirect";
 
 const normalizeLogin = (value: string) => {
@@ -15,14 +15,33 @@ const normalizeLogin = (value: string) => {
   return v;
 };
 
-export default function StaffLoginForm({ next }: { next: string }) {
+// Маппинг ролей для предзаполнения логина через ?as=role
+const ROLE_LOGINS: Record<string, string> = {
+  chairman: "председатель",
+  secretary: "секретарь",
+  accountant: "бухгалтер",
+  admin: "админ",
+};
+
+export default function StaffLoginClient() {
   const router = useRouter();
-  const [login, setLogin] = useState("");
+  const searchParams = useSearchParams();
+  
+  // Получаем next и as из URL параметров
+  const rawNext = searchParams?.get("next") ?? null;
+  const asRole = searchParams?.get("as") ?? null;
+  
+  const nextParam = useMemo(() => {
+    return sanitizeNextUrl(rawNext) ?? "/office";
+  }, [rawNext]);
+  
+  const initialLogin = asRole && ROLE_LOGINS[asRole] ? ROLE_LOGINS[asRole] : "";
+  const [login, setLogin] = useState(initialLogin);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const sanitizedNext = sanitizeNext(next) ?? null;
+  const sanitizedNext = sanitizeNextUrl(nextParam) ?? null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,7 +53,7 @@ export default function StaffLoginForm({ next }: { next: string }) {
     setLoading(true);
     try {
       const normalized = normalizeLogin(login);
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/staff-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function FeatureFlagsPage() {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const flags = await getFeatureFlags();
 
   return (

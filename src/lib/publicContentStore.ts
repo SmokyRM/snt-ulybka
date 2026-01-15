@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { PUBLIC_CONTENT_DEFAULTS, type PublicContent } from "@/lib/publicContentDefaults";
 
 type SaveResult = { ok: boolean; reason?: string };
@@ -12,7 +13,8 @@ const cloneContent = (value: PublicContent): PublicContent => {
   return JSON.parse(JSON.stringify(value)) as PublicContent;
 };
 
-export async function getPublicContent(): Promise<PublicContent> {
+// Внутренняя функция без кеширования
+async function _getPublicContentUncached(): Promise<PublicContent> {
   if (isProd) {
     return cloneContent(PUBLIC_CONTENT_DEFAULTS);
   }
@@ -22,6 +24,19 @@ export async function getPublicContent(): Promise<PublicContent> {
   }
 
   return cloneContent(globalThis.__PUBLIC_CONTENT__);
+}
+
+// Кешированная версия для оптимизации TTFB
+// Revalidate каждые 60 секунд - публичный контент меняется редко
+export async function getPublicContent(): Promise<PublicContent> {
+  return unstable_cache(
+    async () => _getPublicContentUncached(),
+    ["public-content"],
+    {
+      revalidate: 60, // 60 секунд
+      tags: ["public-content"],
+    }
+  )();
 }
 
 export async function savePublicContent(next: PublicContent): Promise<SaveResult> {

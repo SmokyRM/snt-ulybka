@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 
 const staffPassword = process.env.AUTH_PASS_ACCOUNTANT;
 
+test.use({ storageState: undefined });
+
 test("office documents accessible for staff or shows staff-login", async ({ page }) => {
   if (staffPassword) {
     await page.goto("/staff-login");

@@ -12,7 +12,7 @@ const statusText = (entry: { lastReading: number | null; debt: number | null }) 
 async function markAction(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
   const ids = (formData.get("ids") as string | null)?.split(",").filter(Boolean) ?? [];
   const mode = formData.get("mode");
   if (mode === "mark") {
@@ -33,7 +33,7 @@ export default async function AdminElectricityPage({
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   const items = await getAllElectricity();
   const onlyMissing =

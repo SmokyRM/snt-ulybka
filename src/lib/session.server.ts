@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { findUserByContact, findUserById } from "@/lib/mockDb";
 import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import type { QaScenario } from "./qaScenario";
+import { normalizeRole as normalizeRoleRbac } from "./rbac";
 
 const SESSION_COOKIE = "snt_session";
 
@@ -48,18 +49,32 @@ const parseCookie = (value: string | undefined): SessionPayload | null => {
 };
 
 const normalizeRole = (value: unknown): SessionRole => {
-  if (value === "resident_debtor") return "resident";
-  switch (value) {
-    case "resident":
-    case "chairman":
-    case "secretary":
+  // КРИТИЧНО: Если value null/undefined, возвращаем "user", а не "guest"
+  if (value == null) return "user";
+  
+  const normalized = normalizeRoleRbac(String(value));
+  
+  // Маппим результат normalizeRoleRbac в SessionRole
+  // ВАЖНО: staff роли (admin/chairman/secretary/accountant) должны сохраняться
+  switch (normalized) {
     case "admin":
-    case "board":
+      return "admin";
+    case "resident":
+      return "resident";
+    case "chairman":
+      return "chairman";
+    case "secretary":
+      return "secretary";
     case "accountant":
-    case "operator":
-    case "user":
-      return value;
+      return "accountant";
+    case "guest":
+      // Гость без сессии
+      return "user";
     default:
+      // Неизвестная роль - логируем в dev и возвращаем "user"
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[session] Неизвестная роль после normalizeRole:", { value, normalized });
+      }
       return "user";
   }
 };
@@ -119,8 +134,17 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
   }
   const userRecord = payload.userId ? findUserById(payload.userId) : null;
   if (!userRecord) return null;
+  
+  // КРИТИЧЕСКИ ВАЖНО: Приоритет роли из сессии (payload.role) абсолютно главнее роли из БД
+  // Если пользователь вошёл через staff-login с ролью admin/chairman/secretary/accountant,
+  // эта роль НЕ МОЖЕТ быть перезаписана resident из участков/членства
   const roleFromPayload = payload.role;
-  const role: SessionUser["role"] = normalizeRole(roleFromPayload ?? userRecord?.role);
+  const roleFromDb = userRecord?.role;
+  
+  // Если роль есть в payload (не null и не undefined) - используем ЕЁ и ТОЛЬКО её
+  // Это роль из входа через staff-login, она имеет абсолютный приоритет
+  const finalRoleRaw = roleFromPayload != null ? roleFromPayload : roleFromDb;
+  const role: SessionUser["role"] = normalizeRole(finalRoleRaw);
   const resolvedId = userRecord.id;
   return {
     id: resolvedId,
@@ -190,3 +214,6 @@ export const hasFinanceAccess = (user: SessionUser | null | undefined): boolean 
 
 export const hasImportAccess = (user: SessionUser | null | undefined): boolean =>
   Boolean(user && ["admin", "accountant", "operator", "board"].includes(user.role));
+
+export const hasBillingAccess = (user: SessionUser | null | undefined): boolean =>
+  Boolean(user && ["admin", "accountant"].includes(user.role));

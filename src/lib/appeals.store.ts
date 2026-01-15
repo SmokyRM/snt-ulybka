@@ -1,131 +1,416 @@
-import { randomUUID } from "crypto";
+import type {
+  Appeal,
+  AppealStatus,
+  AppealComment,
+  AppealHistory,
+  AppealMessage,
+  OutboxItem,
+  ResidentNotification,
+} from "./office/types";
 
-export type AppealStatus = "new" | "in_progress" | "closed";
+export type { Appeal, AppealStatus };
 
-export type Appeal = {
-  id: string;
-  title: string;
-  body: string;
-  status: AppealStatus;
-  createdAt: string;
-  updatedAt: string;
-  authorName?: string;
-  authorId?: string;
-  comments?: { id: string; text: string; createdAt: string; author?: string }[];
-};
-
-type ListParams = {
-  status?: AppealStatus | "all";
-  q?: string | null;
-  authorId?: string | null;
-};
-
-const seed: Appeal[] = [
+const seedAppeals: Appeal[] = [
   {
     id: "a1",
-    title: "Проблема с освещением",
-    body: "Не горит свет у въезда, просьба починить.",
-    status: "new",
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    authorName: "Иван Петров",
-    authorId: "user-resident-default",
-    comments: [],
+    createdAt: "2024-01-10T09:00:00.000Z",
+    updatedAt: "2024-01-12T14:30:00.000Z",
+    title: "Уточнение начислений за январь",
+    body: "Просьба сверить начисления за январь, кажется, включены лишние киловатты.",
+    status: "in_progress",
+    plotNumber: "Березовая, 12",
+    authorName: "Анна Петрова",
+    authorPhone: "+7 917 111-22-33",
+    assigneeRole: "secretary",
+    dueAt: "2024-03-20T12:00:00.000Z",
+    priority: "high",
+    comments: [
+      {
+        id: "c1",
+        createdAt: "2024-01-12T12:00:00.000Z",
+        authorRole: "chairman",
+        text: "Получили, проверяем начисления.",
+      },
+    ],
+    history: [
+      { id: "h1", createdAt: "2024-01-12T12:00:00.000Z", text: "Взято в работу", authorRole: "chairman" },
+    ],
   },
   {
     id: "a2",
-    title: "Счет за электроэнергию",
-    body: "Прошу уточнить начисление за январь.",
-    status: "in_progress",
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    authorName: "Мария Смирнова",
-    authorId: "user-resident-default",
-    comments: [{ id: "c1", text: "В работе у бухгалтера", createdAt: new Date(Date.now() - 86400000).toISOString() }],
+    createdAt: "2024-02-02T10:00:00.000Z",
+    updatedAt: "2024-02-02T10:00:00.000Z",
+    title: "Заявка на копию протокола",
+    body: "Нужна копия протокола общего собрания за 2023 год.",
+    status: "new",
+    plotNumber: "Луговая, 7",
+    authorName: "Сергей К.",
+    priority: "medium",
+    comments: [],
   },
   {
     id: "a3",
-    title: "Выписка из реестра",
-    body: "Нужна выписка для продажи участка.",
-    status: "closed",
-    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    authorName: "Олег Иванов",
-    authorId: "user-resident-default",
-    comments: [{ id: "c2", text: "Выписка отправлена на почту", createdAt: new Date(Date.now() - 86400000 * 3).toISOString() }],
+    createdAt: "2024-02-15T08:30:00.000Z",
+    updatedAt: "2024-02-18T12:45:00.000Z",
+    title: "Передача показаний февраль",
+    body: "Передаю показания счётчика 045678 за февраль.",
+    status: "done",
+    plotNumber: "Сиреневая, 3",
+    authorName: "Марина Л.",
+    priority: "low",
+    comments: [
+      {
+        id: "c2",
+        createdAt: "2024-02-18T10:00:00.000Z",
+        authorRole: "secretary",
+        text: "Показания внесли, начисление обновлено.",
+      },
+    ],
+    history: [
+      { id: "h2", createdAt: "2024-02-18T10:00:00.000Z", text: "Показания внесены", authorRole: "secretary" },
+    ],
+  },
+  {
+    id: "a4",
+    createdAt: "2024-03-01T16:00:00.000Z",
+    updatedAt: "2024-03-02T09:15:00.000Z",
+    title: "Заявка на смену контактов",
+    body: "Прошу поменять контактный номер телефона на +7 900 222-33-44.",
+    status: "in_progress",
+    plotNumber: "Лесная, 21",
+    priority: "medium",
+    comments: [],
+  },
+  {
+    id: "a5",
+    createdAt: "2024-03-05T11:20:00.000Z",
+    updatedAt: "2024-03-05T11:20:00.000Z",
+    title: "Вопрос по доступу в кабинет",
+    body: "Подскажите, нужен ли отдельный код для арендатора?",
+    status: "new",
+    plotNumber: "Речная, 5",
+    authorName: "Иван П.",
+    priority: "low",
+    comments: [],
   },
 ];
 
-let db: Appeal[] = [...seed];
+export type ListAppealsParams = {
+  status?: AppealStatus;
+  q?: string;
+};
 
-export function listAppeals(params: ListParams = {}): Appeal[] {
-  const { status, q, authorId } = params;
-  let items = [...db];
-  if (status && status !== "all") {
-    items = items.filter((item) => item.status === status);
-  }
-  if (authorId) {
-    items = items.filter((item) => item.authorId === authorId);
-  }
-  if (q) {
-    const query = q.toLowerCase();
-    items = items.filter(
-      (item) =>
-        item.title.toLowerCase().includes(query) ||
-        item.body.toLowerCase().includes(query) ||
-        (item.authorName?.toLowerCase().includes(query) ?? false)
-    );
-  }
-  return items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+export function listAppeals(params: ListAppealsParams = {}): Appeal[] {
+  const { status, q } = params;
+  const query = q?.trim().toLowerCase();
+  return seedAppeals
+    .filter((appeal) => {
+      if (status && appeal.status !== status) return false;
+      if (query) {
+        const haystack = `${appeal.title} ${appeal.body} ${appeal.authorName ?? ""} ${appeal.authorPhone ?? ""} ${
+          appeal.plotNumber ?? ""
+        }`.toLowerCase();
+        return haystack.includes(query);
+      }
+      return true;
+    })
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 export function getAppeal(id: string): Appeal | null {
-  const found = db.find((item) => item.id === id);
-  if (found) return found;
-  // Если не найден, но это seed ID - гарантируем что seed данные есть
-  const seedItem = seed.find((item) => item.id === id);
-  if (seedItem) {
-    // Восстанавливаем seed элемент если он был потерян
-    const existing = db.find((item) => item.id === id);
-    if (!existing) {
-      db.push({ ...seedItem });
-      return { ...seedItem };
-    }
-  }
-  return null;
+  const found = seedAppeals.find((appeal) => appeal.id === id);
+  if (!found) return null;
+  return {
+    ...found,
+    comments: found.comments ?? [],
+    history: found.history ?? [],
+  };
 }
 
-export function updateAppealStatus(id: string, status: AppealStatus): Appeal | null {
-  const idx = db.findIndex((item) => item.id === id);
-  if (idx === -1) return null;
-  db[idx] = { ...db[idx], status, updatedAt: new Date().toISOString() };
-  return db[idx];
-}
+const appealMessages: AppealMessage[] = [];
+const outbox: OutboxItem[] = [];
+const residentNotifications: Array<ResidentNotification> = [];
 
-export function addAppealComment(id: string, text: string, author?: string): Appeal | null {
-  const idx = db.findIndex((item) => item.id === id);
-  if (idx === -1) return null;
-  const clean = text.trim();
-  if (!clean) return db[idx];
-  const comment = { id: randomUUID(), text: clean, createdAt: new Date().toISOString(), author };
-  const comments = db[idx].comments ? [...db[idx].comments, comment] : [comment];
-  db[idx] = { ...db[idx], comments, updatedAt: new Date().toISOString() };
-  return db[idx];
-}
+export const listAppealMessages = (appealId: string): AppealMessage[] =>
+  appealMessages
+    .filter((m) => m.appealId === appealId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-export function createAppeal(input: { title: string; body: string; authorId?: string; authorName?: string }): Appeal {
+export const sendAppealReplyToResident = (
+  appealId: string,
+  params: { text: string; channelPlanned: "site" | "email" | "telegram" },
+  role: "chairman" | "secretary" | "accountant" | "admin",
+) => {
+  const appeal = getAppeal(appealId);
+  if (!appeal) return null;
   const now = new Date().toISOString();
-  const newItem: Appeal = {
-    id: randomUUID(),
+  const message: AppealMessage = {
+    id: `m${Date.now().toString(36)}`,
+    appealId,
+    direction: "outbound",
+    visibility: "resident",
+    channel: "site",
+    status: "sent",
+    text: params.text,
+    createdAt: now,
+    createdByRole: role,
+  };
+  appealMessages.push(message);
+  const historyEntry: AppealHistory = {
+    id: `h${Date.now().toString(36)}`,
+    createdAt: now,
+    text: "Ответ отправлен жителю",
+    authorRole: role,
+  };
+  appeal.history = [historyEntry, ...(appeal.history ?? [])];
+  appeal.updatedAt = now;
+  const outboxItem: OutboxItem = {
+    id: `o${Date.now().toString(36)}`,
+    kind: "appeal_reply",
+    appealId,
+    channelPlanned: params.channelPlanned,
+    status: "pending",
+    payload: { messageId: message.id, text: params.text },
+    createdAt: now,
+    updatedAt: now,
+    attempts: 0,
+  };
+  outbox.push(outboxItem);
+  return { message, outboxItem };
+};
+
+export const listOutbox = (status?: OutboxItem["status"]): OutboxItem[] => {
+  const items = status ? outbox.filter((item) => item.status === status) : outbox.slice();
+  return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+};
+
+export const markOutboxRetry = (id: string): OutboxItem | null => {
+  const idx = outbox.findIndex((item) => item.id === id);
+  if (idx === -1) return null;
+  const updated: OutboxItem = {
+    ...outbox[idx],
+    status: "pending",
+    attempts: outbox[idx].attempts,
+    lastError: undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  outbox[idx] = updated;
+  return updated;
+};
+
+export const processOutbox = async ({
+  limit = 20,
+}: { limit?: number } = {}): Promise<{ processed: number; sent: number; failed: number }> => {
+  const pending = outbox.filter((item) => item.status === "pending").slice(0, limit);
+  let sent = 0;
+  let failed = 0;
+
+  for (const item of pending) {
+    const now = new Date().toISOString();
+    const message = appealMessages.find((m) => m.id === item.payload.messageId);
+    if (!message) {
+      failed += 1;
+      Object.assign(item, {
+        status: "failed",
+        attempts: item.attempts + 1,
+        updatedAt: now,
+        lastError: "Message not found",
+        lastAttemptAt: now,
+      });
+      continue;
+    }
+
+    const appeal = getAppeal(item.appealId);
+    residentNotifications.push({
+      id: `n${Date.now().toString(36)}${Math.random().toString(16).slice(2)}`,
+      appealId: item.appealId,
+      residentId: appeal?.authorId,
+      plotId: undefined,
+      title: `Ответ по обращению №${item.appealId}`,
+      body: item.payload.text,
+      createdAt: now,
+    });
+
+    if (item.channelPlanned === "telegram") {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_DEFAULT_CHAT_ID;
+      if (!token || !chatId) {
+        failed += 1;
+        Object.assign(item, {
+          status: "failed",
+          attempts: item.attempts + 1,
+          updatedAt: now,
+          lastError: "Telegram is not configured",
+          lastAttemptAt: now,
+        });
+        continue;
+      }
+      try {
+        const { sendTelegramMessage } = await import("./notifications/telegram");
+        const result = await sendTelegramMessage({ token, chatId, text: item.payload.text });
+        sent += 1;
+        Object.assign(item, {
+          status: "sent",
+          attempts: item.attempts + 1,
+          updatedAt: now,
+          lastError: undefined,
+          lastAttemptAt: now,
+          providerMessageId: result.providerMessageId,
+        });
+        continue;
+      } catch (e) {
+        failed += 1;
+        Object.assign(item, {
+          status: "failed",
+          attempts: item.attempts + 1,
+          updatedAt: now,
+          lastError: e instanceof Error ? e.message : "Telegram send failed",
+          lastAttemptAt: now,
+        });
+        continue;
+      }
+    }
+
+    sent += 1;
+    Object.assign(item, {
+      status: "sent",
+      attempts: item.attempts + 1,
+      updatedAt: now,
+      lastError: undefined,
+      lastAttemptAt: now,
+    });
+  }
+
+  return { processed: pending.length, sent, failed };
+};
+
+export const listResidentNotifications = (residentId: string): ResidentNotification[] =>
+  residentNotifications
+    .filter((n) => n.residentId === residentId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+export const markNotificationRead = (id: string): ResidentNotification | null => {
+  const idx = residentNotifications.findIndex((n) => n.id === id);
+  if (idx === -1) return null;
+  const updated: ResidentNotification = { ...residentNotifications[idx], readAt: new Date().toISOString() };
+  residentNotifications[idx] = updated;
+  return updated;
+};
+
+export function setAppealStatus(id: string, status: AppealStatus): Appeal | null {
+  const idx = seedAppeals.findIndex((appeal) => appeal.id === id);
+  if (idx === -1) return null;
+  const updated: Appeal = {
+    ...seedAppeals[idx],
+    status,
+    updatedAt: new Date().toISOString(),
+  };
+  seedAppeals[idx] = updated;
+  return updated;
+}
+
+export function addAppealComment(
+  id: string,
+  authorRole: "chairman" | "secretary" | "accountant" | "admin",
+  text: string,
+): Appeal | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const idx = seedAppeals.findIndex((appeal) => appeal.id === id);
+  if (idx === -1) return null;
+  const comment: AppealComment = {
+    id: `c${Date.now()}${Math.random().toString(16).slice(2)}`,
+    createdAt: new Date().toISOString(),
+    authorRole,
+    text: trimmed,
+  };
+  const updated: Appeal = {
+    ...seedAppeals[idx],
+    updatedAt: comment.createdAt,
+    comments: [comment, ...(seedAppeals[idx].comments ?? [])],
+  };
+  seedAppeals[idx] = updated;
+  return updated;
+}
+
+export function updateAppealStatus(
+  id: string,
+  status: AppealStatus,
+  updatedByRole?: "chairman" | "secretary" | "accountant" | "admin",
+): Appeal | null {
+  const updated = setAppealStatus(id, status);
+  if (updated) {
+    const historyEntry: AppealHistory = {
+      id: `h${Date.now().toString(36)}`,
+      createdAt: new Date().toISOString(),
+      text: `Статус: ${status}`,
+      authorRole: updatedByRole,
+    };
+    updated.history = [historyEntry, ...(updated.history ?? [])];
+  }
+  return updated;
+}
+
+export function createAppeal(input: {
+  title: string;
+  body: string;
+  authorId?: string;
+  authorName?: string;
+  plotNumber?: string;
+  authorPhone?: string;
+}): Appeal {
+  const now = new Date().toISOString();
+  const newAppeal: Appeal = {
+    id: `a${Date.now().toString(36)}`,
+    createdAt: now,
+    updatedAt: now,
     title: input.title,
     body: input.body,
     status: "new",
-    createdAt: now,
-    updatedAt: now,
     authorId: input.authorId,
     authorName: input.authorName,
+    plotNumber: input.plotNumber,
+    authorPhone: input.authorPhone,
     comments: [],
+    history: [{ id: `h${Date.now().toString(36)}`, createdAt: now, text: "Создано" }],
   };
-  db = [newItem, ...db];
-  return newItem;
+  seedAppeals.unshift(newAppeal);
+  return newAppeal;
+}
+
+export function setAppealAssignee(
+  id: string,
+  assigneeRole?: "chairman" | "secretary" | "accountant" | "admin",
+  assigneeUserId?: string,
+): Appeal | null {
+  const idx = seedAppeals.findIndex((appeal) => appeal.id === id);
+  if (idx === -1) return null;
+  const updated: Appeal = {
+    ...seedAppeals[idx],
+    assigneeRole,
+    assigneeUserId,
+    updatedAt: new Date().toISOString(),
+  };
+  updated.history = [
+    { id: `h${Date.now().toString(36)}`, createdAt: updated.updatedAt, text: `Назначено: ${assigneeRole ?? "—"}`, authorRole: assigneeRole },
+    ...(seedAppeals[idx].history ?? []),
+  ];
+  seedAppeals[idx] = updated;
+  return updated;
+}
+
+export function setAppealDue(id: string, dueAt: string | null): Appeal | null {
+  const idx = seedAppeals.findIndex((appeal) => appeal.id === id);
+  if (idx === -1) return null;
+  const updated: Appeal = {
+    ...seedAppeals[idx],
+    dueAt,
+    updatedAt: new Date().toISOString(),
+  };
+  updated.history = [
+    { id: `h${Date.now().toString(36)}`, createdAt: updated.updatedAt, text: `Срок: ${dueAt ?? "—"}` },
+    ...(seedAppeals[idx].history ?? []),
+  ];
+  seedAppeals[idx] = updated;
+  return updated;
 }

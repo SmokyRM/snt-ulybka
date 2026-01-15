@@ -1,45 +1,69 @@
-import Link from "next/link";
-import { getEffectiveSessionUser } from "@/lib/session.server";
-import { sanitizeNext } from "@/lib/sanitizeNext";
-
-export const dynamic = "force-dynamic";
+import { getSessionUser, getEffectiveSessionUser } from "@/lib/session.server";
+import { normalizeRole } from "@/lib/rbac";
+import { qaEnabled } from "@/lib/qaScenario";
+import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
+import ForbiddenCtas from "./ForbiddenCtas";
 
 export const metadata = {
   title: "Нет доступа — СНТ «Улыбка»",
   alternates: { canonical: "/forbidden" },
 };
 
-const getReasonText = (reason: string | null | undefined, role: string | null | undefined): string | null => {
-  if (reason) {
-    const reasons: Record<string, string> = {
-      role: "Ваша роль не позволяет получить доступ к этой странице.",
-      session: "Требуется авторизация для доступа к этой странице.",
-      permission: "У вас нет прав для выполнения этого действия.",
-    };
-    return reasons[reason] || null;
-  }
-  if (role) {
-    if (role === "resident" || role === "user") {
-      return "Эта страница доступна только сотрудникам офиса.";
-    }
-    if (role === "chairman" || role === "accountant" || role === "secretary") {
-      return "Эта страница доступна только администраторам.";
-    }
-  }
-  return null;
+type SearchParams = {
+  reason?: string | string[];
+};
+
+const REASON_LABELS: Record<string, string> = {
+  "auth.required": "Требуется вход в систему.",
+  "admin.only": "Доступно только админам.",
+  "office.only": "Доступно только сотрудникам офиса.",
+  "cabinet.only": "Только члены СНТ могут попасть на эту страницу.",
+  forbidden: "У вас нет прав для этой операции.",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Администратор",
+  board: "Совет",
+  accountant: "Бухгалтер",
+  secretary: "Секретарь",
+  chairman: "Председатель",
+  operator: "Оператор",
+  resident: "Член СНТ",
+  user: "Член СНТ",
 };
 
 export default async function ForbiddenPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<SearchParams>;
 }) {
-  const user = await getEffectiveSessionUser();
-  const role = user?.role ?? null;
-  const reasonParam = typeof searchParams?.reason === "string" ? searchParams.reason : null;
-  const nextParam = typeof searchParams?.next === "string" ? searchParams.next : null;
-  const sanitizedNext = sanitizeNext(nextParam);
-  const reasonText = getReasonText(reasonParam, role);
+  const params = (await Promise.resolve(searchParams)) ?? {};
+  const reasonKey = Array.isArray(params.reason) ? params.reason[0] : params.reason;
+  const reasonText = reasonKey ? REASON_LABELS[reasonKey] ?? reasonKey : "Доступ ограничен.";
+  
+  // Используем effectiveUser для учета QA override
+  const effectiveUser = await getEffectiveSessionUser();
+  const user = effectiveUser || await getSessionUser();
+  
+  // Проверяем QA cookie напрямую для определения admin роли через QA override (даже без реальной сессии)
+  const qaScenario = await getQaScenarioFromCookies();
+  const isQaAdmin = qaScenario === "admin";
+  
+  // Определяем роль: если есть QA override - используем его, иначе роль из сессии
+  const effectiveRole = isQaAdmin ? "admin" : (user?.role ?? null);
+  const roleText = effectiveRole ? ROLE_LABELS[effectiveRole] ?? effectiveRole : "Гость";
+  
+  const normalizedRole = normalizeRole(effectiveRole);
+  const canAccessAdmin = normalizedRole === "admin";
+  const canAccessOffice =
+    normalizedRole === "admin" ||
+    normalizedRole === "chairman" ||
+    normalizedRole === "secretary" ||
+    normalizedRole === "accountant";
+  
+  // QA режим доступен только в dev с ENABLE_QA=true
+  const isQaEnabled = qaEnabled();
+  const showQaCabinetButton = isQaEnabled && canAccessAdmin;
 
   return (
     <main
@@ -48,41 +72,27 @@ export default async function ForbiddenPage({
     >
       <div className="max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
         <h1 className="text-2xl font-semibold text-zinc-900">Нет доступа</h1>
-        {reasonText ? (
-          <p className="mt-2 text-sm text-zinc-600">{reasonText}</p>
-        ) : (
-          <p className="mt-2 text-sm text-zinc-600">У вас нет прав для просмотра этой страницы.</p>
+        <p className="mt-3 text-sm text-zinc-600">{reasonText}</p>
+        {user && (
+          <p className="mt-1 text-sm text-zinc-600">
+            Ваша роль: <span className="font-semibold text-zinc-900">{roleText}</span>
+          </p>
         )}
-        <div className="mt-6 flex flex-col gap-2">
-          <Link
-            href="/"
-            data-testid="forbidden-cta-home"
-            className="inline-flex items-center justify-center rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41]"
-          >
-            На главную
-          </Link>
-          <Link
-            href={sanitizedNext ? `/staff-login?next=${encodeURIComponent(sanitizedNext)}` : "/staff-login"}
-            data-testid="forbidden-cta-staff-login"
-            className="inline-flex items-center justify-center rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F]/10"
-          >
-            Войти сотрудником
-          </Link>
-          <Link
-            href={sanitizedNext ? `/login?next=${encodeURIComponent(sanitizedNext)}` : "/login"}
-            data-testid="forbidden-cta-resident-login"
-            className="inline-flex items-center justify-center rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F]/10"
-          >
-            Войти жителем
-          </Link>
-          <Link
-            href="/access"
-            data-testid="forbidden-cta-request-access"
-            className="inline-flex items-center justify-center rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-zinc-400"
-          >
-            Запросить доступ
-          </Link>
-        </div>
+        {!user && (
+          <p className="mt-1 text-sm text-zinc-600">
+            Требуется авторизация для доступа к этой странице.
+          </p>
+        )}
+        {showQaCabinetButton && (
+          <p className="mt-3 text-xs text-zinc-500">
+            Роль Администратор не имеет доступа к кабинету жителя. Для проверки используйте QA-вход.
+          </p>
+        )}
+        <ForbiddenCtas 
+          canAccessAdmin={canAccessAdmin} 
+          canAccessOffice={canAccessOffice}
+          showQaCabinetButton={showQaCabinetButton}
+        />
       </div>
     </main>
   );

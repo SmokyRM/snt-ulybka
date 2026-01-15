@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getTargetFundWithStats, getTargetFundTimeline } from "@/lib/targets";
+import BackToListLink from "@/components/BackToListLink";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,7 +11,7 @@ const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetFundDetail({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   const fund = getTargetFundWithStats(params.id);
   if (!fund) {
@@ -35,12 +36,7 @@ export default async function TargetFundDetail({ params }: { params: { id: strin
       <div className="mx-auto w-full max-w-4xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{fund.title}</h1>
-          <Link
-            href="/admin/targets"
-            className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-          >
-            Назад
-          </Link>
+          <BackToListLink href="/admin/targets" />
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">

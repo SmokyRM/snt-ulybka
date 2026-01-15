@@ -12,7 +12,7 @@ export default async function AdminTariffsPage({
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/login?next=/admin");
+  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
 
   const tariffSetting = getMembershipTariffSetting();
   const status = typeof params.status === "string" ? params.status : null;
@@ -21,7 +21,7 @@ export default async function AdminTariffsPage({
   async function saveTariff(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!hasAdminAccess(session)) redirect("/login?next=/admin");
+    if (!hasAdminAccess(session)) redirect("/staff/login?next=/admin");
 
     const raw = typeof formData.get("membershipMonthlyAmount") === "string"
       ? (formData.get("membershipMonthlyAmount") as string).trim()

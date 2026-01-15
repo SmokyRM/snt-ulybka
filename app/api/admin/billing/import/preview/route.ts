@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, hasImportAccess } from "@/lib/session.server";
+import { getSessionUser, hasBillingAccess } from "@/lib/session.server";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { getPlots, listPayments } from "@/lib/mockDb";
 import { classifyPurposeCategory } from "@/lib/paymentCategory";
@@ -180,7 +180,7 @@ const matchPlot = (
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!hasImportAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!hasBillingAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const form = await request.formData();
   const file = form.get("file");
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
 
   const headerRowRaw = rowsRaw[0];
   const headerRow = headerRowRaw.map(normalizeHeader);
-  const rows = rowsRaw.slice(1, MAX_ROWS + 1);
+const rows = rowsRaw.slice(1, MAX_ROWS + 1);
   const plots = getPlots();
   const payments = listPayments({});
 
@@ -238,10 +238,27 @@ export async function POST(request: Request) {
   const idxPlot = mappingObj ? findByMapping("plotNumber") : col(["plot"]);
   const idxRef = mappingObj ? findByMapping("reference") : col(["reference"]);
 
+  // Обязательная валидация колонок
   if (mappingObj) {
-    if (idxDate < 0 || idxAmount < 0 || idxPurpose < 0) {
+    const missing: string[] = [];
+    if (idxDate < 0) missing.push("Дата (paidAt)");
+    if (idxAmount < 0) missing.push("Сумма (amount)");
+    if (idxPurpose < 0) missing.push("Назначение (purpose)");
+    if (missing.length > 0) {
       return NextResponse.json(
-        { error: "mapping must include paidAt, amount, purpose columns" },
+        { error: `Отсутствуют обязательные колонки: ${missing.join(", ")}` },
+        { status: 400 }
+      );
+    }
+  } else {
+    // Автоопределение: проверяем что найдены обязательные колонки
+    if (idxDate < 0 || idxAmount < 0 || idxPurpose < 0) {
+      const missing: string[] = [];
+      if (idxDate < 0) missing.push("Дата");
+      if (idxAmount < 0) missing.push("Сумма");
+      if (idxPurpose < 0) missing.push("Назначение");
+      return NextResponse.json(
+        { error: `Не найдены обязательные колонки: ${missing.join(", ")}. Используйте сопоставление колонок или переименуйте заголовки.` },
         { status: 400 }
       );
     }
@@ -269,12 +286,28 @@ export async function POST(request: Request) {
     let status: "OK" | "ERROR" | "DUPLICATE" = "OK";
     const errors: string[] = [];
 
+    // Обязательная валидация: дата
     if (!paidAtIso) {
-      errors.push("Некорректная дата");
-    } else if (!amount || amount <= 0) {
-      errors.push("Некорректная сумма");
-    } else if (!match.matchedPlotId) {
-      errors.push("Участок не найден");
+      errors.push("Некорректная или отсутствующая дата");
+    } else {
+      // Проверка что дата не в будущем (опционально, но полезно)
+      const dateObj = new Date(paidAtIso);
+      const now = new Date();
+      if (dateObj > now) {
+        errors.push("Дата не может быть в будущем");
+      }
+    }
+
+    // Обязательная валидация: сумма
+    if (!amount || amount <= 0) {
+      errors.push("Некорректная или отсутствующая сумма (должна быть > 0)");
+    } else if (amount > 1000000) {
+      errors.push("Сумма слишком большая (> 1 000 000)");
+    }
+
+    // Обязательная валидация: участок
+    if (!match.matchedPlotId) {
+      errors.push("Участок не найден по адресу");
     }
 
     if (errors.length) {
@@ -304,6 +337,7 @@ export async function POST(request: Request) {
       status = "DUPLICATE";
     }
 
+    const rawJoined = cells.join(parsed.delimiter ?? ";");
     return {
       rowIndex,
       paidAtIso,
@@ -327,20 +361,24 @@ export async function POST(request: Request) {
       suggestedTargetFundId: matchedFund?.id ?? null,
       suggestedTargetFundTitle: matchedFund?.title ?? null,
       warning: category === "target_fee" && !matchedFund ? "target_fund_missing" : undefined,
+      rawRow: rawJoined,
     };
   });
 
   const okCount = result.filter((r) => r.status === "OK").length;
   const errorCount = result.filter((r) => r.status === "ERROR").length;
   const duplicateCount = result.filter((r) => r.status === "DUPLICATE").length;
+  const unmatchedCount = result.filter((r) => r.status === "ERROR" && !r.plotIdMatched).length;
 
   return NextResponse.json({
     ok: true,
     meta: {
       totalRows: rows.length,
       okCount,
-      errorCount,
-      duplicateCount,
+      validCount: okCount,
+      invalidCount: errorCount,
+      unmatchedCount,
+      duplicates: duplicateCount,
       truncated: rowsRaw.length - 1 > MAX_ROWS,
       detectedDelimiter: parsed.delimiter,
       detectedEncoding: "utf-8",

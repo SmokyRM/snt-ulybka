@@ -27,7 +27,7 @@ export default async function DebtsPage({
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasFinanceAccess(user)) redirect("/login?next=/admin");
+  if (!hasFinanceAccess(user)) redirect("/staff/login?next=/admin");
   const flags = await getFeatureFlags();
   const debtsV2On = isFeatureEnabled(flags, "debtsV2");
   const latestPeriod = getLatestPeriodKey();
