@@ -1,3 +1,5 @@
+import { normalizePhone } from "@/lib/utils/phone";
+
 export type RegistryItem = {
   id: string;
   plotNumber: string;
@@ -169,11 +171,23 @@ type ListParams = { q?: string };
 
 export function listRegistry(params: ListParams = {}): RegistryItem[] {
   const query = params.q?.trim().toLowerCase();
+  // Sprint 4.4: Используем normalizePhone для поиска по телефонам
+  const normalizedQuery = query ? normalizePhone(query) : null;
+  
   return seedRegistry
     .filter((item) => {
       if (!query) return true;
-      const haystack = `${item.plotNumber} ${item.ownerName ?? ""} ${item.phone ?? ""} ${item.email ?? ""}`.toLowerCase();
-      return haystack.includes(query);
+      // Обычный текстовый поиск
+      const haystack = `${item.plotNumber} ${item.ownerName ?? ""} ${item.email ?? ""}`.toLowerCase();
+      if (haystack.includes(query)) return true;
+      
+      // Sprint 4.4: Поиск по нормализованному телефону
+      if (normalizedQuery && item.phone) {
+        const normalizedPhoneValue = normalizePhone(item.phone);
+        if (normalizedPhoneValue.includes(normalizedQuery)) return true;
+      }
+      
+      return false;
     })
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }

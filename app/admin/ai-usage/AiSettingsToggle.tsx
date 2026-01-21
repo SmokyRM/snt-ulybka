@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FeatureFlags } from "@/lib/featureFlags";
 import type { AiSettings } from "@/lib/aiSettings";
+import { readOk } from "@/lib/api/client";
 
 type Props = {
   flags: FeatureFlags;
@@ -59,14 +60,7 @@ export default function AiSettingsToggle({ flags, settings }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        flags?: FeatureFlags;
-        settings?: AiSettings;
-      };
-      if (!res.ok || !data.ok) {
-        throw new Error("Save failed");
-      }
+      const data = await readOk<{ ok: true; flags?: FeatureFlags; settings?: AiSettings }>(res);
       if (data.flags) {
         setWidgetEnabled(data.flags.ai_widget_enabled);
         setPersonalEnabled(data.flags.ai_personal_enabled);

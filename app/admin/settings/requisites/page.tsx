@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getPaymentDetailsSettingServer, listSettingVersions, formatAdminTime } from "@/lib/settings.server";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { revalidatePath } from "next/cache";
+import { readOk } from "@/lib/api/client";
 
 export default async function AdminRequisitesHistory() {
   const user = await getSessionUser();
@@ -16,12 +17,13 @@ export default async function AdminRequisitesHistory() {
     "use server";
     const versionId = formData.get("versionId") as string;
     const comment = (formData.get("comment") as string) || "";
-    await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/settings/requisites/restore`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/settings/requisites/restore`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ versionId, comment }),
       cache: "no-store",
     });
+    await readOk(res);
     revalidatePath("/admin/settings/requisites");
   }
 

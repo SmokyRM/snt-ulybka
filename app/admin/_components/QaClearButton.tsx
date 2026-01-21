@@ -21,11 +21,10 @@ export default function QaClearButton({ className }: Props) {
         window.localStorage.removeItem(key);
         window.sessionStorage.removeItem(key);
       });
-      // eslint-disable-next-line no-console
+       
       console.info("QA: локальные состояния очищены");
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("qa clear error", err);
+      console.error("qa clear error", err instanceof Error ? err.message : String(err ?? "unknown"));
     }
   };
 

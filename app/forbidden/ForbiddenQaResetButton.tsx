@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiPost } from "@/lib/api/client";
 
 export default function ForbiddenQaResetButton() {
   const [loading, setLoading] = useState(false);
@@ -14,27 +15,23 @@ export default function ForbiddenQaResetButton() {
     if (typeof window === "undefined") return;
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/qa/reset", { method: "POST" });
-      if (res.ok) {
-        // Clear localStorage and sessionStorage keys containing "qa" or "admin_view"
-        try {
-          const clearQaFromStorage = (storage: Storage | null | undefined) => {
-            if (!storage) return;
-            const keys = Object.keys(storage).filter((key) => {
-              const lower = key.toLowerCase();
-              return lower.includes("qa") || lower.includes("admin_view");
-            });
-            keys.forEach((key) => storage.removeItem(key));
-          };
-          clearQaFromStorage(window.localStorage);
-          clearQaFromStorage(window.sessionStorage);
-        } catch {
-          // Ignore storage errors
-        }
-        window.location.assign("/admin/qa");
-      } else {
-        throw new Error("reset_failed");
+      await apiPost("/api/admin/qa/reset");
+      // Clear localStorage and sessionStorage keys containing "qa" or "admin_view"
+      try {
+        const clearQaFromStorage = (storage: Storage | null | undefined) => {
+          if (!storage) return;
+          const keys = Object.keys(storage).filter((key) => {
+            const lower = key.toLowerCase();
+            return lower.includes("qa") || lower.includes("admin_view");
+          });
+          keys.forEach((key) => storage.removeItem(key));
+        };
+        clearQaFromStorage(window.localStorage);
+        clearQaFromStorage(window.sessionStorage);
+      } catch {
+        // Ignore storage errors
       }
+      window.location.assign("/admin/qa");
     } catch {
       // Fallback: navigate to /admin/qa?qa=clear
       const url = new URL("/admin/qa", window.location.origin);

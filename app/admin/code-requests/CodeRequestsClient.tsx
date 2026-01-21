@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import EmptyState from "@/components/EmptyState";
+import EmptyStateCard from "@/components/EmptyStateCard";
 
 type CodeRequestStatus = "NEW" | "RESOLVED";
 
@@ -87,7 +87,7 @@ export default function CodeRequestsClient({ requests, plots, onResolve }: Props
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState title="Ничего не найдено" description="Попробуйте изменить фильтры или очистить поиск." />
+        <EmptyStateCard title="Ничего не найдено" description="Попробуйте изменить фильтры или очистить поиск." />
       ) : (
         <div className="space-y-3">
           {filtered

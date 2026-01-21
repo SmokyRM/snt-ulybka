@@ -14,7 +14,7 @@ async function submitPlot(formData: FormData) {
   }
   const profile = await getUserProfile(user.id ?? "");
   if (!profile.fullName || !profile.phone) {
-    redirect("/onboarding?next=/cabinet/plots/new");
+    redirect("/cabinet/onboarding/profile");
   }
   const cadastralNumber = ((formData.get("cadastralNumber") as string | null) ?? "").trim();
   const file = formData.get("document") as File | null;
@@ -76,7 +76,7 @@ export default async function PlotRequestPage({
   }
   const profile = await getUserProfile(user.id ?? "");
   if (!profile.fullName || !profile.phone) {
-    redirect("/onboarding?next=/cabinet/plots/new");
+    redirect("/cabinet/onboarding/profile");
   }
 
   return (

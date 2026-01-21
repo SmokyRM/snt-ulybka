@@ -171,6 +171,19 @@ export const getEffectiveSessionUser = async (): Promise<SessionUser | null> => 
   if (!qa || !real) {
     return real;
   }
+  const isStaffRole =
+    real.role === "admin" ||
+    real.role === "chairman" ||
+    real.role === "accountant" ||
+    real.role === "secretary";
+  if (isStaffRole) {
+    return {
+      ...real,
+      isQaOverride: false,
+      realRole: real.role,
+      qaScenario: qa,
+    };
+  }
   const qaRole: SessionRole | null =
     qa === "resident_ok" || qa === "resident_debtor"
       ? "resident"

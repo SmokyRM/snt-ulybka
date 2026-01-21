@@ -5,7 +5,7 @@ import { qaEnabled } from "@/lib/qaScenario";
 import { qaText } from "@/lib/qaText";
 import QaStatusCard from "../_components/QaStatusCard";
 import QaChecksCard from "../_components/QaChecksCard";
-import QaDebugActions from "../_components/QaDebugActions";
+import QaDebugActionsWrapper from "../_components/QaDebugActionsWrapper";
 import QaSeedCard from "../_components/QaSeedCard";
 import QaMatrixCard from "../_components/QaMatrixCard";
 import QaDeadendsCard from "../_components/QaDeadendsCard";
@@ -18,6 +18,12 @@ import QaTestDataCard from "../_components/QaTestDataCard";
 import QaSnapshotCard from "../_components/QaSnapshotCard";
 import QaTicketBuilder from "../_components/QaTicketBuilder";
 import QaStateBar from "../_components/QaStateBar";
+import QaQualityCenterCard from "../_components/QaQualityCenterCard";
+import QaRoleSimulatorCard from "../_components/QaRoleSimulatorCard";
+import { readOnboardingStateFromCookies } from "../cabinet-lab/../../cabinet/_components/onboardingState";
+import { getQaCabinetStageFromCookies, readQaCabinetMockEnabled } from "@/lib/qaCabinetStage.server";
+import { QaCabinetControl } from "../_components/QaCabinetControl";
+import QaCabinetLabButton from "../_components/QaCabinetLabButton";
 
 export const metadata = {
   title: "Пульт тестировщика — СНТ «Улыбка»",
@@ -81,8 +87,14 @@ export default async function QaPage() {
   }
 
   const session = await getSessionUser();
+  const isDev = process.env.NODE_ENV !== "production";
+  const masterCodeConfigured = Boolean((process.env.DEV_LOGIN_CODE || process.env.MASTER_CODE)?.trim());
   if (!session || (session.role !== "admin" && session.role !== "board")) {
-    redirect("/staff/login?next=/admin/qa");
+    if (isDev) {
+      // В dev ослабляем доступ для удобства тестов QA
+    } else {
+      redirect("/staff/login?next=/admin/qa");
+    }
   }
 
   const effectiveSession = await getEffectiveSessionUser();
@@ -154,6 +166,10 @@ export default async function QaPage() {
     },
   };
 
+  const qaStage = await getQaCabinetStageFromCookies();
+  const onboardingState = await readOnboardingStateFromCookies();
+  const mockEnabled = await readQaCabinetMockEnabled();
+
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6" data-testid="qa-root">
       <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -161,8 +177,8 @@ export default async function QaPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-[#5E704F]">QA</p>
           <h1 className="text-2xl font-semibold">{qaText.headers.pageTitle}</h1>
           <p className="text-sm text-zinc-700">{qaText.misc.pageDescription}</p>
-          <div className="flex flex-wrap gap-2">
-            <QaDebugActions
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white/80 p-3 shadow-sm">
+            <QaDebugActionsWrapper
               envInfo={{
                 NODE_ENV: process.env.NODE_ENV,
                 ENABLE_QA: process.env.ENABLE_QA,
@@ -207,7 +223,27 @@ export default async function QaPage() {
                 isQaOverride: effectiveSession?.isQaOverride,
               }}
             />
+            <QaCabinetLabButton />
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] text-zinc-700">
+                QA stage: {qaStage ?? "—"}
+              </span>
+              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] text-zinc-700">
+                Onboarding: {onboardingState.step}
+              </span>
+              {isDev && (
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] text-zinc-700" title={masterCodeConfigured ? "DEV_LOGIN_CODE задан" : "Используется встроенный 1111"}>
+                  Мастер-код: {masterCodeConfigured ? "включен" : "выключен"}
+                </span>
+              )}
+            </div>
           </div>
+
+          <QaCabinetControl
+            initialStage={qaStage}
+            mocksEnabled={mockEnabled}
+            onboardingStep={onboardingState.step}
+          />
         </header>
 
         {/* Панель состояния QA */}
@@ -233,7 +269,7 @@ export default async function QaPage() {
           data-testid="qa-tester-guide"
         >
           <summary className="cursor-pointer text-lg font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#5E704F] focus:ring-offset-1 rounded p-1 -m-1">
-            {qaText.headers.testerGuide}
+            Инструкции тестировщику
           </summary>
           <div className="mt-4 space-y-4 text-sm text-zinc-700">
             <p>{qaText.misc.pageDescription}</p>
@@ -339,6 +375,12 @@ export default async function QaPage() {
 
         {/* Карточка: Тест-данные */}
         <QaTestDataCard roles={ROLES} testData={testData} canShowPasswords={canShowPasswords} />
+
+        {/* Карточка: Role Simulator */}
+        <QaRoleSimulatorCard />
+
+        {/* Карточка: Quality Center */}
+        <QaQualityCenterCard />
 
         {/* Карточка: Проверки */}
         <QaChecksCard

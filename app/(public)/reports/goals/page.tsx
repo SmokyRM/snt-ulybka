@@ -10,7 +10,8 @@ export const metadata = {
 const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default function PublicGoalsPage() {
-  const funds = listTargetFundsWithStats(false).sort((a, b) => {
+  // Show only active funds for public view
+  const funds = listTargetFundsWithStats(true).sort((a, b) => {
     if (a.status === b.status) {
       return (b.remaining ?? 0) - (a.remaining ?? 0);
     }
@@ -18,6 +19,7 @@ export default function PublicGoalsPage() {
     if (b.status === "active") return 1;
     return 0;
   });
+  
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -43,6 +45,11 @@ export default function PublicGoalsPage() {
                     <div>Цель: {formatAmount(f.targetAmount)}</div>
                     <div>Собрано: {formatAmount(f.collected)}</div>
                     <div>Осталось: {formatAmount(remaining)}</div>
+                    {f.deadline && (
+                      <div className="text-xs text-zinc-600 mt-1">
+                        Срок: {new Date(f.deadline).toLocaleDateString("ru-RU")}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <p className="text-sm text-zinc-700 whitespace-pre-wrap">{f.description}</p>

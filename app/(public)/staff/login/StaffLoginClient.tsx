@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
 
 const roleOptions = [
   { value: "admin", label: "Админ" },
@@ -34,21 +35,19 @@ export default function StaffLoginClient() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/staff-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ login: role, password, next: sanitizedNext ?? "" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError("Неверный логин или пароль.");
-        return;
-      }
-      const redirectToRaw = (data?.redirectTo as string) || "/office";
+      const data = await apiPostRaw<{ redirectTo?: string }>(
+        "/api/auth/staff-login",
+        { login: role, password, next: sanitizedNext ?? "" },
+        { credentials: "include" },
+      );
+      const redirectToRaw = data?.redirectTo || "/office";
       const redirectTo = sanitizeNextUrl(redirectToRaw) ?? "/office";
       router.push(redirectTo);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || "Неверный логин или пароль.");
+        return;
+      }
       setError("Ошибка входа. Попробуйте позже.");
     } finally {
       setLoading(false);

@@ -1,0 +1,442 @@
+{
+  "reportId": "qa-report-1768997348719-2qemlpa",
+  "generatedAt": "2026-01-21T12:09:08.719Z",
+  "app": {
+    "env": "development"
+  },
+  "sessionContext": {
+    "role": "admin",
+    "effectiveRole": "admin",
+    "normalizedRole": "admin",
+    "qaScenario": null
+  },
+  "checks": {
+    "health": {
+      "ok": true,
+      "status": 200,
+      "timingMs": 6
+    },
+    "accessMatrix": {
+      "results": {
+        "guest": {
+          "/cabinet": {
+            "expected": "LOGIN_REQUIRED",
+            "actual": "LOGIN_REQUIRED",
+            "status": 200,
+            "finalUrl": "/login?next=%2Fcabinet",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/cabinet",
+                "to": "http://localhost:3000/login?next=%2Fcabinet",
+                "status": 307
+              }
+            ],
+            "timingMs": 280
+          },
+          "/office": {
+            "expected": "LOGIN_REQUIRED",
+            "actual": "LOGIN_REQUIRED",
+            "status": 200,
+            "finalUrl": "/staff/login?next=%2Foffice",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/office",
+                "to": "http://localhost:3000/staff/login?next=%2Foffice",
+                "status": 307
+              }
+            ],
+            "timingMs": 213
+          },
+          "/admin": {
+            "expected": "LOGIN_REQUIRED",
+            "actual": "LOGIN_REQUIRED",
+            "status": 200,
+            "finalUrl": "/staff/login?next=%2Fadmin",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/admin",
+                "to": "http://localhost:3000/staff/login?next=%2Fadmin",
+                "status": 307
+              }
+            ],
+            "timingMs": 34
+          },
+          "/login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/login",
+            "redirectChain": [],
+            "timingMs": 32
+          },
+          "/staff-login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/staff-login",
+            "redirectChain": [],
+            "timingMs": 236
+          },
+          "/forbidden": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/forbidden",
+            "redirectChain": [],
+            "timingMs": 170
+          },
+          "/": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/",
+            "redirectChain": [],
+            "timingMs": 37
+          }
+        },
+        "resident": {
+          "/cabinet": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/cabinet",
+            "redirectChain": [],
+            "timingMs": 36
+          },
+          "/office": {
+            "expected": "FORBIDDEN",
+            "actual": "FORBIDDEN",
+            "status": 200,
+            "finalUrl": "/forbidden?reason=office.only",
+            "forbiddenReason": "office.only",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/office",
+                "to": "http://localhost:3000/forbidden?reason=office.only",
+                "status": 307
+              }
+            ],
+            "timingMs": 28
+          },
+          "/admin": {
+            "expected": "FORBIDDEN",
+            "actual": "FORBIDDEN",
+            "status": 200,
+            "finalUrl": "/forbidden?reason=admin.only",
+            "forbiddenReason": "admin.only",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/admin",
+                "to": "http://localhost:3000/forbidden?reason=admin.only",
+                "status": 307
+              }
+            ],
+            "timingMs": 29
+          },
+          "/login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/login",
+            "redirectChain": [],
+            "timingMs": 38
+          },
+          "/staff-login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/staff-login",
+            "redirectChain": [],
+            "timingMs": 40
+          },
+          "/forbidden": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/forbidden",
+            "redirectChain": [],
+            "timingMs": 20
+          },
+          "/": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/",
+            "redirectChain": [],
+            "timingMs": 72
+          }
+        },
+        "chairman": {
+          "/cabinet": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/cabinet",
+            "redirectChain": [],
+            "timingMs": 33
+          },
+          "/office": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/office",
+            "redirectChain": [],
+            "timingMs": 30
+          },
+          "/admin": {
+            "expected": "FORBIDDEN",
+            "actual": "FORBIDDEN",
+            "status": 200,
+            "finalUrl": "/forbidden?reason=admin.only",
+            "forbiddenReason": "admin.only",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/admin",
+                "to": "http://localhost:3000/forbidden?reason=admin.only",
+                "status": 307
+              }
+            ],
+            "timingMs": 21
+          },
+          "/login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/login",
+            "redirectChain": [],
+            "timingMs": 33
+          },
+          "/staff-login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/staff-login",
+            "redirectChain": [],
+            "timingMs": 36
+          },
+          "/forbidden": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/forbidden",
+            "redirectChain": [],
+            "timingMs": 20
+          },
+          "/": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/",
+            "redirectChain": [],
+            "timingMs": 35
+          }
+        },
+        "secretary": {
+          "/cabinet": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/cabinet",
+            "redirectChain": [],
+            "timingMs": 33
+          },
+          "/office": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/office",
+            "redirectChain": [],
+            "timingMs": 37
+          },
+          "/admin": {
+            "expected": "FORBIDDEN",
+            "actual": "FORBIDDEN",
+            "status": 200,
+            "finalUrl": "/forbidden?reason=admin.only",
+            "forbiddenReason": "admin.only",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/admin",
+                "to": "http://localhost:3000/forbidden?reason=admin.only",
+                "status": 307
+              }
+            ],
+            "timingMs": 22
+          },
+          "/login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/login",
+            "redirectChain": [],
+            "timingMs": 114
+          },
+          "/staff-login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/staff-login",
+            "redirectChain": [],
+            "timingMs": 37
+          },
+          "/forbidden": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/forbidden",
+            "redirectChain": [],
+            "timingMs": 53
+          },
+          "/": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/",
+            "redirectChain": [],
+            "timingMs": 38
+          }
+        },
+        "accountant": {
+          "/cabinet": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/cabinet",
+            "redirectChain": [],
+            "timingMs": 42
+          },
+          "/office": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/office",
+            "redirectChain": [],
+            "timingMs": 41
+          },
+          "/admin": {
+            "expected": "FORBIDDEN",
+            "actual": "FORBIDDEN",
+            "status": 200,
+            "finalUrl": "/forbidden?reason=admin.only",
+            "forbiddenReason": "admin.only",
+            "redirectChain": [
+              {
+                "from": "http://localhost:3000/admin",
+                "to": "http://localhost:3000/forbidden?reason=admin.only",
+                "status": 307
+              }
+            ],
+            "timingMs": 40
+          },
+          "/login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/login",
+            "redirectChain": [],
+            "timingMs": 45
+          },
+          "/staff-login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/staff-login",
+            "redirectChain": [],
+            "timingMs": 38
+          },
+          "/forbidden": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/forbidden",
+            "redirectChain": [],
+            "timingMs": 20
+          },
+          "/": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/",
+            "redirectChain": [],
+            "timingMs": 35
+          }
+        },
+        "admin": {
+          "/cabinet": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/cabinet",
+            "redirectChain": [],
+            "timingMs": 30
+          },
+          "/office": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/office",
+            "redirectChain": [],
+            "timingMs": 36
+          },
+          "/admin": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/admin",
+            "redirectChain": [],
+            "timingMs": 53
+          },
+          "/login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/login",
+            "redirectChain": [],
+            "timingMs": 26
+          },
+          "/staff-login": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/staff-login",
+            "redirectChain": [],
+            "timingMs": 28
+          },
+          "/forbidden": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/forbidden",
+            "redirectChain": [],
+            "timingMs": 18
+          },
+          "/": {
+            "expected": "ALLOW",
+            "actual": "ALLOW",
+            "status": 200,
+            "finalUrl": "/",
+            "redirectChain": [],
+            "timingMs": 41
+          }
+        }
+      },
+      "summary": {
+        "ok": 42,
+        "mismatches": 0,
+        "forbiddenOk": 5,
+        "loginOk": 3,
+        "errors": 0,
+        "pass": true
+      },
+      "timingMs": 5928
+    },
+    "deadEnds": {
+      "issues": [],
+      "pass": true
+    },
+    "smoke": {
+      "issues": [],
+      "pass": true
+    }
+  }
+}

@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { ok, serverError } from "@/lib/api/respond";
 import { listTargetFundsWithStats } from "@/lib/targets";
 
-export async function GET() {
-  const items = listTargetFundsWithStats(true);
-  return NextResponse.json({ items });
+export async function GET(request: Request) {
+  try {
+    const items = listTargetFundsWithStats(true);
+    return ok(request, { items });
+  } catch (error) {
+    return serverError(request, "Ошибка при получении целевых сборов", error);
+  }
 }

@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import { listDebtRows } from "@/lib/office/finance.server";
 import type { DebtRow } from "@/lib/office/types";
-import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import { assertCan, hasPermission, isOfficeRole, isStaffOrAdmin } from "@/lib/rbac";
+import type { Role } from "@/lib/permissions";
+import { getDebtsSummary } from "@/server/services/finance";
+import AppLink from "@/components/AppLink";
 import ExportButton from "./ExportButton";
 
 type Props = {
@@ -23,12 +26,28 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
   if (!user) {
     redirect("/staff-login?next=/office/finance");
   }
-  const role = user.role ?? "resident";
-  if (!isOfficeRole(role)) {
-    redirect("/forbidden");
+  const role = (user.role as Role | undefined) ?? "resident";
+  if (!isStaffOrAdmin(role)) {
+    redirect("/forbidden?reason=office.only&next=/office");
   }
-  if (!hasPermission(role, "finance.view")) {
-    redirect("/forbidden");
+
+  try {
+    assertCan(role, "finance.read", "finance");
+  } catch {
+    redirect("/forbidden?reason=office.only&next=/office");
+  }
+
+  let summary;
+  try {
+    summary = await getDebtsSummary();
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      redirect("/staff-login?next=/office/finance");
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      redirect("/forbidden?reason=office.only&next=/office");
+    }
+    throw error;
   }
 
   const params = (await searchParams) ?? {};
@@ -38,8 +57,56 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
   const rows = normalizeRows(await listDebtRows({ q, period }));
   const periodOptions = Array.from(new Set(rows.map((row) => row.period))).sort().reverse();
 
+  const canMutate = role === "admin" || role === "accountant";
+
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="office-finance-root">
+    <div className="space-y-4" data-testid="office-finance-page">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Финансы</h1>
+          <p className="text-sm text-zinc-600">Обзор финансов и управление платежами</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {canMutate && (
+            <AppLink
+              href="/office/finance/import"
+              className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#4b5b40]"
+            >
+              Импорт платежей
+            </AppLink>
+          )}
+          {hasPermission(role, "finance.export") && (
+            <AppLink
+              href="/office/finance/exports"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+            >
+              Выгрузки
+            </AppLink>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-zinc-600">Общий долг</div>
+          <div className="mt-1 text-2xl font-bold text-rose-600">{formatCurrency(summary.totalDebt)}</div>
+          <div className="mt-1 text-xs text-zinc-500">{summary.debtorsCount} должников</div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-zinc-600">Собрано за 30 дней</div>
+          <div className="mt-1 text-2xl font-bold text-emerald-600">{formatCurrency(summary.collected30d)}</div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-zinc-600">Всего начислено</div>
+          <div className="mt-1 text-2xl font-bold text-zinc-900">{formatCurrency(summary.totalAccrued)}</div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold text-zinc-600">Всего оплачено</div>
+          <div className="mt-1 text-2xl font-bold text-zinc-900">{formatCurrency(summary.totalPaid)}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900">Финансы</h1>
@@ -124,6 +191,7 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

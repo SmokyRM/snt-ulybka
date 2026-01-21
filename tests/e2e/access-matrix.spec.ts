@@ -5,7 +5,20 @@ import * as path from "path";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
 type Role = "resident" | "chairman" | "secretary" | "accountant" | "admin";
-type Route = "/cabinet" | "/office" | "/admin" | "/admin/qa" | "/forbidden" | "/login" | "/staff-login";
+type Route =
+  | "/cabinet"
+  | "/office"
+  | "/admin"
+  | "/admin/qa"
+  | "/forbidden"
+  | "/login"
+  | "/staff-login"
+  | "/admin/billing/accruals"
+  | "/admin/billing/debts"
+  | "/admin/billing/debtors"
+  | "/admin/billing/notifications"
+  | "/admin/billing/payments/import"
+  | "/admin/billing/payments/imports";
 
 type MatrixResult = {
   role: Role;
@@ -34,16 +47,36 @@ type MatrixReport = {
 };
 
 const ROLES: Role[] = ["resident", "chairman", "secretary", "accountant", "admin"];
-const ROUTES: Route[] = ["/cabinet", "/office", "/admin", "/admin/qa", "/forbidden", "/login", "/staff-login"];
+const ROUTES: Route[] = [
+  "/cabinet",
+  "/office",
+  "/admin",
+  "/admin/qa",
+  "/forbidden",
+  "/login",
+  "/staff-login",
+  "/admin/billing/accruals",
+  "/admin/billing/debts",
+  "/admin/billing/debtors",
+  "/admin/billing/notifications",
+  "/admin/billing/payments/import",
+  "/admin/billing/payments/imports",
+];
 
 const ROLE_TEST_IDS: Record<Route, string | null> = {
   "/cabinet": "cabinet-page-root",
-  "/office": "office-root", // Office redirects to dashboard, but shell is always present
+  "/office": "office-root",
   "/admin": "admin-root",
   "/admin/qa": "qa-root",
   "/forbidden": "forbidden-root",
   "/login": "login-form",
   "/staff-login": "staff-login-root",
+  "/admin/billing/accruals": "accruals-root",
+  "/admin/billing/debts": "debts-root",
+  "/admin/billing/debtors": "debtors-root",
+  "/admin/billing/notifications": "notifications-root",
+  "/admin/billing/payments/import": "payments-import-root",
+  "/admin/billing/payments/imports": "payments-imports-root",
 };
 
 function getVerdict(

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ApiError, apiPost } from "@/lib/api/client";
 
 type TemplateCard = {
   slug: string;
@@ -93,24 +94,17 @@ export default function TemplateListClient({ templates }: { templates: TemplateC
     setModalError(null);
     setModalSending(true);
     try {
-      const res = await fetch("/api/appeals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: modalTopic || "Общее", message: modalText }),
+      await apiPost<{ appeal: { id: string } }>("/api/appeals", {
+        topic: modalTopic || "Общее",
+        message: modalText,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setModalError(
-          data?.message ??
-            (res.status === 429
-              ? "Слишком много обращений. Попробуйте позже."
-              : "Не удалось отправить обращение."),
-        );
+      setModalSuccess(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 429) {
+        setModalError("Слишком много обращений. Попробуйте позже.");
         return;
       }
-      setModalSuccess(true);
-    } catch {
-      setModalError("Не удалось отправить обращение. Попробуйте позже.");
+      setModalError(error instanceof Error ? error.message : "Не удалось отправить обращение. Попробуйте позже.");
     } finally {
       setModalSending(false);
     }

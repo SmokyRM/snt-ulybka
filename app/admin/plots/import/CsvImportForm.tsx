@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { normalizeRow } from "@/lib/plotsImport/normalizeRow";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
 
 type ParsedRow = {
   street?: string;
@@ -105,22 +106,11 @@ const mapHeadersLocal = (raw: string[]) =>
     return headerAliases[low] ?? low;
   });
 
-type XLSXType = {
-  read: (data: ArrayBuffer, opts: { type: string }) => { SheetNames: string[]; Sheets: Record<string, unknown> };
-  utils: { sheet_to_json: (sheet: unknown, opts: { header: number }) => unknown[] };
-};
-
 async function parseXlsx(file: File): Promise<string[][]> {
   const buffer = await file.arrayBuffer();
   try {
-    const XLSX: XLSXType = await import(
-      // @ts-expect-error External ESM import from CDN at runtime (types unavailable)
-      /* webpackIgnore: true */ "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"
-    );
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+    const { parseXlsx: parseExcel } = await import("@/lib/excel");
+    const json = await parseExcel(new Uint8Array(buffer));
     return json;
   } catch (e) {
     console.error("XLSX import failed", e);
@@ -250,20 +240,13 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/plots/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows, mode }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Не удалось импортировать");
-        setRowErrors(
-          data.errors?.map((e: { rowIndex: number; message: string }) => `Строка ${e.rowIndex}: ${e.message}`) ??
-            []
-        );
-        return;
-      }
+      const data = await apiPostRaw<{
+        created?: number;
+        updated?: number;
+        skipped?: number;
+        error?: string;
+        errors?: Array<{ rowIndex: number; message: string }>;
+      }>("/api/plots/import", { rows, mode });
       setResult(
         `Создано: ${data.created ?? 0}, обновлено: ${data.updated ?? 0}, пропущено: ${
           data.skipped ?? 0
@@ -274,7 +257,15 @@ export default function CsvImportForm({ existingKeys }: { existingKeys: string[]
           []
       );
       router.refresh();
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const details = error.details as { error?: string; errors?: Array<{ rowIndex: number; message: string }> } | null;
+        setError(details?.error || error.message || "Не удалось импортировать");
+        setRowErrors(
+          details?.errors?.map((e) => `Строка ${e.rowIndex}: ${e.message}`) ?? []
+        );
+        return;
+      }
       setError("Ошибка сети");
     } finally {
       setLoading(false);

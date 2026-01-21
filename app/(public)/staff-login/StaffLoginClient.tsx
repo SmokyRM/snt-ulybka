@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useEffect, useRef } from "react";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { getSafeRedirectUrl } from "@/lib/safeRedirect";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
+import StaffLoginDiagnostics from "./StaffLoginDiagnostics";
 
 const normalizeLogin = (value: string) => {
   const v = value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -23,7 +25,23 @@ const ROLE_LOGINS: Record<string, string> = {
   admin: "админ",
 };
 
-export default function StaffLoginClient() {
+type DiagnosticsData = {
+  currentUrl: string;
+  nextTarget: string | null;
+  hasSessionCookie: boolean;
+  currentRole: string | null;
+  lastLoginAttempt: {
+    status: number | null;
+    error: string | null;
+    timestamp: number | null;
+  } | null;
+};
+
+type StaffLoginClientProps = {
+  diagnosticsData: DiagnosticsData | null;
+};
+
+export default function StaffLoginClient({ diagnosticsData }: StaffLoginClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -40,8 +58,45 @@ export default function StaffLoginClient() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(diagnosticsData);
 
-  const sanitizedNext = sanitizeNextUrl(nextParam) ?? null;
+  // Мемоизируем sanitizedNext
+  const sanitizedNext = useMemo(() => {
+    return sanitizeNextUrl(nextParam) ?? null;
+  }, [nextParam]);
+
+  // useRef для отслеживания предыдущих значений, чтобы избежать бесконечного цикла
+  const lastDiagKeyRef = useRef<{ currentUrl: string; nextTarget: string | null } | null>(null);
+
+  // Обновляем URL в диагностике при изменении
+  useEffect(() => {
+    if (!diagnostics) return;
+
+    const currentUrl = window.location.href;
+    const nextTarget = sanitizedNext;
+
+    // Guard: проверяем, изменились ли значения
+    const prev = lastDiagKeyRef.current;
+    if (prev && prev.currentUrl === currentUrl && prev.nextTarget === nextTarget) {
+      return; // Значения не изменились, не обновляем
+    }
+
+    // Обновляем ref перед setState
+    lastDiagKeyRef.current = { currentUrl, nextTarget };
+
+    setDiagnostics((prev) => {
+      if (!prev) return prev;
+      // Дополнительная проверка: если значения уже такие же, не обновляем
+      if (prev.currentUrl === currentUrl && prev.nextTarget === nextTarget) {
+        return prev;
+      }
+      return {
+        ...prev,
+        currentUrl,
+        nextTarget,
+      };
+    });
+  }, [sanitizedNext]); // Убрали diagnostics из dependency array
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -53,23 +108,59 @@ export default function StaffLoginClient() {
     setLoading(true);
     try {
       const normalized = normalizeLogin(login);
-      const res = await fetch("/api/auth/staff-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ login: normalized, password, next: sanitizedNext ?? "" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data?.error === "Неизвестная роль/логин" ? "Неизвестная роль" : "Неверный логин или пароль";
-        setError(msg);
-        return;
+      const data = await apiPostRaw<{
+        role?: "admin" | "chairman" | "accountant" | "secretary";
+        redirectUrl?: string;
+        redirectTo?: string;
+      }>("/api/auth/staff-login", { login: normalized, password, next: sanitizedNext ?? "" }, { credentials: "include" });
+      const role = data?.role ?? "chairman";
+      const redirect = data?.redirectUrl || data?.redirectTo || getSafeRedirectUrl(role, sanitizedNext);
+      
+      // Обновляем диагностику при успехе
+      if (diagnostics) {
+        setDiagnostics((prev) => ({
+          ...prev!,
+          lastLoginAttempt: {
+            status: 200,
+            error: null,
+            timestamp: Date.now(),
+          },
+          hasSessionCookie: true,
+          currentRole: role,
+        }));
       }
-      const role = (data?.role as "admin" | "chairman" | "accountant" | "secretary") ?? "chairman";
-      const redirect = data?.redirectUrl || getSafeRedirectUrl(role, sanitizedNext);
+      
       router.push(redirect);
-    } catch {
-      setError("Ошибка входа. Попробуйте позже.");
+    } catch (err) {
+      let msg = "Ошибка входа. Попробуйте позже.";
+      let status: number | null = null;
+      if (err instanceof ApiError) {
+        status = err.status;
+        const details = err.details as { error?: string; message?: string } | null;
+        const rawError = details?.error;
+        if (rawError === "auth_not_configured") {
+          msg =
+            typeof details?.message === "string"
+              ? details.message
+              : "Код доступа для роли не настроен (env). Задайте AUTH_PASS_* в .env.local.";
+        } else if (rawError === "Неизвестная роль/логин" || rawError === "invalid_credentials") {
+          msg = rawError === "Неизвестная роль/логин" ? "Неизвестная роль" : "Неверный логин или пароль";
+        } else if (err.message) {
+          msg = err.message;
+        }
+      }
+      setError(msg);
+
+      if (diagnostics) {
+        setDiagnostics((prev) => ({
+          ...prev!,
+          lastLoginAttempt: {
+            status,
+            error: err instanceof ApiError ? (err.details as { error?: string } | null)?.error || msg : msg,
+            timestamp: Date.now(),
+          },
+        }));
+      }
     } finally {
       setLoading(false);
     }
@@ -134,6 +225,7 @@ export default function StaffLoginClient() {
           {loading ? "Вход..." : "Войти"}
         </button>
       </form>
+      {diagnostics && <StaffLoginDiagnostics key={JSON.stringify(diagnostics)} initialData={diagnostics} />}
     </main>
   );
 }

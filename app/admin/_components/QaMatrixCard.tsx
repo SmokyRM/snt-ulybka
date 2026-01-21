@@ -3,175 +3,192 @@
 import { useState, useEffect } from "react";
 import { qaText } from "@/lib/qaText";
 import { primaryButtonClass, secondaryButtonClass } from "./qaStyles";
-import { fetchWithTimeout, createRequestPool, isNetworkError } from "./QaFetchUtils";
+import { useToast, CopyReportModal, downloadJson } from "./QaReportUtils";
+import { ApiError, apiGetRaw, readOk } from "@/lib/api/client";
+
+// Компонент для отображения подробностей ячейки матрицы
+function MatrixCellDetails({ cell }: { cell: MatrixCell }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="text-xs text-blue-600 underline hover:text-blue-800"
+      >
+        Подробнее →
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded border border-zinc-200 bg-zinc-50 p-2 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-zinc-800">Диагностика</span>
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Свернуть
+        </button>
+      </div>
+      
+      {cell.redirectChain && cell.redirectChain.length > 0 && (
+        <div>
+          <div className="font-medium text-zinc-700 mb-1">Цепочка редиректов:</div>
+          <div className="space-y-1 pl-2">
+            {cell.redirectChain.map((step, idx) => (
+              <div key={idx} className="text-zinc-600">
+                {step.from} → {step.to} ({step.status})
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {cell.traceHeaders && Object.keys(cell.traceHeaders).length > 0 && (
+        <div>
+          <div className="font-medium text-zinc-700 mb-1">Заголовки:</div>
+          <div className="space-y-1 pl-2">
+            {Object.entries(cell.traceHeaders).map(([key, value]) => (
+              <div key={key} className="text-zinc-600">
+                <span className="font-mono">{key}:</span> {value}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {cell.redirectTo && (
+        <div className="text-zinc-600">
+          <span className="font-medium">Redirect to:</span> {cell.redirectTo}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Role = "guest" | "resident" | "chairman" | "secretary" | "accountant" | "admin";
 type Route = "/cabinet" | "/office" | "/admin" | "/login" | "/staff-login" | "/forbidden" | "/";
 
+type TestResult = "ALLOW" | "LOGIN_REQUIRED" | "FORBIDDEN" | "SERVER_ERROR";
+
+type RedirectStep = {
+  from: string;
+  to: string;
+  status: number;
+};
+
 type MatrixCell = {
-  status: "OK" | "LOGIN" | "FORBIDDEN" | "NOT_FOUND" | "UNEXPECTED" | "PENDING" | "SERVER_ERROR";
+  result: TestResult | "PENDING";
   httpStatus: number | null;
   finalUrl: string;
   redirectTo?: string;
-  isRedirect?: boolean;
-  expected?: ExpectedOutcome;
-  actual?: ExpectedOutcome;
-  matchesExpected?: boolean;
+  reason?: string; // reason из /forbidden?reason=...
+  redirectChain?: RedirectStep[]; // Цепочка редиректов
+  loginType?: "login" | "staff-login" | null; // Тип логина если LOGIN_REQUIRED
+  timingMs?: number; // Время выполнения запроса
+  traceHeaders?: Record<string, string>; // Диагностические заголовки (x-auth-source, x-auth-reason, x-auth-guard, x-request-id)
+  expected: TestResult;
+  actual: TestResult | null;
+  matchesExpected: boolean;
 };
 
 type MatrixResult = Record<Role, Record<Route, MatrixCell>>;
 
+type ServerMatrixCell = {
+  result?: TestResult;
+  actual?: TestResult | null;
+  httpStatus?: number | null;
+  finalUrl?: string;
+  redirectTo?: string;
+  reason?: string;
+  redirectChain?: RedirectStep[];
+  loginType?: "login" | "staff-login" | null;
+  timingMs?: number;
+  traceHeaders?: Record<string, string>;
+  expected?: TestResult;
+  matchesExpected?: boolean;
+};
+
 const ROLES: Role[] = ["guest", "resident", "chairman", "secretary", "accountant", "admin"];
 const ROUTES: Route[] = ["/cabinet", "/office", "/admin", "/login", "/staff-login", "/forbidden", "/"];
 
-// Таблица ожиданий: expected[role][route] = "Доступ есть" | "Требуется вход" | "Доступ запрещён"
-type ExpectedOutcome = "Доступ есть" | "Требуется вход" | "Доступ запрещён";
-const EXPECTED: Record<Role, Record<Route, ExpectedOutcome>> = {
+// Таблица ожиданий (синхронизирована с сервером)
+const EXPECTED: Record<Role, Record<Route, TestResult>> = {
   guest: {
-    "/cabinet": "Требуется вход",
-    "/office": "Требуется вход",
-    "/admin": "Требуется вход",
-    "/login": "Доступ есть",
-    "/staff-login": "Доступ есть",
-    "/forbidden": "Доступ есть",
-    "/": "Доступ есть",
+    "/cabinet": "LOGIN_REQUIRED",
+    "/office": "LOGIN_REQUIRED",
+    "/admin": "LOGIN_REQUIRED", // или FORBIDDEN в зависимости от политики
+    "/login": "ALLOW",
+    "/staff-login": "ALLOW",
+    "/forbidden": "ALLOW",
+    "/": "ALLOW",
   },
   resident: {
-    "/cabinet": "Доступ есть",
-    "/office": "Доступ запрещён",
-    "/admin": "Доступ запрещён",
-    "/login": "Доступ есть",
-    "/staff-login": "Доступ есть",
-    "/forbidden": "Доступ есть",
-    "/": "Доступ есть",
+    "/cabinet": "ALLOW",
+    "/office": "FORBIDDEN",
+    "/admin": "FORBIDDEN",
+    "/login": "ALLOW",
+    "/staff-login": "ALLOW",
+    "/forbidden": "ALLOW",
+    "/": "ALLOW",
   },
   chairman: {
-    "/cabinet": "Доступ запрещён",
-    "/office": "Доступ есть",
-    "/admin": "Доступ запрещён",
-    "/login": "Доступ есть",
-    "/staff-login": "Доступ есть",
-    "/forbidden": "Доступ есть",
-    "/": "Доступ есть",
+    "/cabinet": "ALLOW", // chairman имеет доступ в /cabinet и /office
+    "/office": "ALLOW",
+    "/admin": "FORBIDDEN", // но НЕ в /admin
+    "/login": "ALLOW",
+    "/staff-login": "ALLOW",
+    "/forbidden": "ALLOW",
+    "/": "ALLOW",
   },
   secretary: {
-    "/cabinet": "Доступ запрещён",
-    "/office": "Доступ есть",
-    "/admin": "Доступ запрещён",
-    "/login": "Доступ есть",
-    "/staff-login": "Доступ есть",
-    "/forbidden": "Доступ есть",
-    "/": "Доступ есть",
+    "/cabinet": "ALLOW", // secretary имеет доступ в /cabinet и /office
+    "/office": "ALLOW",
+    "/admin": "FORBIDDEN", // но НЕ в /admin
+    "/login": "ALLOW",
+    "/staff-login": "ALLOW",
+    "/forbidden": "ALLOW",
+    "/": "ALLOW",
   },
   accountant: {
-    "/cabinet": "Доступ запрещён",
-    "/office": "Доступ есть",
-    "/admin": "Доступ запрещён",
-    "/login": "Доступ есть",
-    "/staff-login": "Доступ есть",
-    "/forbidden": "Доступ есть",
-    "/": "Доступ есть",
+    "/cabinet": "ALLOW", // accountant имеет доступ в /cabinet и /office
+    "/office": "ALLOW",
+    "/admin": "FORBIDDEN", // но НЕ в /admin
+    "/login": "ALLOW",
+    "/staff-login": "ALLOW",
+    "/forbidden": "ALLOW",
+    "/": "ALLOW",
   },
   admin: {
-    "/cabinet": "Доступ запрещён",
-    "/office": "Доступ запрещён",
-    "/admin": "Доступ есть",
-    "/login": "Доступ есть",
-    "/staff-login": "Доступ есть",
-    "/forbidden": "Доступ есть",
-    "/": "Доступ есть",
+    "/cabinet": "ALLOW", // admin имеет доступ ко всем разделам
+    "/office": "ALLOW", // admin имеет доступ ко всем разделам
+    "/admin": "ALLOW",
+    "/login": "ALLOW",
+    "/staff-login": "ALLOW",
+    "/forbidden": "ALLOW",
+    "/": "ALLOW",
   },
 };
 
-// Преобразует статус в ожидаемый формат для сравнения
-const statusToExpected = (status: MatrixCell["status"]): ExpectedOutcome => {
-  switch (status) {
-    case "OK":
-      return "Доступ есть";
-    case "LOGIN":
-      return "Требуется вход";
-    case "FORBIDDEN":
-      return "Доступ запрещён";
-    case "NOT_FOUND":
-      return "Доступ запрещён"; // 404 считается как запрет доступа
-    case "SERVER_ERROR":
-      return "Доступ запрещён"; // 500+ считается как проблема с доступом
-    case "UNEXPECTED":
-      return "Доступ запрещён"; // Неожиданный статус считается проблемой
-    case "PENDING":
-      return "Доступ запрещён"; // В процессе проверки считаем как проблему
-    default:
-      return "Доступ запрещён";
-  }
-};
-
-const getStatusFromResponse = (
-  status: number,
-  finalUrl: string,
-  route: Route,
-  redirectTo?: string
-): { status: MatrixCell["status"]; isRedirect: boolean } => {
-  // Нормализуем finalUrl - убираем origin, оставляем только pathname (без query)
-  const finalUrlObj = finalUrl.startsWith("http") 
-    ? new URL(finalUrl) 
-    : new URL(finalUrl, "http://localhost");
-  const normalizedFinalUrl = finalUrlObj.pathname;
-  
-  // Нормализуем route - только pathname (без query)
-  const routeObj = new URL(route, "http://localhost");
-  const normalizedRoute = routeObj.pathname;
-
-  // Правило 1: pathname finalUrl начинается с /forbidden -> "Доступ запрещён"
-  if (normalizedFinalUrl.startsWith("/forbidden")) {
-    return { status: "FORBIDDEN", isRedirect: false };
-  }
-
-  // Правило 2: pathname начинается с /login или /staff-login -> "Требуется вход"
-  if (normalizedFinalUrl.startsWith("/login") || normalizedFinalUrl.startsWith("/staff-login")) {
-    return { status: "LOGIN", isRedirect: false };
-  }
-
-  // Правило 3: статус 404 -> "Не найдено (404)"
-  if (status === 404) {
-    return { status: "NOT_FOUND", isRedirect: false };
-  }
-
-  // Правило 4: статус >= 500 -> "Ошибка сервера (500)"
-  if (status >= 500) {
-    return { status: "SERVER_ERROR", isRedirect: false };
-  }
-
-  // Правило 5: если pathname finalUrl == route pathname и статус 2xx -> "Доступ есть"
-  if (normalizedFinalUrl === normalizedRoute && status >= 200 && status < 300) {
-    return { status: "OK", isRedirect: false };
-  }
-
-  // Правило 6: если 30x и redirectTo ведёт в ожидаемое место (например /office -> /office/dashboard) -> "Доступ есть" (и пометка "Редирект")
-  if (status >= 300 && status < 400 && redirectTo) {
-    const redirectUrlObj = new URL(redirectTo, "http://localhost");
-    const redirectPathname = redirectUrlObj.pathname;
-    
-    // Проверяем, ведёт ли редирект в ожидаемое место (например /office -> /office/dashboard)
-    if (redirectPathname.startsWith(normalizedRoute) || normalizedRoute.startsWith(redirectPathname)) {
-      return { status: "OK", isRedirect: true };
-    }
-    
-    // Если редирект в /forbidden, /login, /staff-login - используем соответствующий статус
-    if (redirectPathname.startsWith("/forbidden")) {
-      return { status: "FORBIDDEN", isRedirect: true };
-    }
-    if (redirectPathname.startsWith("/login") || redirectPathname.startsWith("/staff-login")) {
-      return { status: "LOGIN", isRedirect: true };
-    }
-  }
-
-  // Правило 7: иначе -> "Неожиданно"
-  return { status: "UNEXPECTED", isRedirect: status >= 300 && status < 400 };
-};
 
 type QaMatrixCardProps = {
   enableQa?: boolean;
   nodeEnv?: string;
+};
+
+type SessionContext = {
+  currentSessionRole: string | null;
+  effectiveRole: string | null;
+  normalizedRole: string | null;
+  sessionSource: "cookie" | "qa" | "none";
+  cookiePresent: {
+    snt_session: boolean;
+    qaCookie: boolean;
+  };
 };
 
 export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardProps) {
@@ -183,6 +200,9 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
     type: "idle",
   });
   const [isQaDisabled, setIsQaDisabled] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [sessionContext, setSessionContext] = useState<SessionContext | null>(null);
+  const { showToast, ToastComponent } = useToast();
 
   useEffect(() => {
     const checkQaEnabled = () => {
@@ -200,191 +220,190 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
     setResults(null);
     setStatus({ type: "loading", message: qaText.messages.matrixRunning });
 
-    // Получаем текущую роль из сессии (если есть)
-    // Используем document.cookie для чтения сессии, если доступно
-    try {
-      if (typeof document !== "undefined") {
-        const cookies = document.cookie.split(";");
-        const sessionCookie = cookies.find((c) => c.trim().startsWith("snt_session="));
-        if (sessionCookie) {
-          try {
-            const sessionValue = sessionCookie.split("=")[1];
-            const decoded = decodeURIComponent(sessionValue);
-            const sessionData = JSON.parse(decoded);
-            setCurrentRole(sessionData.role || null);
-          } catch {
-            // Ignore parsing errors
-          }
-        }
-      }
-    } catch {
-      // Ignore
-    }
-
+    // Инициализируем матрицу с PENDING
     const matrix: MatrixResult = {} as MatrixResult;
-
-    // Инициализируем матрицу
     for (const role of ROLES) {
-        matrix[role] = {} as Record<Route, MatrixCell>;
+      matrix[role] = {} as Record<Route, MatrixCell>;
       for (const route of ROUTES) {
         const expected = EXPECTED[role][route];
         matrix[role][route] = {
-          status: "PENDING",
+          result: "PENDING",
           httpStatus: null,
           finalUrl: route,
-          isRedirect: false,
           expected,
-          actual: statusToExpected("PENDING"),
+          actual: null,
           matchesExpected: false,
         };
       }
     }
-
     setResults(matrix);
 
     const totalChecks = ROLES.length * ROUTES.length;
     setProgress({ current: 0, total: totalChecks });
 
-    const pool = createRequestPool(); // Используем дефолтный лимит (5)
+    type FirstError = { status?: number; url?: string; message: string };
+    let firstError: FirstError | null = null;
 
     try {
-      // Создаём все задачи проверки
-      const checkTasks: Array<() => Promise<void>> = [];
+      // Создаём AbortController для таймаута
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 15000); // 15 секунд таймаут
 
-      for (const role of ROLES) {
-        for (const route of ROUTES) {
-          checkTasks.push(async () => {
-            const startTime = Date.now();
-            try {
-              const url = new URL(route, window.location.origin);
-              if (role !== "guest") {
-                url.searchParams.set("qa", role === "resident" ? "resident_ok" : role);
-              }
+      let fetchError: Error | null = null;
+      try {
+        // Вызываем серверный endpoint для выполнения проверок
+        const response = await fetch("/api/admin/qa/run-access-matrix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          signal: controller.signal,
+        });
 
-              const response = await fetchWithTimeout(
-                url.toString(),
-                {
-                  method: "HEAD",
-                  redirect: "manual",
-                  cache: "no-store",
-                },
-                7000
-              ).catch(() =>
-                fetchWithTimeout(
-                  url.toString(),
-                  {
-                    method: "GET",
-                    redirect: "manual",
-                    cache: "no-store",
-                  },
-                  7000
-                )
-              );
+        clearTimeout(timeoutId);
 
-              const statusCode = response.status;
-              let redirectTo: string | undefined;
-              let finalUrl: string;
+        let data: { results?: Record<string, Record<string, ServerMatrixCell>>; sessionContext?: SessionContext } | null = null;
+        try {
+          data = await readOk<{ results?: Record<string, Record<string, ServerMatrixCell>>; sessionContext?: SessionContext }>(response);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Server returned error";
+          const status = error instanceof ApiError ? error.status : response.status;
+          firstError = { status, url: response.url, message };
+          fetchError = new Error(message);
+          throw fetchError;
+        }
 
-              // Обрабатываем редиректы (30x статусы)
-              if (statusCode >= 300 && statusCode < 400) {
-                redirectTo = response.headers.get("Location") || undefined;
-                if (redirectTo) {
-                  // Если редирект относительный, делаем его абсолютным
-                  try {
-                    const redirectUrl = new URL(redirectTo, window.location.origin);
-                    redirectTo = redirectUrl.pathname + redirectUrl.search;
-                    finalUrl = redirectTo;
-                  } catch {
-                    // Если не удалось распарсить, пробуем использовать как есть
-                    finalUrl = redirectTo.startsWith("/") ? redirectTo : `/${redirectTo}`;
-                  }
-                } else {
-                  // Если Location header отсутствует, используем response.url
-                  finalUrl = response.url;
-                }
-              } else {
-                // Для не-редиректов используем response.url
-                finalUrl = response.url;
-              }
+        if (!data?.results) {
+          const invalidResponseMessage = "Invalid response from server";
+          firstError = { url: "/api/admin/qa/run-access-matrix", message: invalidResponseMessage };
+          fetchError = new Error(invalidResponseMessage);
+          throw fetchError;
+        }
 
-              // Нормализуем finalUrl - убираем origin, оставляем pathname + search
-              let finalUrlPathname: string;
-              let finalUrlFull: string;
-              try {
-                const finalUrlObj = new URL(finalUrl, window.location.origin);
-                finalUrlPathname = finalUrlObj.pathname;
-                finalUrlFull = finalUrlObj.pathname + finalUrlObj.search;
-              } catch {
-                // Если не удалось распарсить, используем как есть
-                finalUrlPathname = finalUrl.startsWith("/") ? finalUrl.split("?")[0] : `/${finalUrl.split("?")[0]}`;
-                finalUrlFull = finalUrl;
-              }
+        // Сохраняем sessionContext
+        if (data.sessionContext) {
+          setSessionContext(data.sessionContext);
+        }
 
-              const { status, isRedirect } = getStatusFromResponse(
-                statusCode,
-                finalUrlPathname,
-                route,
-                redirectTo
-              );
-
+        // Преобразуем результаты сервера в формат UI
+        const serverResults = data.results;
+        let completedCount = 0;
+        for (const role of ROLES) {
+          for (const route of ROUTES) {
+            const serverCell = serverResults[role]?.[route];
+            if (serverCell) {
+              // Используем actual result из сервера (он всегда валидный TestResult)
+              // UNEXPECTED показывается только в UI когда matchesExpected = false
+              const displayResult = serverCell.actual || serverCell.result || "SERVER_ERROR";
               const expected = EXPECTED[role][route];
-              const actual = statusToExpected(status);
-              const matchesExpected = expected === actual;
-
+              const matchesExpected =
+                serverCell.matchesExpected ?? (serverCell.actual ? serverCell.actual === expected : true);
               matrix[role][route] = {
-                status,
-                httpStatus: statusCode,
-                finalUrl: finalUrlFull,
-                redirectTo,
-                isRedirect: isRedirect || false,
+                result: displayResult,
+                httpStatus: serverCell.httpStatus ?? null,
+                finalUrl: serverCell.finalUrl || "",
+                redirectTo: serverCell.redirectTo,
+                reason: serverCell.reason,
+                redirectChain: serverCell.redirectChain || [],
+                loginType: serverCell.loginType || null,
+                timingMs: serverCell.timingMs,
+                traceHeaders: serverCell.traceHeaders || {},
                 expected,
-                actual,
+                actual: serverCell.actual ?? null,
                 matchesExpected,
               };
-            } catch (error) {
-              // Определяем, является ли это сетевой ошибкой
-              const isNetwork = isNetworkError(error);
-              const expected = EXPECTED[role][route];
-              const actual = statusToExpected("UNEXPECTED");
-              matrix[role][route] = {
-                status: "UNEXPECTED",
-                httpStatus: null,
-                finalUrl: route,
-                isRedirect: false,
-                expected,
-                actual,
-                matchesExpected: expected === actual,
-              };
+              const resultStatus: TestResult | "PENDING" = serverCell.result ?? "PENDING";
+              // Считаем завершённые проверки (не PENDING)
+              if (resultStatus !== "PENDING") {
+                completedCount++;
+              }
             }
+          }
+        }
+        
+        // Обновляем прогресс
+        setProgress({ current: completedCount, total: totalChecks });
 
-            // Обновляем прогресс и результаты постепенно
-            setProgress((prev) => {
-              const newCurrent = prev.current + 1;
-              return { current: newCurrent, total: prev.total };
-            });
-            setResults({ ...matrix });
+        setResults({ ...matrix });
+        setStatus({ type: "success", message: qaText.messages.matrixSuccess });
+
+        // Сохраняем результаты в localStorage
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem("qa-matrix-results", JSON.stringify(matrix));
+          } catch {
+            // Ignore
+          }
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          // Таймаут
+          const timeoutErrorMessage = "Превышено время ожидания (15 секунд)";
+          firstError = { url: "/api/admin/qa/run-access-matrix", message: timeoutErrorMessage };
+          
+          // Помечаем все ячейки как таймаут
+          for (const role of ROLES) {
+            for (const route of ROUTES) {
+              if (matrix[role][route].result === "PENDING") {
+                const expected = matrix[role][route].expected;
+                matrix[role][route] = {
+                  ...matrix[role][route],
+                  result: "SERVER_ERROR",
+                  actual: "SERVER_ERROR",
+                  matchesExpected: expected === "SERVER_ERROR",
+                };
+              }
+            }
+          }
+          setResults({ ...matrix });
+          setStatus({ 
+            type: "error", 
+            message: `Не удалось выполнить запросы: ${timeoutErrorMessage}` 
           });
+          return; // Выходим из функции, не попадая в внешний catch
+        } else {
+          throw fetchError;
         }
       }
+    } catch (error) {
+      // Логируем первую ошибку в консоль
+      const caughtErrorMessage = error instanceof Error ? error.message : String(error);
+      if (!firstError) {
+        firstError = { message: caughtErrorMessage };
+      }
+      
+      console.error("[matrix] Первая ошибка:", {
+        status: firstError.status,
+        url: firstError.url,
+        message: firstError.message,
+        error,
+      });
 
-      // Выполняем все задачи через пул
-      await Promise.all(checkTasks.map((task) => pool.add(task)));
-
-      setStatus({ type: "success", message: qaText.messages.matrixSuccess });
-
-      // Сохраняем результаты в localStorage для Bug Report Builder
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem("qa-matrix-results", JSON.stringify(matrix));
-        } catch {
-          // Ignore
+      // Помечаем все PENDING ячейки как ошибку
+      for (const role of ROLES) {
+        for (const route of ROUTES) {
+          if (matrix[role][route].result === "PENDING") {
+            const expected = matrix[role][route].expected;
+            matrix[role][route] = {
+              ...matrix[role][route],
+              result: "SERVER_ERROR",
+              actual: "SERVER_ERROR",
+              matchesExpected: expected === "SERVER_ERROR",
+            };
+          }
         }
       }
-    } catch {
-      setStatus({ type: "error", message: qaText.messages.matrixError });
+      setResults({ ...matrix });
+      
+      const finalErrorMessage = firstError?.message || caughtErrorMessage;
+      setStatus({ 
+        type: "error", 
+        message: `Не удалось выполнить запросы: ${finalErrorMessage}` 
+      });
     } finally {
       setLoading(false);
-      setProgress({ current: 0, total: 0 });
     }
   };
 
@@ -401,45 +420,194 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
     }
   };
 
-  const getStatusColor = (status: MatrixCell["status"]) => {
-    switch (status) {
-      case "OK":
+  // Генерация JSON отчёта
+  const generateReport = async (): Promise<string> => {
+    if (!results) {
+      throw new Error("Нет результатов для генерации отчёта");
+    }
+
+    // Получаем build info
+    let buildInfo: { sha?: string; builtAt?: string } = {};
+    try {
+      buildInfo = await apiGetRaw("/admin/build-info");
+    } catch {
+      // Ignore
+    }
+
+    // Формируем результаты в плоском формате
+    const reportResults: Array<{
+      role: Role;
+      route: Route;
+      expected: TestResult;
+      actual: TestResult | "PENDING" | "UNEXPECTED" | null;
+      status: number | null;
+      finalUrl: string;
+      forbiddenReason: string | null;
+      authSource: string | null;
+      redirectChain: Array<{ from: string; to: string; status: number }>;
+      timingMs: number | null;
+      notes?: string;
+    }> = [];
+
+    for (const role of ROLES) {
+      for (const route of ROUTES) {
+        const cell = results[role]?.[route];
+        if (!cell) continue;
+
+        const authSource = cell.traceHeaders?.["x-auth-source"] || null;
+        const notes: string[] = [];
+        if (!cell.matchesExpected) {
+          notes.push(`Ожидалось: ${cell.expected}, получено: ${cell.actual || "null"}`);
+        }
+        if (cell.loginType) {
+          notes.push(`Тип логина: ${cell.loginType}`);
+        }
+
+        reportResults.push({
+          role,
+          route,
+          expected: cell.expected,
+          actual: cell.actual,
+          status: cell.httpStatus,
+          finalUrl: cell.finalUrl,
+          forbiddenReason: cell.reason || null,
+          authSource,
+          redirectChain: cell.redirectChain || [],
+          timingMs: cell.timingMs || null,
+          notes: notes.length > 0 ? notes.join("; ") : undefined,
+        });
+      }
+    }
+
+    const report = {
+      generatedAt: new Date().toISOString(),
+      app: {
+        env: nodeEnv || process.env.NODE_ENV || "unknown",
+        build: buildInfo.builtAt || null,
+        commit: buildInfo.sha || null,
+      },
+      sessionContext: sessionContext || {
+        currentSessionRole: null,
+        effectiveRole: null,
+        normalizedRole: null,
+        sessionSource: "none",
+        cookiePresent: {
+          snt_session: false,
+          qaCookie: false,
+        },
+      },
+      matrix: {
+        routes: ROUTES,
+        roles: ROLES,
+        results: reportResults,
+      },
+    };
+
+    return JSON.stringify(report, null, 2);
+  };
+
+  const handleCopyReport = async () => {
+    if (!results) {
+      return;
+    }
+
+    try {
+      const reportJson = await generateReport();
+
+      // Пытаемся скопировать в clipboard
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(reportJson);
+        showToast("Отчёт скопирован");
+      } else {
+        // Fallback: открываем modal
+        setReportJsonForModal(reportJson);
+        setShowCopyModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to generate report:", error);
+      // Fallback: открываем modal
+      try {
+        const reportJson = await generateReport();
+        setReportJsonForModal(reportJson);
+        setShowCopyModal(true);
+      } catch (err) {
+        console.error("Failed to generate report for modal:", err);
+      }
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    if (!results) {
+      return;
+    }
+
+    try {
+      const reportJson = await generateReport();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5);
+      downloadJson(reportJson, `access-matrix-report-${timestamp}.json`);
+      showToast("Отчёт скачан");
+    } catch (error) {
+      console.error("Failed to download report:", error);
+    }
+  };
+
+  const getResultColor = (cell: MatrixCell) => {
+    // Если результат не соответствует ожидаемому - красный цвет
+    if (cell.result !== "PENDING" && !cell.matchesExpected && cell.actual !== null) {
+      return "bg-red-100 text-red-800";
+    }
+    
+    switch (cell.result) {
+      case "ALLOW":
         return "bg-green-100 text-green-800";
-      case "LOGIN":
+      case "LOGIN_REQUIRED":
         return "bg-blue-100 text-blue-800";
       case "FORBIDDEN":
         return "bg-amber-100 text-amber-800";
-      case "NOT_FOUND":
-        return "bg-zinc-100 text-zinc-800";
       case "SERVER_ERROR":
         return "bg-red-100 text-red-800";
-      case "UNEXPECTED":
-        return "bg-red-100 text-red-800";
       case "PENDING":
-        return "bg-gray-100 text-gray-500";
+        // Нейтральный цвет для PENDING (не красный)
+        return "bg-zinc-100 text-zinc-600";
       default:
         return "bg-gray-100 text-gray-500";
     }
   };
 
-  const getVerdictLabel = (status: MatrixCell["status"]): string => {
-    switch (status) {
-      case "OK":
-        return qaText.verdicts.OK;
-      case "LOGIN":
-        return qaText.verdicts.LOGIN;
+  const getResultLabel = (cell: MatrixCell): string => {
+    // Если результат не соответствует ожидаемому - показываем "Неожиданно"
+    if (cell.result !== "PENDING" && !cell.matchesExpected && cell.actual !== null) {
+      return "Неожиданно";
+    }
+    
+    switch (cell.result) {
+      case "ALLOW":
+        return "Доступ есть";
+      case "LOGIN_REQUIRED":
+        return "Требуется вход";
       case "FORBIDDEN":
-        return qaText.verdicts.FORBIDDEN;
-      case "NOT_FOUND":
-        return qaText.verdicts.NOT_FOUND;
+        return "Доступ запрещён";
       case "SERVER_ERROR":
-        return "Ошибка сервера (500)";
-      case "UNEXPECTED":
-        return qaText.verdicts.UNEXPECTED;
+        return "Ошибка сервера";
       case "PENDING":
-        return qaText.verdicts.PENDING;
+        return "Проверка...";
       default:
-        return qaText.verdicts.UNEXPECTED;
+        return "Неизвестно";
+    }
+  };
+
+  const formatExpected = (expected: TestResult): string => {
+    switch (expected) {
+      case "ALLOW":
+        return "Доступ есть";
+      case "LOGIN_REQUIRED":
+        return "Требуется вход";
+      case "FORBIDDEN":
+        return "Доступ запрещён";
+      case "SERVER_ERROR":
+        return "Ошибка сервера";
+      default:
+        return String(expected);
     }
   };
 
@@ -457,6 +625,8 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
       </div>
     );
   };
+
+  const [reportJsonForModal, setReportJsonForModal] = useState<string>("");
 
   if (isQaDisabled) {
     return (
@@ -479,10 +649,18 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
   }
 
   return (
-    <section
-      className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
-      data-testid="qa-matrix-card"
-    >
+    <>
+      {ToastComponent}
+      <CopyReportModal
+        open={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
+        content={reportJsonForModal}
+        testId="access-matrix-report-modal"
+      />
+      <section
+        className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+        data-testid="qa-matrix-card"
+      >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold text-zinc-900">{qaText.headers.accessMatrix}</h2>
@@ -493,6 +671,17 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
             <p className="text-xs text-zinc-600">
               {qaText.labels.currentRoleCoverage}: {currentRole}
             </p>
+          )}
+          {sessionContext && (
+            <div className="text-xs text-zinc-600" data-testid="access-matrix-session-context">
+              Текущая сессия:{" "}
+              <span className="font-medium">
+                {sessionContext.normalizedRole || sessionContext.currentSessionRole || "guest"}
+              </span>
+              {" "}(source: {sessionContext.sessionSource}), cookie: snt_session=
+              {sessionContext.cookiePresent.snt_session ? "yes" : "no"}, qa=
+              {sessionContext.cookiePresent.qaCookie ? "yes" : "no"}
+            </div>
           )}
         </div>
 
@@ -538,20 +727,15 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
                     </td>
                     {ROUTES.map((route) => {
                       const cell = results[role][route];
-                      // Сравниваем pathname без query параметров
-                      const finalUrlPathname = cell.finalUrl.split("?")[0];
-                      const routePathname = route.split("?")[0];
-                      const isSamePath = finalUrlPathname === routePathname;
-                      const displayUrl = cell.redirectTo || cell.finalUrl;
                       return (
                         <td
                           key={route}
                           className="border border-zinc-200 px-2 py-2 text-center"
-                          title={`${getVerdictLabel(cell.status)} (${cell.httpStatus || qaText.misc.dash}) → ${displayUrl}`}
+                          title={`${getResultLabel(cell)} (${cell.httpStatus || "—"}) → ${cell.finalUrl}`}
                         >
                           <div className="space-y-1">
-                            {/* Индикатор совпадения с ожиданием */}
-                            {cell.matchesExpected !== undefined && (
+                            {/* Индикатор совпадения с ожиданием - показываем только для завершённых проверок */}
+                            {cell.result !== "PENDING" && cell.matchesExpected !== undefined && (
                               <div className="flex items-center justify-center">
                                 {cell.matchesExpected ? (
                                   <span
@@ -577,7 +761,7 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
                                 ) : (
                                   <span
                                     className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800"
-                                    title={`Ожидалось: ${cell.expected || "—"}`}
+                                    title={`Ожидалось: ${formatExpected(cell.expected)}`}
                                   >
                                     <svg
                                       className="h-3 w-3"
@@ -600,38 +784,58 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
                             )}
                             <div className="flex items-center justify-center gap-1 flex-wrap">
                               <span
-                                className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusColor(cell.status)}`}
+                                className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getResultColor(cell)}`}
                               >
-                                {getVerdictLabel(cell.status)}
+                                {getResultLabel(cell)}
                               </span>
-                              {cell.isRedirect && (
-                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                                  Редирект
-                                </span>
-                              )}
                             </div>
-                            {!cell.matchesExpected && cell.expected && (
+                            {cell.result !== "PENDING" && !cell.matchesExpected && (
                               <div className="text-xs text-red-600 font-medium">
-                                Ожидалось: {cell.expected}
+                                Ожидалось: {formatExpected(cell.expected)}
                               </div>
                             )}
-                            {cell.httpStatus && <div className="text-xs text-zinc-500">{cell.httpStatus}</div>}
-                            {displayUrl && (
-                              <div className="flex items-center justify-center gap-1 flex-wrap">
-                                <span className="text-xs text-zinc-400" title={displayUrl}>
-                                  URL: {displayUrl.length > 15 ? `${displayUrl.substring(0, 15)}...` : displayUrl}
-                                </span>
-                                <a
-                                  href={displayUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-medium text-zinc-700 hover:bg-zinc-300 transition-colors"
-                                  aria-label={`Открыть ${displayUrl} в новой вкладке`}
-                                >
-                                  Открыть
-                                </a>
+                            {cell.result === "PENDING" && loading && (
+                              <div className="text-xs text-zinc-500 italic">
+                                Ожидание...
                               </div>
                             )}
+                            {cell.result === "SERVER_ERROR" && cell.actual === "SERVER_ERROR" && !cell.httpStatus && (
+                              <div className="text-xs text-red-600 font-medium">
+                                Ошибка запроса
+                              </div>
+                            )}
+                            {cell.httpStatus && (
+                              <div className="text-xs text-zinc-500">HTTP {cell.httpStatus}</div>
+                            )}
+                            {cell.finalUrl && (
+                              <div className="text-xs text-zinc-400" title={cell.finalUrl}>
+                                URL: {cell.finalUrl.length > 20 ? `${cell.finalUrl.substring(0, 20)}...` : cell.finalUrl}
+                              </div>
+                            )}
+                            {cell.reason && (
+                              <div className="text-xs text-amber-600 font-medium">
+                                Reason: {cell.reason}
+                                {cell.traceHeaders?.["x-auth-source"] && (
+                                  <span className="ml-1 text-zinc-500">
+                                    (src: {cell.traceHeaders["x-auth-source"]})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {cell.loginType && (
+                              <div className="text-xs text-blue-600">
+                                Login: {cell.loginType}
+                              </div>
+                            )}
+                            {cell.timingMs !== undefined && (
+                              <div className="text-xs text-zinc-400">
+                                {cell.timingMs}ms
+                              </div>
+                            )}
+                            {(cell.redirectChain && cell.redirectChain.length > 0) || 
+                             (cell.traceHeaders && Object.keys(cell.traceHeaders).length > 0) ? (
+                              <MatrixCellDetails cell={cell} />
+                            ) : null}
                           </div>
                         </td>
                       );
@@ -696,10 +900,34 @@ export default function QaMatrixCard({ enableQa = true, nodeEnv }: QaMatrixCardP
             >
               {qaText.buttons.clearResults}
             </button>
+            <button
+              type="button"
+              onClick={handleCopyReport}
+              disabled={loading || !results}
+              data-testid="access-matrix-copy-json"
+              className={secondaryButtonClass}
+              title={!results ? "Сначала запустите матрицу" : "Скопировать отчёт (JSON)"}
+              aria-label="Скопировать отчёт матрицы доступов в формате JSON"
+            >
+              Скопировать отчёт (JSON)
+            </button>
+            {results && (
+              <button
+                type="button"
+                onClick={handleDownloadReport}
+                disabled={loading}
+                data-testid="access-matrix-download-json"
+                className={secondaryButtonClass}
+                aria-label="Скачать отчёт матрицы доступов"
+              >
+                Скачать .json
+              </button>
+            )}
           </div>
           {status.type !== "idle" && <span className="text-xs text-zinc-500">{status.message}</span>}
         </div>
       </div>
     </section>
+    </>
   );
 }

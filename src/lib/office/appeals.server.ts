@@ -33,6 +33,8 @@ export const listAppeals = (params: ListAppealsParams = {}): Appeal[] =>
     comments: item.comments,
     assigneeRole: item.assigneeRole,
     assigneeUserId: item.assigneeUserId,
+    assignedToUserId: item.assignedToUserId ?? item.assigneeUserId ?? null, // Sprint 2.1
+    assignedAt: item.assignedAt ?? null,
     dueAt: item.dueAt,
     priority: item.priority,
     history: item.history,
@@ -41,6 +43,10 @@ export const listAppeals = (params: ListAppealsParams = {}): Appeal[] =>
 export const getAppeal = (id: string): Appeal | null => {
   const found = getBaseAppeal(id);
   if (!found) return null;
+  // Миграция Sprint 2.1: синхронизация assigneeUserId -> assignedToUserId
+  const assignedToUserId = found.assignedToUserId ?? found.assigneeUserId ?? null;
+  const assignedAt = found.assignedAt ?? null;
+  
   return {
     id: found.id,
     createdAt: found.createdAt,
@@ -55,6 +61,8 @@ export const getAppeal = (id: string): Appeal | null => {
   comments: found.comments,
   assigneeRole: found.assigneeRole,
   assigneeUserId: found.assigneeUserId,
+  assignedToUserId, // Sprint 2.1
+  assignedAt,
   dueAt: found.dueAt,
   priority: found.priority,
   history: found.history,

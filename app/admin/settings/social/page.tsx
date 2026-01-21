@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { formatAdminTime, getOfficialChannelsSettingServer, listSettingVersions } from "@/lib/settings.server";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { revalidatePath } from "next/cache";
+import { readOk } from "@/lib/api/client";
 
 export default async function AdminSocialHistory() {
   const user = await getSessionUser();
@@ -17,12 +18,13 @@ export default async function AdminSocialHistory() {
     "use server";
     const versionId = formData.get("versionId") as string;
     const comment = (formData.get("comment") as string) || "";
-    await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/settings/social/restore`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/settings/social/restore`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ versionId, comment }),
       cache: "no-store",
     });
+    await readOk(res);
     revalidatePath("/admin/settings/social");
   }
 

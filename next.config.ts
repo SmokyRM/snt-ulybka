@@ -6,7 +6,12 @@ const bundleAnalyzer = withBundleAnalyzer({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Dev-кэш Turbopack: единственный поддерживаемый ключ в Next.js 16.1.1 —
+    // turbopackFileSystemCacheForDev. (turbopackPersistentCaching, isrMemoryCacheSize удалены.)
+    // false — избегаем LevelDB "Another write batch or compaction is already active" при hot-reload.
+    turbopackFileSystemCacheForDev: false,
+  },
 };
 
 export default bundleAnalyzer(nextConfig);

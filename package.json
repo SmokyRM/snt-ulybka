@@ -7,32 +7,41 @@
     "dev:turbo": "next dev --turbopack",
     "dev:e2e": "next dev --webpack",
     "clean": "rm -rf .next .turbo node_modules/.cache",
+    "clean:dev": "rm -rf .next .turbo node_modules/.cache && echo '✓ Cleaned build artifacts (preserved data/ and tmp/)' && npm run dev",
     "build": "cross-env NEXT_PUBLIC_BUILD_TIME=$(node -e \"process.stdout.write(new Date().toISOString())\") next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "lint:public": "eslint \"app/(public)\"",
+    "lint:cabinet": "eslint \"app/(cabinet)/**\" \"app/admin/qa/**\" \"src/lib/qaCabinetStage.*\" \"src/lib/cabinet*\"",
     "typecheck": "tsc --noEmit",
     "typecheck:e2e": "tsc -p tests/e2e/tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "npm run check:api-contracts && vitest run",
     "test:e2e": "PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:matrix": "PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test tests/e2e/access-matrix.spec.ts --project=access-matrix",
     "qa:report": "node scripts/qa-report.mjs",
-    "check:conflicts": "node -e \"const {execSync}=require('node:child_process');const patterns=['<<<<<<','=======','>>>>>>'];const files=execSync('git ls-files').toString().trim().split('\\n').filter(Boolean);let bad=[];for(const f of files){const txt=execSync(`cat ${JSON.stringify(f)}`).toString();if(patterns.some(p=>txt.includes(p))) bad.push(f);}if(bad.length){console.error('Conflict markers found in:\\n'+bad.join('\\n'));process.exit(1);}\"",
+    "check:conflicts": "node -e \"const {execSync}=require('node:child_process');const patterns=['<<<<<<','=======','>>>>>>'];const files=execSync('git ls-files').toString().trim().split('\\\\n').filter(Boolean);let bad=[];for(const f of files){try{const txt=execSync('cat '+f.replace(/[^a-zA-Z0-9/._-]/g,''),{encoding:'utf8'}).toString();if(patterns.some(p=>txt.includes(p))) bad.push(f);}catch(e){}}if(bad.length){console.error('Conflict markers found in:\\\\n'+bad.join('\\\\n'));process.exit(1);}\"",
     "deploy": "npm run lint && npm run typecheck && npm run build && node scripts/release.js",
     "deploy:prod": "npm run deploy",
     "deploy:dry": "node scripts/release.js --dry-run",
     "seed:test": "ALLOW_SEED_TEST_DATA=true tsx seed/seed-test.ts",
     "analyze": "ANALYZE=true next build",
     "perf:budget": "node scripts/check-bundle-size.mjs",
-    "check:imports": "npm run lint -- --quiet"
+    "check:api-contracts": "node scripts/check-api-contracts.mjs",
+    "check:imports": "npm run lint -- --quiet",
+    "vercel": "npx vercel@latest",
+    "vercel:deploy": "npx vercel@latest deploy",
+    "vercel:pull": "npx vercel@latest pull"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.34.0",
     "@vercel/blob": "^0.27.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "^11.5.4",
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.1.2",
@@ -47,8 +56,10 @@
     "tailwindcss": "^4",
     "tsx": "^4.7.1",
     "typescript": "^5",
-    "vercel": "^39.4.1",
     "vitest": "^4.0.17",
     "wait-on": "^8.0.1"
+  },
+  "overrides": {
+    "undici": "^6.23.0"
   }
 }

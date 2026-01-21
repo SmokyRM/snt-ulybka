@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { qaText } from "@/lib/qaText";
 import { primaryButtonClass, secondaryButtonClass } from "./qaStyles";
+import { useToast, CopyReportModal, downloadJson } from "./QaReportUtils";
+import { apiGetRaw } from "@/lib/api/client";
 
 type DeadendResult = {
   route: string;
@@ -41,6 +43,9 @@ export default function QaDeadendsCard({ enableQa = true, nodeEnv }: QaDeadendsC
     type: "idle",
   });
   const [isQaDisabled, setIsQaDisabled] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [reportJsonForModal, setReportJsonForModal] = useState<string>("");
+  const { showToast, ToastComponent } = useToast();
 
   useEffect(() => {
     const checkQaEnabled = () => {
@@ -189,6 +194,87 @@ export default function QaDeadendsCard({ enableQa = true, nodeEnv }: QaDeadendsC
     }
   };
 
+  // Генерация JSON отчёта для deadends
+  const generateReport = async (): Promise<string> => {
+    if (!results || results.length === 0) {
+      throw new Error("Нет результатов для генерации отчёта");
+    }
+
+    // Получаем build info
+    let buildInfo: { sha?: string; builtAt?: string } = {};
+    try {
+      buildInfo = await apiGetRaw("/admin/build-info");
+    } catch {
+      // Ignore
+    }
+
+    const report = {
+      generatedAt: new Date().toISOString(),
+      app: {
+        env: nodeEnv || process.env.NODE_ENV || "unknown",
+        build: buildInfo.builtAt || null,
+        commit: buildInfo.sha || null,
+      },
+      deadends: {
+        routesChecked: ROUTES_TO_CHECK,
+        results: results.map((r) => ({
+          route: r.route,
+          issue: r.issue,
+          details: r.details,
+          finalUrl: r.finalUrl || null,
+          redirectCount: r.redirectCount || null,
+        })),
+      },
+    };
+
+    return JSON.stringify(report, null, 2);
+  };
+
+  const handleCopyReport = async () => {
+    if (!results || results.length === 0) {
+      return;
+    }
+
+    try {
+      const reportJson = await generateReport();
+
+      // Пытаемся скопировать в clipboard
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(reportJson);
+        showToast("Отчёт скопирован");
+      } else {
+        // Fallback: открываем modal
+        setReportJsonForModal(reportJson);
+        setShowCopyModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to generate report:", error);
+      // Fallback: открываем modal
+      try {
+        const reportJson = await generateReport();
+        setReportJsonForModal(reportJson);
+        setShowCopyModal(true);
+      } catch (err) {
+        console.error("Failed to generate report for modal:", err);
+      }
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    if (!results || results.length === 0) {
+      return;
+    }
+
+    try {
+      const reportJson = await generateReport();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5);
+      downloadJson(reportJson, `deadends-report-${timestamp}.json`);
+      showToast("Отчёт скачан");
+    } catch (error) {
+      console.error("Failed to download report:", error);
+    }
+  };
+
   const getIssueColor = (issue: DeadendResult["issue"]) => {
     switch (issue) {
       case "404":
@@ -235,10 +321,18 @@ export default function QaDeadendsCard({ enableQa = true, nodeEnv }: QaDeadendsC
   };
 
   return (
-    <section
-      className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
-      data-testid="qa-deadends-card"
-    >
+    <>
+      {ToastComponent}
+      <CopyReportModal
+        open={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
+        content={reportJsonForModal}
+        testId="deadends-report-modal"
+      />
+      <section
+        className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+        data-testid="qa-deadends-card"
+      >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold text-zinc-900">{qaText.headers.deadendScan}</h2>
@@ -249,7 +343,11 @@ export default function QaDeadendsCard({ enableQa = true, nodeEnv }: QaDeadendsC
 
         {renderBanner()}
 
-        {results.length > 0 ? (
+        {status.type === "idle" ? (
+          <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-4 text-center">
+            <div className="text-sm text-zinc-600">Нажмите кнопку для запуска проверки</div>
+          </div>
+        ) : results.length > 0 ? (
           <div className="space-y-2">
             {results.map((result, idx) => (
               <div
@@ -276,11 +374,11 @@ export default function QaDeadendsCard({ enableQa = true, nodeEnv }: QaDeadendsC
               </div>
             ))}
           </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-4 text-center">
-            <div className="text-sm text-zinc-600">{qaText.messages.emptyDeadends}</div>
+        ) : status.type === "success" ? (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
+            <div className="text-sm text-green-800 font-medium">Проблем не обнаружено</div>
           </div>
-        )}
+        ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 pt-4">
           <div className="flex gap-2">
@@ -331,10 +429,34 @@ export default function QaDeadendsCard({ enableQa = true, nodeEnv }: QaDeadendsC
             >
               {qaText.buttons.clearResults}
             </button>
+            <button
+              type="button"
+              onClick={handleCopyReport}
+              disabled={loading || results.length === 0}
+              data-testid="deadends-copy-json"
+              className={secondaryButtonClass}
+              title={results.length === 0 ? "Сначала запустите проверку" : "Скопировать отчёт (JSON)"}
+              aria-label="Скопировать отчёт проверки тупиков в формате JSON"
+            >
+              Скопировать отчёт (JSON)
+            </button>
+            {results.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDownloadReport}
+                disabled={loading}
+                data-testid="deadends-download-json"
+                className={secondaryButtonClass}
+                aria-label="Скачать отчёт проверки тупиков"
+              >
+                Скачать .json
+              </button>
+            )}
           </div>
           {status.type !== "idle" && <span className="text-xs text-zinc-500">{status.message}</span>}
         </div>
       </div>
     </section>
+    </>
   );
 }

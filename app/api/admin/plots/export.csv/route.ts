@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unauthorized, forbidden } from "@/lib/api/respond";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlots } from "@/lib/plotsDb";
 import { membershipLabel } from "@/lib/membershipLabels";
@@ -28,8 +29,8 @@ const parseFilters = (params: URLSearchParams) => {
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!user) return unauthorized(request);
+  if (!hasAdminAccess(user)) return forbidden(request);
 
   const url = new URL(request.url);
   const filters = parseFilters(url.searchParams);

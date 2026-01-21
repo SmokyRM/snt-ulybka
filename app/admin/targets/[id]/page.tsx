@@ -1,19 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import { isOfficeRole, isAdminRole } from "@/lib/rbac";
 import { getTargetFundWithStats, getTargetFundTimeline } from "@/lib/targets";
 import BackToListLink from "@/components/BackToListLink";
+import TargetFundDetailClient from "./TargetFundDetailClient";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
-
-export default async function TargetFundDetail({ params }: { params: { id: string } }) {
+export default async function TargetFundDetail({ params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
+  if (!user) redirect("/staff-login?next=/admin/targets");
+  
+  const role = user.role;
+  if (!hasAdminAccess(user) && !isOfficeRole(role) && !isAdminRole(role)) {
+    redirect("/forbidden?reason=admin.only&next=/admin/targets");
+  }
 
-  const fund = getTargetFundWithStats(params.id);
+  const { id } = await params;
+  const fund = getTargetFundWithStats(id);
   if (!fund) {
     return (
       <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
@@ -27,9 +33,24 @@ export default async function TargetFundDetail({ params }: { params: { id: strin
     );
   }
 
-  const progressPct = Math.min(Math.floor((fund.collected / fund.targetAmount) * 100), 100);
   const timeline = getTargetFundTimeline(fund.id);
-  const hasSpent = timeline.spent.length > 0;
+  
+  // Get payments linked to this target fund
+  const { listPayments, findPlotById } = await import("@/lib/mockDb");
+  const payments = listPayments({ includeVoided: false })
+    .filter((p) => p.targetFundId === id)
+    .map((p) => {
+      const plot = findPlotById(p.plotId);
+      return {
+        id: p.id,
+        amount: p.amount,
+        paidAt: p.paidAt,
+        plotStreet: plot?.street,
+        plotNumber: plot?.plotNumber,
+        ownerFullName: plot?.ownerFullName,
+      };
+    })
+    .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-10 text-zinc-900 sm:px-6">
@@ -39,28 +60,7 @@ export default async function TargetFundDetail({ params }: { params: { id: strin
           <BackToListLink href="/admin/targets" />
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
-          <p className="text-sm text-zinc-700 whitespace-pre-wrap">{fund.description}</p>
-          <div className="space-y-2 text-sm text-zinc-800">
-            <div>Статус: {fund.status}</div>
-            <div>Цель: {formatAmount(fund.targetAmount)}</div>
-            <div>Собрано: {formatAmount(fund.collected)}</div>
-            <div>Расходы: {formatAmount(fund.spent)}</div>
-            <div>Осталось: {formatAmount(Math.max(fund.targetAmount - fund.collected, 0))}</div>
-            {hasSpent && <div>Баланс в рамках цели: {formatAmount(fund.collected - fund.spent)}</div>}
-          </div>
-          <div className="space-y-1">
-            <div className="w-full rounded-full bg-zinc-100">
-              <div
-                className="rounded-full bg-[#5E704F] text-xs text-white"
-                style={{ width: `${progressPct}%`, minWidth: "4%" }}
-              >
-                &nbsp;
-              </div>
-            </div>
-            <div className="text-xs text-zinc-600">Прогресс: {progressPct}%</div>
-          </div>
-        </div>
+        <TargetFundDetailClient fund={fund} payments={payments} />
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm space-y-3">
           <h2 className="text-lg font-semibold">Собрано по месяцам</h2>
@@ -82,7 +82,7 @@ export default async function TargetFundDetail({ params }: { params: { id: strin
               </div>
             )}
           </div>
-          {hasSpent && (
+          {timeline.spent.length > 0 && (
             <div className="space-y-1 text-sm text-zinc-800">
               <div className="font-semibold">Потрачено по месяцам</div>
               <div className="flex flex-wrap items-end gap-2">

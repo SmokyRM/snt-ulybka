@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters } from "@/lib/mockDb";
+import { forbidden, ok, unauthorized, serverError } from "@/lib/api/respond";
 
 const parseQuery = (request: Request) => {
   const url = new URL(request.url);
@@ -11,14 +11,18 @@ const parseQuery = (request: Request) => {
 };
 
 export async function GET(request: Request) {
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return unauthorized(request, "unauthorized");
+    }
+    if (!hasAdminAccess(user)) {
+      return forbidden(request, "forbidden");
+    }
+    const { query, page, limit } = parseQuery(request);
+    const { items, total } = listPlotsWithFilters({ query, page, pageSize: limit });
+    return ok(request, { plots: items, total, page, limit });
+  } catch (error) {
+    return serverError(request, "Internal error", error);
   }
-  if (!hasAdminAccess(user)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-  const { query, page, limit } = parseQuery(request);
-  const { items, total } = listPlotsWithFilters({ query, page, pageSize: limit });
-  return NextResponse.json({ plots: items, total, page, limit });
 }

@@ -12,10 +12,10 @@ describe("respond", () => {
     it("возвращает JSON ответ со статусом 200", async () => {
       const request = new Request("https://example.com/api/test");
       const response = ok(request, { data: "test" });
-      
+
       expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data).toEqual({ data: "test" });
+      const json = await response.json();
+      expect(json).toEqual({ ok: true, data: { data: "test" } });
     });
 
     it("добавляет x-request-id в заголовки", async () => {
@@ -52,11 +52,12 @@ describe("respond", () => {
     it("возвращает JSON ответ со статусом 400", async () => {
       const request = new Request("https://example.com/api/test");
       const response = badRequest(request, "Ошибка валидации");
-      
+
       expect(response.status).toBe(400);
-      const data = await response.json();
-      expect(data).toHaveProperty("error", "bad_request");
-      expect(data).toHaveProperty("message", "Ошибка валидации");
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.code).toBe("bad_request");
+      expect(json.error.message).toBe("Ошибка валидации");
     });
 
     it("добавляет x-request-id в заголовки", async () => {
@@ -70,9 +71,10 @@ describe("respond", () => {
     it("может включать details", async () => {
       const request = new Request("https://example.com/api/test");
       const response = badRequest(request, "Ошибка", { field: "email" });
-      
-      const data = await response.json();
-      expect(data).toHaveProperty("details", { field: "email" });
+
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.details).toEqual({ field: "email" });
     });
   });
 
@@ -80,19 +82,21 @@ describe("respond", () => {
     it("возвращает JSON ответ со статусом 401", async () => {
       const request = new Request("https://example.com/api/test");
       const response = unauthorized(request);
-      
+
       expect(response.status).toBe(401);
-      const data = await response.json();
-      expect(data).toHaveProperty("error", "unauthorized");
-      expect(data).toHaveProperty("message", "Требуется авторизация");
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.code).toBe("unauthorized");
+      expect(json.error.message).toBe("Требуется авторизация");
     });
 
     it("может принимать кастомное сообщение", async () => {
       const request = new Request("https://example.com/api/test");
       const response = unauthorized(request, "Неверные учётные данные");
-      
-      const data = await response.json();
-      expect(data).toHaveProperty("message", "Неверные учётные данные");
+
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.message).toBe("Неверные учётные данные");
     });
   });
 
@@ -100,11 +104,12 @@ describe("respond", () => {
     it("возвращает JSON ответ со статусом 403", async () => {
       const request = new Request("https://example.com/api/test");
       const response = forbidden(request);
-      
+
       expect(response.status).toBe(403);
-      const data = await response.json();
-      expect(data).toHaveProperty("error", "forbidden");
-      expect(data).toHaveProperty("message", "Доступ запрещён");
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.code).toBe("forbidden");
+      expect(json.error.message).toBe("Доступ запрещён");
     });
   });
 
@@ -112,10 +117,11 @@ describe("respond", () => {
     it("возвращает JSON ответ со статусом 405", async () => {
       const request = new Request("https://example.com/api/test");
       const response = methodNotAllowed(request, ["GET", "POST"]);
-      
+
       expect(response.status).toBe(405);
-      const data = await response.json();
-      expect(data).toHaveProperty("error", "method_not_allowed");
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.code).toBe("method_not_allowed");
     });
 
     it("добавляет Allow header с разрешёнными методами", async () => {
@@ -139,10 +145,11 @@ describe("respond", () => {
     it("возвращает JSON ответ со статусом 500", async () => {
       const request = new Request("https://example.com/api/test");
       const response = serverError(request);
-      
+
       expect(response.status).toBe(500);
-      const data = await response.json();
-      expect(data).toHaveProperty("error", "internal_error");
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.code).toBe("internal_error");
     });
 
     it("не содержит stacktrace в ответе", async () => {
@@ -150,10 +157,11 @@ describe("respond", () => {
       const error = new Error("Test error");
       error.stack = "Error: Test error\n    at test.js:1:1";
       const response = serverError(request, "Ошибка", error);
-      
-      const data = await response.json();
-      expect(data).not.toHaveProperty("stack");
-      expect(JSON.stringify(data)).not.toContain("at test.js");
+
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error).not.toHaveProperty("stack");
+      expect(JSON.stringify(json)).not.toContain("at test.js");
     });
 
     it("логирует ошибку в console.error", async () => {
@@ -186,13 +194,14 @@ describe("respond", () => {
     it("включает request-id в ответ в dev режиме", async () => {
       const originalEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = "development";
-      
+
       const request = new Request("https://example.com/api/test");
       const response = serverError(request);
-      
-      const data = await response.json();
-      expect(data).toHaveProperty("requestId");
-      
+
+      const json = await response.json();
+      expect(json.ok).toBe(false);
+      expect(json.error.details).toHaveProperty("requestId");
+
       process.env.NODE_ENV = originalEnv;
     });
   });

@@ -3,14 +3,45 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 import { getUserProfile, upsertUserProfileByUser } from "@/lib/userProfiles";
 import { OnboardingForm } from "./OnboardingForm";
+import { logAuthEvent } from "@/lib/structuredLogger/node";
+import { mapQaStageToPath } from "@/lib/qaCabinetStage.shared";
+import { getQaCabinetStageFromCookies } from "@/lib/qaCabinetStage.server";
+
+function generateRequestId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 15);
+  return `${timestamp}-${random}-${Math.random().toString(36).substring(2, 11)}`;
+}
 
 async function saveOnboarding(formData: FormData) {
   "use server";
   const user = await getSessionUser();
-  if (!user || (user.role !== "user" && user.role !== "board" && user.role !== "admin")) {
+  // Разрешаем онбординг для user, board, resident (жители) и admin
+  const allowedRoles = ["user", "board", "resident", "admin"];
+  if (!user || !allowedRoles.includes(user.role)) {
+    const reason = !user ? "no_session" : `invalid_role:${user.role}`;
+    const requestId = generateRequestId();
+    logAuthEvent({
+      action: "forbidden",
+      path: "/onboarding",
+      role: user?.role || null,
+      userId: user?.id || null,
+      status: 401,
+      latencyMs: 0,
+      requestId,
+      message: `Onboarding redirect to /login: ${reason}`,
+    });
     redirect("/login");
   }
-  if (user.role === "admin") {
+  // Редирект в /admin только на STANDALONE /onboarding; при fromCabinet (из /cabinet) — никогда не редиректим в /admin.
+  const fromCabinet = formData.get("fromCabinet") === "1";
+  if (user.role === "admin" && !fromCabinet) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[guard-redirect]", { path: "/onboarding (saveOnboarding)", role: user.role, reason: "admin.skip_onboarding", redirectTo: "/admin" });
+    }
     redirect("/admin");
   }
   const fullName = ((formData.get("fullName") as string | null) ?? "").trim();
@@ -33,19 +64,51 @@ async function saveOnboarding(formData: FormData) {
 
 export default async function OnboardingPage({
   searchParams,
+  fromCabinet = false,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  fromCabinet?: boolean;
 }) {
   const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!user || (user.role !== "user" && user.role !== "board" && user.role !== "admin")) {
+  // Разрешаем онбординг для user, board, resident (жители) и admin
+  const allowedRoles = ["user", "board", "resident", "admin"];
+  if (!user || !allowedRoles.includes(user.role)) {
+    const reason = !user ? "no_session" : `invalid_role:${user.role}`;
+    const requestId = generateRequestId();
+    logAuthEvent({
+      action: "forbidden",
+      path: "/onboarding",
+      role: user?.role || null,
+      userId: user?.id || null,
+      status: 401,
+      latencyMs: 0,
+      requestId,
+      message: `Onboarding redirect to /login: ${reason}`,
+    });
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[guard-redirect]", { path: "/onboarding", role: String(user?.role ?? "null"), reason, redirectTo: "/login" });
+    }
     redirect("/login");
   }
-  if (user.role === "admin") {
+  // Редирект в /admin только на STANDALONE /onboarding; при fromCabinet (из /cabinet) — /cabinet и /cabinet/* никогда не ведут в /admin.
+  const fc = Array.isArray(params.fromCabinet) ? params.fromCabinet[0] : params.fromCabinet;
+  const fromCabinetAny = fromCabinet || fc === "1" || fc === "true";
+  if (user.role === "admin" && !fromCabinetAny) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[guard-redirect]", { path: "/onboarding", role: user.role, reason: "admin.skip_onboarding", redirectTo: "/admin" });
+    }
     redirect("/admin");
   }
+  const isDevEnv = process.env.NODE_ENV !== "production";
+  const qaStage = isDevEnv ? await getQaCabinetStageFromCookies() : null;
+  const qaPath = qaStage ? mapQaStageToPath(qaStage) : null;
+  if (isDevEnv && qaStage && qaPath && !qaPath.startsWith("/onboarding")) {
+    redirect(qaPath);
+  }
   const profile = await getUserProfile(user.id ?? "");
-  if (profile.fullName && profile.phone) {
+  const bypassProfileCheck = isDevEnv && Boolean(qaStage);
+  if (profile.fullName && profile.phone && !bypassProfileCheck) {
     redirect("/cabinet");
   }
 
@@ -60,7 +123,7 @@ export default async function OnboardingPage({
             Эти данные нужны для связи и доступа к информации по вашему участку.
           </p>
         </div>
-        <OnboardingForm action={saveOnboarding} error={error} />
+        <OnboardingForm action={saveOnboarding} error={error} fromCabinet={fromCabinetAny} />
         <Link
           href="/cabinet/verification"
           className="text-xs text-zinc-500 transition hover:text-[#5E704F] hover:underline"

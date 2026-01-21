@@ -2,70 +2,114 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { getEffectiveSessionUser } from "@/lib/session.server";
-import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import { assertCan, isStaffOrAdmin, can } from "@/lib/rbac";
 import type { Role } from "@/lib/permissions";
 import {
   getAnnouncement,
   updateAnnouncement,
-  setAnnouncementPublished,
+  publishAnnouncement,
   type OfficeAnnouncementStatus,
-} from "@/lib/office/announcements.server";
+} from "@/server/services/announcements";
 
-export default async function OfficeAnnouncementEditPage({ params }: { params: { id: string } }) {
+export default async function OfficeAnnouncementEditPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getEffectiveSessionUser();
-  if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
+  if (!session) redirect(`/staff/login?next=/office/announcements/${id}/edit`);
   const role = (session.role as Role | undefined) ?? "resident";
-  if (!isOfficeRole(role)) redirect("/forbidden");
-  const canManage = hasPermission(role, "announcements.manage");
-  if (!canManage) redirect("/forbidden");
+  if (!isStaffOrAdmin(role)) redirect("/forbidden?reason=office.only&next=/office");
+  
+  try {
+    assertCan(role, "announcements.view", undefined);
+  } catch {
+    redirect("/forbidden?reason=office.only&next=/office");
+  }
+  const canManage = can(role, "announcements.manage", undefined);
 
-  const announcement = getAnnouncement(params.id);
+  let announcement;
+  try {
+    announcement = await getAnnouncement(id);
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      redirect(`/staff/login?next=/office/announcements/${id}/edit`);
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      redirect("/forbidden?reason=office.only&next=/office");
+    }
+    throw error;
+  }
+
   if (!announcement) redirect("/office/announcements");
+
+  if (!canManage) {
+    redirect(`/office/announcements/${id}`);
+  }
 
   async function save(formData: FormData) {
     "use server";
     const session = await getEffectiveSessionUser();
-    if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
+    if (!session) redirect(`/staff/login?next=/office/announcements/${id}/edit`);
     const sessionRole = (session.role as Role | undefined) ?? "resident";
-    if (!hasPermission(sessionRole, "announcements.manage")) redirect("/forbidden");
+    try {
+      assertCan(sessionRole, "announcements.manage", undefined);
+    } catch {
+      redirect("/forbidden");
+    }
     const title = String(formData.get("title") ?? "").trim();
     const body = String(formData.get("body") ?? "").trim();
     const status = (formData.get("status") as OfficeAnnouncementStatus | null) ?? "draft";
     if (!title || !body) return;
-    updateAnnouncement(params.id, { title, body, status });
-    if (status === "published") setAnnouncementPublished(params.id, true);
-    revalidatePath("/office/announcements");
-    revalidatePath(`/office/announcements/${params.id}`);
-    redirect(`/office/announcements/${params.id}`);
+    
+    try {
+      await updateAnnouncement(id, { title, body, status });
+      const current = await getAnnouncement(id);
+      if (current && status === "published" && current.status !== "published") {
+        await publishAnnouncement(id, true);
+      } else if (current && status === "draft" && current.status === "published") {
+        await publishAnnouncement(id, false);
+      }
+      revalidatePath("/office/announcements");
+      revalidatePath(`/office/announcements/${id}`);
+      redirect(`/office/announcements/${id}`);
+    } catch {
+      redirect("/office/announcements");
+    }
   }
 
   async function togglePublish(published: boolean) {
     "use server";
     const session = await getEffectiveSessionUser();
-    if (!session) redirect(`/staff-login?next=/office/announcements/${params.id}/edit`);
+    if (!session) redirect(`/staff/login?next=/office/announcements/${id}/edit`);
     const sessionRole = (session.role as Role | undefined) ?? "resident";
-    if (!hasPermission(sessionRole, "announcements.manage")) redirect("/forbidden");
-    setAnnouncementPublished(params.id, published);
-    revalidatePath("/office/announcements");
-    revalidatePath(`/office/announcements/${params.id}`);
+    try {
+      assertCan(sessionRole, "announcements.manage", undefined);
+    } catch {
+      redirect("/forbidden");
+    }
+    try {
+      await publishAnnouncement(id, published);
+      revalidatePath("/office/announcements");
+      revalidatePath(`/office/announcements/${id}`);
+    } catch {
+      // Игнорируем ошибки
+    }
   }
 
   return (
-    <div className="space-y-4" data-testid="office-announcement-form">
+    <div className="space-y-4" data-testid="announcement-editor">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Редактировать объявление</h1>
           <p className="text-sm text-zinc-600">Обновите текст или статус публикации</p>
         </div>
         <Link
-          href={`/office/announcements/${params.id}`}
+          href={`/office/announcements/${id}`}
           className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
         >
           К объявлению
         </Link>
       </div>
 
-      <form action={save} className="space-y-3 rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm">
+      <form action={save} className="space-y-3 rounded-2xl border border-zinc-200 bg-white px-4 py-5 shadow-sm" data-testid="announcement-editor">
         <div className="space-y-1">
           <label className="text-sm font-semibold text-zinc-800" htmlFor="title">
             Заголовок
@@ -109,7 +153,6 @@ export default async function OfficeAnnouncementEditPage({ params }: { params: {
           <button
             type="submit"
             className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#4b5b40]"
-            data-testid="office-announcement-form-save"
           >
             Сохранить
           </button>
@@ -121,7 +164,7 @@ export default async function OfficeAnnouncementEditPage({ params }: { params: {
             <button
               type="submit"
               className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
-              data-testid="office-announcement-toggle-publish"
+              data-testid="announcement-publish"
             >
               В черновик
             </button>
@@ -131,7 +174,7 @@ export default async function OfficeAnnouncementEditPage({ params }: { params: {
             <button
               type="submit"
               className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
-              data-testid="office-announcement-toggle-publish"
+              data-testid="announcement-publish"
             >
               Опубликовать
             </button>

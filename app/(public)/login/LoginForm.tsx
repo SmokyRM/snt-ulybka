@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getSessionClient } from "@/lib/session";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
 
 const showTestCodes = process.env.NEXT_PUBLIC_SHOW_TEST_CODES === "true";
 const testUserCode = process.env.NEXT_PUBLIC_USER_ACCESS_CODE || "USER_CODE";
@@ -12,6 +13,8 @@ const testAdminCode = process.env.NEXT_PUBLIC_ADMIN_ACCESS_CODE || "ADMIN_CODE";
 
 type LoginFormProps = {
   nextParam?: string;
+  devLoginCode?: string | null;
+  showDevHints?: boolean;
 };
 
 type LoginRole = "user" | "admin" | "board" | "accountant" | "operator" | "resident" | "chairman" | "secretary";
@@ -24,7 +27,7 @@ const defaultPathForRole = (role: LoginRole) => {
 
 const isPathAllowedForRole = (role: LoginRole, path: string | null | undefined) => {
   if (!path) return false;
-  if (role === "admin") return path.startsWith("/admin");
+  if (role === "admin") return path.startsWith("/admin") || path.startsWith("/cabinet");
   if (role === "chairman" || role === "accountant" || role === "secretary" || role === "board") {
     return path.startsWith("/office");
   }
@@ -37,13 +40,14 @@ const ROLE_TEST_CODES: Record<string, string> = {
   admin: testAdminCode,
 };
 
-export default function LoginForm({ nextParam }: LoginFormProps) {
+export default function LoginForm({ nextParam, devLoginCode, showDevHints }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const asRole = searchParams?.get("as");
   const initialCode = asRole && ROLE_TEST_CODES[asRole] ? ROLE_TEST_CODES[asRole] : "";
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
 
@@ -70,6 +74,7 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setErrorHint(null);
     if (!code.trim()) {
       setError("Введите код доступа.");
       return;
@@ -77,23 +82,30 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
     isSubmittingRef.current = true;
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ code: code.trim(), next: sanitizedNext ?? "" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(res.status === 401 ? "Неверный код доступа." : "Ошибка входа, попробуйте позже");
-        return;
-      }
+      const data = await apiPostRaw<{ role?: string; hint?: string; error?: string }>(
+        "/api/auth/login",
+        { code: code.trim(), next: sanitizedNext ?? "" },
+        { credentials: "include" },
+      );
       const role: LoginRole = (data.role as LoginRole) ?? "user";
       const target = isPathAllowedForRole(role, sanitizedNext) ? (sanitizedNext as string) : defaultPathForRole(role);
       // Используем push вместо replace для более быстрого перехода
       // prefetch уже включен по умолчанию в Next.js для Link компонентов
       router.push(target);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const hint =
+          typeof (error.details as { hint?: string } | null)?.hint === "string"
+            ? (error.details as { hint?: string }).hint
+            : null;
+        setErrorHint(hint ?? null);
+        if (error.status === 401) {
+          setError("Неверный код доступа.");
+        } else {
+          setError(error.message || "Ошибка входа, попробуйте позже");
+        }
+        return;
+      }
       setError("Ошибка входа, попробуйте позже");
     } finally {
       isSubmittingRef.current = false;
@@ -117,6 +129,11 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           После входа вернём вас на страницу: <span className="font-semibold">{sanitizedNext}</span>
         </p>
       )}
+      {showDevHints ? (
+        <p className="mt-2 text-xs font-semibold text-amber-700" data-testid="login-dev-hint">
+          DEV: мастер-код {devLoginCode ? devLoginCode : "выключен"}
+        </p>
+      ) : null}
       <form
         className="mt-6 space-y-4"
         onSubmit={handleSubmit}
@@ -166,6 +183,9 @@ export default function LoginForm({ nextParam }: LoginFormProps) {
           {error && (
             <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
               <div>{error}</div>
+              {errorHint && (
+                <div className="text-xs text-amber-800" data-testid="login-error-hint">{errorHint}</div>
+              )}
               <div className="flex flex-wrap gap-3 text-xs font-semibold text-[#5E704F]">
                 <Link href="/#get-access" className="hover:underline">
                   Как получить доступ

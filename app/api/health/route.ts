@@ -1,5 +1,9 @@
-import { NextResponse } from "next/server";
+import { ok, serverError } from "@/lib/api/respond";
 
-export async function GET() {
-  return NextResponse.json({ ok: true });
+export async function GET(request: Request) {
+  try {
+    return ok(request, {});
+  } catch (error) {
+    return serverError(request, "Ошибка при получении статуса", error);
+  }
 }

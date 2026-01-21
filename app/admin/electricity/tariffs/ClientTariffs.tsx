@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readOk } from "@/lib/api/client";
 
 type Tariff = {
   id: string;
@@ -28,12 +29,8 @@ export default function ClientTariffs() {
     setError(null);
     try {
       const res = await fetch("/api/admin/electricity/tariffs", { cache: "no-store" });
-      if (!res.ok) {
-        setError("Не удалось загрузить тарифы");
-        return;
-      }
-      const json = (await res.json()) as TariffResponse;
-      setTariffs(json.tariffs);
+      const data = await readOk<TariffResponse>(res);
+      setTariffs(data.tariffs);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -60,11 +57,7 @@ export default function ClientTariffs() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pricePerKwh: priceValue, validFrom }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError((data as { error?: string }).error ?? "Ошибка сохранения");
-        return;
-      }
+      await readOk<{ tariff: Tariff }>(res);
       setPrice("");
       setValidFrom("");
       await loadTariffs();
@@ -92,15 +85,11 @@ export default function ClientTariffs() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ year: yearNum, month: monthNum }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError((data as { error?: string }).error ?? "Ошибка начисления");
-        return;
-      }
+      const data = await readOk<{ updatedCount?: number }>(res);
       setMessage(
         `Начислено за ${monthNum.toString().padStart(2, "0")}.${yearNum}: обновлено ${(
-          data as { updatedCount?: number }
-        ).updatedCount ?? 0}`
+          data.updatedCount ?? 0
+        )}`
       );
     } catch (e) {
       setError((e as Error).message);

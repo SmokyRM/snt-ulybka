@@ -27,5 +27,5 @@ export async function toggleFeatureFlag(formData: FormData) {
   }
   await setFeatureFlag(key as FeatureFlagKey, enabled);
   revalidatePath("/admin/feature-flags");
-  revalidatePath("/admin/debts");
+  revalidatePath("/admin/billing/debts");
 }

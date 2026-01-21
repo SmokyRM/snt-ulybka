@@ -46,7 +46,7 @@ export default function OfficeShell({ role, roleLabel, navItems, children, hasQa
         </header>
         <main className="mx-auto flex w-full max-w-6xl gap-6 px-4 pb-10 pt-8 sm:px-6">
           <aside className="w-64 shrink-0 space-y-2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="space-y-1 text-sm" data-testid="office-nav">
+            <nav className="space-y-1 text-sm" data-testid="office-nav">
               {navItems.map((item) => (
                 <AppLink
                   key={item.href}
@@ -60,7 +60,7 @@ export default function OfficeShell({ role, roleLabel, navItems, children, hasQa
               {!navItems.length ? (
                 <div className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Нет доступных разделов</div>
               ) : null}
-            </div>
+            </nav>
           </aside>
           <div className="flex-1 min-h-0">{children}</div>
         </main>

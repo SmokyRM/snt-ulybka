@@ -4,6 +4,7 @@ import { useState } from "react";
 import QaCopyButton from "./QaCopyButton";
 import { qaText } from "@/lib/qaText";
 import { dangerButtonClass, primaryButtonClass, secondaryButtonClass } from "./qaStyles";
+import { apiPost } from "@/lib/api/client";
 
 type SeedResult = {
   appeal?: { id: string; url: string };
@@ -23,19 +24,7 @@ export default function QaSeedCard() {
     setResult(null);
     setStatus({ type: "loading", message: qaText.messages.seedRunning });
     try {
-      const response = await fetch("/api/admin/qa/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ create, openAfter }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: qaText.messages.unknownError }));
-        setStatus({ type: "error", message: `${qaText.messages.error}: ${error.error || qaText.messages.seedError}` });
-        return;
-      }
-
-      const data = await response.json();
+      const data = await apiPost<{ created?: SeedResult }>("/api/admin/qa/seed", { create, openAfter });
       setResult(data.created || {});
       setStatus({ type: "success", message: qaText.messages.seedSuccess });
 
@@ -290,21 +279,12 @@ export default function QaSeedCard() {
                 setLoading(true);
                 setStatus({ type: "loading", message: qaText.messages.cleanupRunning });
                 try {
-                  const response = await fetch("/api/admin/qa/cleanup", {
-                    method: "POST",
-                  });
-                  if (!response.ok) {
-                    const error = await response.json().catch(() => ({ error: qaText.messages.unknownError }));
-                    setStatus({
-                      type: "error",
-                      message: `${qaText.messages.error}: ${error.error || qaText.messages.cleanupError}`,
-                    });
-                    return;
-                  }
-                  const data = await response.json();
+                  const data = await apiPost<{ deleted?: { appeals?: number; announcements?: number } }>(
+                    "/api/admin/qa/cleanup"
+                  );
                   setStatus({
                     type: "success",
-                    message: qaText.messages.cleanupSuccess(data.deleted.appeals || 0, data.deleted.announcements || 0),
+                    message: qaText.messages.cleanupSuccess(data.deleted?.appeals || 0, data.deleted?.announcements || 0),
                   });
                   setResult(null);
                 } catch (error) {

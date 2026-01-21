@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { generateReply, type ReplyCategory, type ReplyTone } from "@/lib/office/replyTemplates";
+import { apiPost } from "@/lib/api/client";
 
 type Props = {
   appealId: string;
@@ -53,14 +54,15 @@ export function ReplyBlock({
 
   const saveDraft = async () => {
     setStatus("");
-    const res = await fetch("/api/office/appeals/save-draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: appealId, text, category, tone }),
-    });
-    if (res.ok) {
+    try {
+      await apiPost<{ replyDraft: { text: string } }>("/api/office/appeals/save-draft", {
+        id: appealId,
+        text,
+        category,
+        tone,
+      });
       setStatus("Черновик сохранён");
-    } else {
+    } catch {
       setStatus("Не удалось сохранить");
     }
   };

@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { qaEnabled, QA_COOKIE } from "@/lib/qaScenario";
 import { verifySameOrigin } from "@/lib/security/verifySameOrigin";
 import { rateLimit } from "@/lib/security/rateLimit";
-import { getRequestId, setRequestIdHeader } from "@/lib/api/requestId";
+import { fail, forbidden, methodNotAllowed, ok, serverError } from "@/lib/api/respond";
 
 const ADMIN_VIEW_COOKIE = "admin_view";
 
@@ -15,32 +14,21 @@ const ADMIN_VIEW_COOKIE = "admin_view";
  * Uses proper cookie deletion: maxAge=0, expires, same path/domain as setting.
  */
 export async function POST(request: Request) {
-  const requestId = getRequestId(request);
-  
   try {
     // Fail-closed: проверка метода
     if (request.method !== "POST") {
-      const response = NextResponse.json({ error: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
-      setRequestIdHeader(response, requestId);
-      return response;
+      return methodNotAllowed(request, ["POST"]);
     }
 
     // Fail-closed: только dev + ENABLE_QA
     if (!qaEnabled()) {
-      const response = NextResponse.json({ ok: false, error: "QA not enabled" }, { status: 404 });
-      setRequestIdHeader(response, requestId);
-      return response;
+      return fail(request, "not_found", "QA not enabled", 404);
     }
 
     // CSRF защита
     const originCheck = verifySameOrigin(request);
     if (!originCheck.ok) {
-      const response = NextResponse.json(
-        { error: "Запрос отклонён по политике безопасности (origin)." },
-        { status: 403 }
-      );
-      setRequestIdHeader(response, requestId);
-      return response;
+      return forbidden(request, "Запрос отклонён по политике безопасности (origin).");
     }
 
     // Rate limiting (dev-only, для QA endpoints) - 2 req/sec на ip+path
@@ -50,51 +38,43 @@ export async function POST(request: Request) {
     const rateLimitResult = rateLimit(`qa-reset-${clientId}`, 2, 1000); // 2 requests per second
     if (!rateLimitResult.ok) {
       const retryAfter = Math.ceil((rateLimitResult.retryAfterMs || 0) / 1000);
-      const response = NextResponse.json(
-        { error: "Превышен лимит запросов. Попробуйте позже." },
-        { 
-          status: 429,
-          headers: { "Retry-After": String(retryAfter) }
-        }
+      return fail(
+        request,
+        "rate_limited",
+        "Превышен лимит запросов. Попробуйте позже.",
+        429,
+        undefined,
+        { headers: { "Retry-After": String(retryAfter) } }
       );
-      setRequestIdHeader(response, requestId);
-      return response;
     }
 
-  const cookieStore = await cookies();
-  
-  // Clear QA scenario cookie with same options as setting
-  cookieStore.set(QA_COOKIE, "", {
-    path: "/",
-    maxAge: 0,
-    httpOnly: false,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    expires: new Date(0), // Explicit expiration
-  });
-
-  // Clear admin_view cookie if it exists
-  const adminView = cookieStore.get(ADMIN_VIEW_COOKIE);
-  if (adminView) {
-    cookieStore.set(ADMIN_VIEW_COOKIE, "", {
+    const cookieStore = await cookies();
+    
+    // Clear QA scenario cookie with same options as setting
+    cookieStore.set(QA_COOKIE, "", {
       path: "/",
       maxAge: 0,
       httpOnly: false,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      expires: new Date(0),
+      expires: new Date(0), // Explicit expiration
     });
-  }
 
-    const response = NextResponse.json({ ok: true });
-    setRequestIdHeader(response, requestId);
-    return response;
+    // Clear admin_view cookie if it exists
+    const adminView = cookieStore.get(ADMIN_VIEW_COOKIE);
+    if (adminView) {
+      cookieStore.set(ADMIN_VIEW_COOKIE, "", {
+        path: "/",
+        maxAge: 0,
+        httpOnly: false,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        expires: new Date(0),
+      });
+    }
+
+    return ok(request, {});
   } catch (error) {
-    const response = NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-    setRequestIdHeader(response, getRequestId(request));
-    return response;
+    return serverError(request, "Internal server error", error);
   }
 }

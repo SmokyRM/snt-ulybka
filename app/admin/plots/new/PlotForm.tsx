@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { MembershipStatus } from "@/types/snt";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
 
 const membershipOptions: MembershipStatus[] = ["UNKNOWN", "MEMBER", "NON_MEMBER"];
 
@@ -28,28 +29,23 @@ export default function PlotForm() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/plots", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          street,
-          number,
-          ownerFullName: ownerFullName || null,
-          phone: phone || null,
-          email: email || null,
-          membershipStatus,
-          isConfirmed,
-          notes: notes || null,
-        }),
+      await apiPostRaw("/api/plots", {
+        street,
+        number,
+        ownerFullName: ownerFullName || null,
+        phone: phone || null,
+        email: email || null,
+        membershipStatus,
+        isConfirmed,
+        notes: notes || null,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Не удалось сохранить");
-        return;
-      }
       router.replace("/admin/plots");
       router.refresh();
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || "Не удалось сохранить");
+        return;
+      }
       setError("Ошибка сети, попробуйте позже");
     } finally {
       setLoading(false);

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import { readOk } from "@/lib/api/client";
 
 type HealthResponse = {
   ok: boolean;
@@ -26,8 +27,7 @@ const fetchHealth = async (): Promise<HealthResponse | null> => {
     const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/admin/health`, {
       cache: "no-store",
     });
-    if (!res.ok) return null;
-    return (await res.json()) as HealthResponse;
+    return await readOk<HealthResponse>(res);
   } catch {
     return null;
   }

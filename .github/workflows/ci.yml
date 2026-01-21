@@ -94,6 +94,21 @@ jobs:
           AUTH_PASS_ACCOUNTANT: ${{ secrets.AUTH_PASS_ACCOUNTANT }}
           CI: "true"
 
+      - name: Run E2E Office smoke tests
+        run: npx playwright test tests/e2e/office-smoke.spec.ts --reporter=line
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          AUTH_USER_CHAIRMAN: ${{ secrets.AUTH_USER_CHAIRMAN }}
+          AUTH_PASS_CHAIRMAN: ${{ secrets.AUTH_PASS_CHAIRMAN }}
+          AUTH_USER_SECRETARY: ${{ secrets.AUTH_USER_SECRETARY }}
+          AUTH_PASS_SECRETARY: ${{ secrets.AUTH_PASS_SECRETARY }}
+          AUTH_USER_ACCOUNTANT: ${{ secrets.AUTH_USER_ACCOUNTANT }}
+          AUTH_PASS_ACCOUNTANT: ${{ secrets.AUTH_PASS_ACCOUNTANT }}
+          AUTH_USER_ADMIN: ${{ secrets.AUTH_USER_ADMIN }}
+          AUTH_PASS_ADMIN: ${{ secrets.AUTH_PASS_ADMIN }}
+          ENABLE_QA: "true"
+          CI: "true"
+
       - name: Run E2E regression tests
         run: npx playwright test tests/e2e/regression.access.spec.ts tests/e2e/regression.admin-flow.spec.ts --reporter=line
         env:

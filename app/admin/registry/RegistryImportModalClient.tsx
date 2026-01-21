@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ApiError, readOk } from "@/lib/api/client";
 
 type ParsedRow = {
   plot_display: string;
@@ -95,12 +96,9 @@ async function parseFile(file: File): Promise<ParsedRow[]> {
   const rows = parseCsv(text);
   if (!rows.length && (ext.endsWith(".xlsx") || ext.endsWith(".xls"))) {
     try {
-      // @ts-expect-error dynamic import from CDN
-      const XLSX = await import(/* webpackIgnore: true */ "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+      const { parseXlsx } = await import("@/lib/excel");
       const data = new Uint8Array(await file.arrayBuffer());
-      const workbook = XLSX.read(data, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+      const json = await parseXlsx(data);
       return mapRows(json);
     } catch {
       return [];
@@ -140,13 +138,18 @@ export default function RegistryImportModalClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows }),
       });
-      const data = (await res.json()) as { ok?: boolean; errors?: string[]; created?: number; updated?: number; skipped?: number };
-      if (!res.ok || !data.ok) {
-        setErrors(data.errors || ["Ошибка импорта"]);
-      } else {
-        setResult(`Создано: ${data.created ?? 0}, обновлено: ${data.updated ?? 0}, пропущено: ${data.skipped ?? 0}`);
+      const data = await readOk<{ created?: number; updated?: number; skipped?: number }>(res);
+      setResult(
+        `Создано: ${data?.created ?? 0}, обновлено: ${data?.updated ?? 0}, пропущено: ${
+          data?.skipped ?? 0
+        }`
+      );
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const detailsErrors = (error.details as { errors?: string[] } | undefined)?.errors;
+        setErrors(detailsErrors || [error.message || "Ошибка импорта"]);
+        return;
       }
-    } catch {
       setErrors(["Не удалось импортировать"]);
     } finally {
       setLoading(false);

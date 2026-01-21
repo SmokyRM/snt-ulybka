@@ -50,7 +50,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
   const envPass = (process.env[mapped.env] ?? "").trim();
-  if (!envPass || !safeEquals(envPass, password)) {
+  if (!envPass) {
+    return NextResponse.json(
+      { error: "auth_not_configured", envVar: mapped.env, message: "Код доступа для роли " + mapped.role + " не настроен (env). Задайте " + mapped.env + " в .env.local." },
+      { status: 503 },
+    );
+  }
+  if (!safeEquals(envPass, password)) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
 
@@ -70,15 +76,17 @@ export async function POST(request: Request) {
       roleType: typeof role,
     });
   }
+  const redirectUrl =
+    sanitizedNext && isPathAllowedForRole(role, sanitizedNext)
+      ? sanitizedNext
+      : role === "admin"
+        ? "/admin"
+        : "/office";
   const response = NextResponse.json({
     ok: true,
     role,
-    redirectTo:
-      sanitizedNext && isPathAllowedForRole(role, sanitizedNext)
-        ? sanitizedNext
-        : role === "admin"
-          ? "/admin"
-          : "/office",
+    redirectTo: redirectUrl,
+    redirectUrl, // для совместимости с клиентом
   });
   // КРИТИЧНО: Устанавливаем cookie с правильными параметрами
   // secure: только в production (не ломает localhost)

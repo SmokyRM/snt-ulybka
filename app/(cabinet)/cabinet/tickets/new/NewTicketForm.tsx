@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Image from "next/image";
 import { useAppRouter } from "@/hooks/useAppRouter";
+import { ApiError, apiPostRaw, readOk } from "@/lib/api/client";
 
 export default function NewTicketForm() {
   const router = useAppRouter();
@@ -19,17 +20,18 @@ export default function NewTicketForm() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/uploads/tickets", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      const data = await apiPostRaw<{ url?: string; error?: string }>("/api/uploads/tickets", formData);
+      const url = data.url;
+      if (!url) {
         setError(data.error || "Не удалось загрузить файл");
         return;
       }
-      setAttachments((prev) => [...prev, data.url].slice(0, 3));
-    } catch {
+      setAttachments((prev) => [...prev, url].slice(0, 3));
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || "Не удалось загрузить файл");
+        return;
+      }
       setError("Ошибка загрузки файла");
     } finally {
       setUploading(false);
@@ -54,11 +56,7 @@ export default function NewTicketForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, message, attachments }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Не удалось отправить обращение");
-        return;
-      }
+      await readOk<{ ticketId?: string }>(res);
       router.replace("/cabinet/tickets");
       router.refresh();
     } catch {

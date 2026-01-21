@@ -13,19 +13,14 @@ const baseSections = [
     links: [
       { href: "/admin", label: "Дашборд" },
       {
-        href: "/admin/plots",
-        label: "Реестр участков",
-        hint: "Список участков и владельцев",
+        href: "/admin/registry",
+        label: "Реестр",
+        hint: "Участки, владельцы, импорт и проблемы",
       },
       {
-        href: "/admin/imports/plots",
-        label: "Импорт реестра",
-        hint: "Загрузка файла для массового обновления",
-      },
-      {
-        href: "/admin/analytics",
-        label: "Проблемы и сводка",
-        hint: "Пустые поля, неподтверждённые статусы, ошибки",
+        href: "/admin/verification",
+        label: "Верификация",
+        hint: "Подтверждение регистрации жителей",
       },
       {
         href: "/admin/ai-usage",
@@ -37,35 +32,28 @@ const baseSections = [
   {
     title: "Финансы",
     links: [
+      { href: "/admin/billing", label: "Обзор", hint: "Обзор биллинга" },
+      { href: "/admin/billing/fee-tariffs", label: "Тарифы", hint: "Тарифы взносов" },
+      { href: "/admin/billing/accruals", label: "Начисления", hint: "Начисления по периодам" },
       {
-        href: "/admin/billing",
-        label: "Биллинг",
-        hint: "Начисления по периодам и итоги",
-      },
-      {
-        href: "/admin/tariffs",
-        label: "Тарифы взносов",
-        hint: "Настройка сумм взносов",
-      },
-      {
-        href: "/admin/billing/import",
+        href: "/admin/billing/payments/import",
         label: "Импорт платежей",
-        hint: "Загрузка платежей из CSV",
+        hint: "Загрузка платежей из CSV с предпросмотром",
       },
       {
-        href: "/admin/billing/imports",
-        label: "Импорты платежей",
-        hint: "Журнал импортов и ошибки",
+        href: "/admin/billing/payments/imports",
+        label: "Журнал импортов",
+        hint: "История импортов платежей",
       },
       {
-        href: "/admin/notifications/debtors",
+        href: "/admin/billing/debtors",
         label: "Должники",
-        hint: "Уведомления и рассылка",
+        hint: "Сегментация должников и генерация уведомлений",
       },
       {
-        href: "/admin/debts",
+        href: "/admin/billing/debts",
         label: "Долги",
-        hint: "Долги по участкам и экспорт",
+        hint: "Расчёт долгов и планы погашения",
       },
     ],
   },
@@ -108,9 +96,19 @@ const baseSections = [
     title: "Настройки сайта",
     links: [
       {
+        href: "/admin/settings",
+        label: "Основные настройки",
+        hint: "Тарифы, сроки, реквизиты",
+      },
+      {
+        href: "/admin/settings/content",
+        label: "Контент",
+        hint: "Реквизиты, контакты, каналы, публичные страницы",
+      },
+      {
         href: "/admin/public-content",
-        label: "Публичные данные",
-        hint: "Контакты, реквизиты, FAQ",
+        label: "Публичный контент",
+        hint: "FAQ, документы, шаги доступа",
       },
     ],
   },
@@ -152,12 +150,11 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
 
   const hasFinanceAccess =
     role === "admin" || role === "accountant" || role === "board" || role === "chairman";
-  const hasMembershipTariffAccess = role === "admin" || role === "board" || role === "chairman";
   const hasImportAccess =
     role === "admin" || role === "accountant" || role === "operator" || role === "board" || role === "chairman";
   const isAdminUi = role === "admin";
 
-  const sections = baseSections
+  let sections = baseSections
     .map((section) => ({
       ...section,
       links: [...section.links],
@@ -167,8 +164,7 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
         return {
           ...section,
           links: section.links.filter((link) => {
-            if (link.href === "/admin/plots") return isAdminUi;
-            if (link.href === "/admin/imports/plots") return hasImportAccess;
+            if (link.href === "/admin/registry") return isAdminUi;
             if (link.href === "/admin/ai-usage") return hasFinanceAccess;
             return true;
           }),
@@ -177,19 +173,7 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
       if (section.title === "Финансы") {
         return {
           ...section,
-          links: section.links.filter((link) => {
-            if (link.href === "/admin/tariffs") return hasMembershipTariffAccess;
-            if (
-              link.href === "/admin/billing" ||
-              link.href === "/admin/billing/import" ||
-              link.href === "/admin/billing/imports" ||
-              link.href === "/admin/notifications/debtors" ||
-              link.href === "/admin/debts"
-            ) {
-              return hasFinanceAccess || (hasImportAccess && link.href.includes("import"));
-            }
-            return true;
-          }),
+          links: section.links.filter(() => isAdminUi),
         };
       }
       if (section.title === "Настройки сайта") {
@@ -224,29 +208,53 @@ export default function AdminSidebar({ isDev, isAdmin, role }: AdminSidebarProps
     });
   }
 
+  // Уникальность href: оставляем первое вхождение, убираем legacy-дубли
+  const seenHref = new Set<string>();
+  sections = sections
+    .map((sec) => ({
+      ...sec,
+      links: sec.links.filter((link) => {
+        if (seenHref.has(link.href)) return false;
+        seenHref.add(link.href);
+        return true;
+      }),
+    }))
+    .filter((sec) => sec.links.length > 0);
+
   useEffect(() => {
-    const prefetchTargets = [
-      "/admin",
-      "/admin/plots",
-      "/admin/imports/plots",
-      "/admin/analytics",
-    ];
+    // Единый источник правды: prefetchTargets вычисляется из sections.links
+    const prefetchTargetsSet = new Set<string>();
+    sections.forEach((section) => {
+      section.links.forEach((link) => {
+        const rawHref = link.label === "Дашборд" ? "/admin" : link.href;
+        const href = rawHref.startsWith("/") ? rawHref : `/${rawHref}`;
+        prefetchTargetsSet.add(href);
+      });
+    });
+    // Дополнительные ссылки, которых нет в меню
     if (isDev && isAdmin) {
-      prefetchTargets.push("/admin/dev/seed");
+      prefetchTargetsSet.add("/admin/dev/seed");
     }
-    prefetchTargets.forEach((href) => router.prefetch(href));
-  }, [isAdmin, isDev, router]);
+    prefetchTargetsSet.forEach((href) => router.prefetch(href));
+  }, [sections, isAdmin, isDev, router]);
 
   if (isDev) {
     const seen = new Set<string>();
     sections.forEach((section) => {
       section.links.forEach((link) => {
         if (seen.has(link.href)) {
-          console.error("[admin-nav] duplicate href detected:", link.href);
+          console.error("[admin-nav] duplicate href detected:", link.href, {
+            section: section.title ?? "unknown",
+            label: link.label ?? "unknown",
+          });
+        } else {
+          seen.add(link.href);
         }
-        seen.add(link.href);
         if (link.label === "Дашборд" && link.href !== "/admin") {
-          console.error("[admin-nav] invalid dashboard href:", link.href);
+          console.error("[admin-nav] invalid dashboard href:", link.href, {
+            section: section.title ?? "unknown",
+            label: link.label ?? "unknown",
+          });
         }
       });
     });

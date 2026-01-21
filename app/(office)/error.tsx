@@ -37,17 +37,36 @@ export default function OfficeError({ error, reset }: ErrorProps) {
     });
   }, [error, requestId]);
 
+  // Безопасное отображение ошибки (без утечки секретов)
+  const errorMessage = isDev 
+    ? error.message 
+    : "Произошла ошибка при загрузке страницы";
+
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-16 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-2xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
         <h1 className="text-2xl font-semibold">Ошибка в кабинете правления</h1>
         <p className="mt-3 text-sm text-zinc-700">
-          Произошёл сбой при загрузке страницы Office. Попробуйте ещё раз или вернитесь на главную.
+          {errorMessage}
         </p>
-        {isDev && requestId && (
-          <p className="mt-2 text-xs text-zinc-500">
-            Request-ID: <code className="rounded bg-zinc-100 px-1 py-0.5 font-mono">{requestId}</code>
-          </p>
+        {isDev && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-xs">
+            <div className="font-semibold text-red-800">Детали ошибки (только в dev):</div>
+            <div className="mt-2 font-mono text-red-700 break-all">{error.message}</div>
+            {error.stack && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-red-600">Stack trace</summary>
+                <pre className="mt-2 whitespace-pre-wrap text-red-600 text-[10px] overflow-auto max-h-60">
+                  {error.stack}
+                </pre>
+              </details>
+            )}
+            {requestId && (
+              <div className="mt-2 text-red-600">
+                Request-ID: <code className="rounded bg-red-100 px-1 py-0.5">{requestId}</code>
+              </div>
+            )}
+          </div>
         )}
         <div className="mt-6 flex flex-wrap gap-3">
           <button
@@ -63,9 +82,14 @@ export default function OfficeError({ error, reset }: ErrorProps) {
           >
             На главную
           </Link>
+          <Link
+            href="/staff-login"
+            className="rounded-full border border-zinc-300 px-5 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+          >
+            Войти как сотрудник
+          </Link>
         </div>
       </div>
     </main>
   );
 }
-

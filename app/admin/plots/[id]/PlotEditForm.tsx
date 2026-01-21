@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { MembershipStatus, Plot } from "@/types/snt";
+import { ApiError, readRaw } from "@/lib/api/client";
 
 const membershipOptions: MembershipStatus[] = ["UNKNOWN", "MEMBER", "NON_MEMBER"];
 
@@ -32,28 +33,29 @@ export default function PlotEditForm({ plot }: { plot: Plot }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/plots/${plot.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          street,
-          number,
-          ownerFullName: ownerFullName || null,
-          phone: phone || null,
-          email: email || null,
-          membershipStatus,
-          isConfirmed,
-          notes: notes || null,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Не удалось сохранить");
-        return;
-      }
+      await readRaw(
+        await fetch(`/api/plots/${plot.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            street,
+            number,
+            ownerFullName: ownerFullName || null,
+            phone: phone || null,
+            email: email || null,
+            membershipStatus,
+            isConfirmed,
+            notes: notes || null,
+          }),
+        })
+      );
       setSuccess("Сохранено");
       router.refresh();
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || "Не удалось сохранить");
+        return;
+      }
       setError("Ошибка сети, попробуйте позже");
     } finally {
       setLoading(false);

@@ -17,13 +17,40 @@ import {
   ImportBatch,
   BillingImport,
   BillingImportError,
+  RegistryImport,
+  AiEvent,
   ElectricityMeter,
   MeterReading,
   ElectricityTariff,
   DebtNotification,
   Expense,
+  ExpenseCategory,
   TargetFund,
+  UnifiedBillingPeriod,
+  PeriodAccrual,
+  BillingPeriodStatus,
+  FeeTariff,
+  FeeTariffOverride,
+  FeeTariffType,
+  FeeTariffMethod,
+  PaymentImport,
+  PaymentImportRow,
+  DebtRepaymentPlan,
+  DebtNotificationTemplate,
+  DebtNotificationHistory,
 } from "@/types/snt";
+import type { Template } from "@/lib/office/types";
+
+export type ActivityLogEntry = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  actorUserId: string | null; // null для system действий
+  actorRole: string | null;
+  meta: Record<string, unknown> | null; // JSON метаданные
+  createdAt: string;
+};
 
 interface MockDb {
   users: User[];
@@ -31,21 +58,35 @@ interface MockDb {
   ownershipRequests: OwnershipRequest[];
   plotOwners: PlotOwner[];
   auditLogs: AuditLog[];
+  activityLogs: ActivityLogEntry[];
   settings: SettingEntry[];
   entityVersions: EntityVersion[];
   persons: Person[];
   accrualPeriods: AccrualPeriod[];
   accrualItems: AccrualItem[];
+  unifiedBillingPeriods: UnifiedBillingPeriod[];
+  periodAccruals: PeriodAccrual[];
+  feeTariffs: FeeTariff[];
+  feeTariffOverrides: FeeTariffOverride[];
+  paymentImports: PaymentImport[];
+  paymentImportRows: PaymentImportRow[];
+  debtRepaymentPlans: DebtRepaymentPlan[];
+  debtNotificationTemplates: DebtNotificationTemplate[];
+  debtNotificationHistory: DebtNotificationHistory[];
   payments: Payment[];
   importBatches: ImportBatch[];
   billingImports: BillingImport[];
   billingImportErrors: BillingImportError[];
+  registryImports: RegistryImport[];
+  aiEvents: AiEvent[];
   electricityMeters: ElectricityMeter[];
   meterReadings: MeterReading[];
   electricityTariffs: ElectricityTariff[];
   debtNotifications: DebtNotification[];
   expenses: Expense[];
+  expenseCategories: ExpenseCategory[];
   targetFunds: TargetFund[];
+  templates: Template[]; // Sprint 5.4: шаблоны действий/ответов
 }
 
 export type MockDbSnapshot = MockDb;
@@ -81,6 +122,13 @@ const defaultPlots: Plot[] = Array.from({ length: 20 }, (_, idx) => {
 
 const defaultUsers: User[] = [
   {
+    id: "user-admin-root",
+    email: "admin@snt.ru",
+    fullName: "Администратор СНТ",
+    role: "admin",
+    status: "verified",
+  },
+  {
     id: "user-board",
     email: "board@snt.ru",
     fullName: "Правление СНТ",
@@ -89,7 +137,7 @@ const defaultUsers: User[] = [
   },
 ];
 
-const getDb = (): MockDb => {
+export const getDb = (): MockDb => {
   const g = globalThis as typeof globalThis & { __SNT_DB__?: MockDb };
   if (!g.__SNT_DB__) {
     const now = new Date().toISOString();
@@ -99,6 +147,7 @@ const getDb = (): MockDb => {
       ownershipRequests: [],
       plotOwners: [],
       auditLogs: [],
+      activityLogs: [],
       settings: [
         {
           key: "payment_details",
@@ -111,6 +160,10 @@ const getDb = (): MockDb => {
             bankInn: "7453002182",
             bic: "047501711",
             corr: "30101810400000000711",
+            address: "",
+            chairman: "",
+            chairmanPhone: "",
+            chairmanEmail: "",
           },
           createdAt: now,
           updatedAt: now,
@@ -121,6 +174,7 @@ const getDb = (): MockDb => {
             vk: "https://vk.com/snt_smile?t2fs=07b664f4ccd18da444_3",
             telegram: "https://t.me/snt_smile",
             email: "",
+            phone: "",
           },
           createdAt: now,
           updatedAt: now,
@@ -154,16 +208,78 @@ const getDb = (): MockDb => {
       persons: [],
       accrualPeriods: [],
       accrualItems: [],
+      unifiedBillingPeriods: [],
+      periodAccruals: [],
+      feeTariffs: [],
+      feeTariffOverrides: [],
+      paymentImports: [],
+      paymentImportRows: [],
+      debtRepaymentPlans: [],
+      debtNotificationTemplates: [],
+      debtNotificationHistory: [],
       payments: [],
       importBatches: [],
       billingImports: [],
       billingImportErrors: [],
+      registryImports: [],
+      aiEvents: [],
       electricityMeters: [],
       meterReadings: [],
       electricityTariffs: [],
       debtNotifications: [],
       expenses: [],
+      expenseCategories: [
+        {
+          id: "cat-roads",
+          name: "Дороги",
+          description: "Расходы на содержание и ремонт дорог",
+          createdAt: now,
+          updatedAt: now,
+          createdByUserId: null,
+        },
+        {
+          id: "cat-trash",
+          name: "Вывоз мусора",
+          description: "Расходы на вывоз мусора",
+          createdAt: now,
+          updatedAt: now,
+          createdByUserId: null,
+        },
+        {
+          id: "cat-security",
+          name: "Охрана",
+          description: "Расходы на охрану территории",
+          createdAt: now,
+          updatedAt: now,
+          createdByUserId: null,
+        },
+        {
+          id: "cat-lighting",
+          name: "Освещение",
+          description: "Расходы на освещение",
+          createdAt: now,
+          updatedAt: now,
+          createdByUserId: null,
+        },
+        {
+          id: "cat-electricity",
+          name: "Электроэнергия",
+          description: "Расходы на электроэнергию",
+          createdAt: now,
+          updatedAt: now,
+          createdByUserId: null,
+        },
+        {
+          id: "cat-other",
+          name: "Другое",
+          description: "Прочие расходы",
+          createdAt: now,
+          updatedAt: now,
+          createdByUserId: null,
+        },
+      ],
       targetFunds: [],
+      templates: [], // Sprint 5.4: шаблоны действий/ответов (инициализируются в templates.store.ts)
     };
   }
   return g.__SNT_DB__ as MockDb;
@@ -179,8 +295,15 @@ export const getMockDbSnapshot = (): MockDbSnapshot | null => {
   return g.__SNT_DB__ ?? null;
 };
 
-const createId = (prefix: string) =>
-  `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+/**
+ * Универсальный генератор строковых ID
+ * @param prefix - опциональный префикс для ID (по умолчанию "id")
+ * @returns уникальный строковый ID в формате: {prefix}-{timestamp}-{random}
+ */
+export function createId(prefix?: string): string {
+  const prefixValue = prefix ?? "id";
+  return `${prefixValue}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export const findUserByContact = (contact: string) => {
   const db = getDb();
@@ -206,6 +329,7 @@ export const upsertUser = (user: {
   street?: string;
   role?: User["role"];
   status?: UserStatus;
+  pendingPersonId?: string | null;
 }) => {
   const db = getDb();
   const existing = findUserByContact(user.contact);
@@ -219,6 +343,7 @@ export const upsertUser = (user: {
       street: user.street ?? existing.street,
       role: user.role ?? existing.role,
       status: user.status ?? existing.status,
+      pendingPersonId: user.pendingPersonId !== undefined ? user.pendingPersonId : existing.pendingPersonId,
     };
     db.users = db.users.map((u) => (u.id === existing.id ? updated : u));
     return updated;
@@ -232,6 +357,7 @@ export const upsertUser = (user: {
     street: user.street,
     role: user.role ?? "user",
     status: user.status ?? "pending",
+    pendingPersonId: user.pendingPersonId ?? null,
   };
   db.users.push(newUser);
   return newUser;
@@ -255,6 +381,20 @@ export const listUsers = (limit = 10) => {
   return db.users.slice(0, Math.max(0, limit));
 };
 
+/**
+ * Sprint 7.7: Get deterministic mock user ID for a role
+ */
+export function getMockUserIdByRole(role: "guest" | "resident" | "chairman" | "secretary" | "accountant" | "admin"): string | null {
+  const ROLE_USER_ID_MAP: Record<string, string> = {
+    admin: "user-admin-root",
+    resident: "user-resident-default",
+    chairman: "user-chairman-default",
+    secretary: "user-secretary-default",
+    accountant: "user-accountant-default",
+  };
+  return ROLE_USER_ID_MAP[role] || null;
+}
+
 export const upsertUserById = (input: {
   id: string;
   fullName?: string;
@@ -262,6 +402,7 @@ export const upsertUserById = (input: {
   email?: string;
   role?: User["role"];
   status?: UserStatus;
+  telegramChatId?: string | null; // Sprint 5.1: Поддержка telegramChatId
 }) => {
   const db = getDb();
   const existing = db.users.find((user) => user.id === input.id);
@@ -276,6 +417,8 @@ export const upsertUserById = (input: {
       // Если role явно передан - используем его, иначе сохраняем существующую
       role: input.role !== undefined ? input.role : existing.role,
       status: input.status ?? existing.status,
+      // Sprint 5.1: Обновляем telegramChatId если передан
+      telegramChatId: input.telegramChatId !== undefined ? input.telegramChatId : existing.telegramChatId,
     };
     db.users = db.users.map((u) => (u.id === updated.id ? updated : u));
     return updated;
@@ -287,6 +430,7 @@ export const upsertUserById = (input: {
     email: input.email,
     role: input.role ?? "user",
     status: input.status ?? "pending",
+    telegramChatId: input.telegramChatId ?? null, // Sprint 5.1
   };
   db.users.push(created);
   return created;
@@ -411,6 +555,7 @@ export const resetMockDb = () => {
     ownershipRequests: [],
     plotOwners: [],
     auditLogs: [],
+    activityLogs: [],
     settings: [
       {
         key: "payment_details",
@@ -423,6 +568,10 @@ export const resetMockDb = () => {
           bankInn: "7453002182",
           bic: "047501711",
           corr: "30101810400000000711",
+          address: "",
+          chairman: "",
+          chairmanPhone: "",
+          chairmanEmail: "",
         },
         createdAt: now,
         updatedAt: now,
@@ -433,6 +582,7 @@ export const resetMockDb = () => {
           vk: "https://vk.com/snt_smile?t2fs=07b664f4ccd18da444_3",
           telegram: "https://t.me/snt_smile",
           email: "",
+          phone: "",
         },
         createdAt: now,
         updatedAt: now,
@@ -466,16 +616,78 @@ export const resetMockDb = () => {
     persons: [],
     accrualPeriods: [],
     accrualItems: [],
+    unifiedBillingPeriods: [],
+    periodAccruals: [],
+    feeTariffs: [],
+    feeTariffOverrides: [],
+    paymentImports: [],
+    paymentImportRows: [],
+    debtRepaymentPlans: [],
+    debtNotificationTemplates: [],
+    debtNotificationHistory: [],
     payments: [],
     importBatches: [],
     billingImports: [],
     billingImportErrors: [],
+    registryImports: [],
+    aiEvents: [],
     electricityMeters: [],
     meterReadings: [],
     electricityTariffs: [],
     debtNotifications: [],
     expenses: [],
+    expenseCategories: [
+      {
+        id: "cat-roads",
+        name: "Дороги",
+        description: "Расходы на содержание и ремонт дорог",
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: null,
+      },
+      {
+        id: "cat-trash",
+        name: "Вывоз мусора",
+        description: "Расходы на вывоз мусора",
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: null,
+      },
+      {
+        id: "cat-security",
+        name: "Охрана",
+        description: "Расходы на охрану территории",
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: null,
+      },
+      {
+        id: "cat-lighting",
+        name: "Освещение",
+        description: "Расходы на освещение",
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: null,
+      },
+      {
+        id: "cat-electricity",
+        name: "Электроэнергия",
+        description: "Расходы на электроэнергию",
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: null,
+      },
+      {
+        id: "cat-other",
+        name: "Другое",
+        description: "Прочие расходы",
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: null,
+      },
+    ],
     targetFunds: [],
+    templates: [], // Sprint 5.4: шаблоны действий/ответов (инициализируются в templates.store.ts)
   };
 };
 
@@ -810,8 +1022,8 @@ export const listPayments = (filters?: {
 };
 
 export const addPayment = (data: {
-  periodId: string;
-  plotId: string;
+  periodId: string | null;
+  plotId: string | null;
   amount: number;
   paidAt?: string;
   method?: string;
@@ -826,8 +1038,8 @@ export const addPayment = (data: {
   const now = new Date().toISOString();
   const payment: Payment = {
     id: createId("pay"),
-    periodId: data.periodId,
-    plotId: data.plotId,
+    periodId: data.periodId || "",
+    plotId: data.plotId || "",
     amount: data.amount,
     paidAt: data.paidAt ?? now,
     method: data.method ?? "other",
@@ -847,6 +1059,25 @@ export const addPayment = (data: {
   const db = getDb();
   db.payments.push(payment);
   return payment;
+};
+
+export const findPaymentById = (id: string) => {
+  const db = getDb();
+  return db.payments.find((p) => p.id === id) ?? null;
+};
+
+export const updatePayment = (id: string, data: {
+  targetFundId?: string | null;
+}) => {
+  const db = getDb();
+  const payment = db.payments.find((p) => p.id === id);
+  if (!payment) return null;
+  const updated: Payment = {
+    ...payment,
+    targetFundId: data.targetFundId !== undefined ? data.targetFundId : payment.targetFundId,
+  };
+  db.payments = db.payments.map((p) => (p.id === id ? updated : p));
+  return updated;
 };
 
 export const voidPayment = (id: string, reason: string | null, voidedBy: string | null) => {
@@ -971,6 +1202,86 @@ export const findBillingImport = (id: string) => getDb().billingImports.find((it
 export const findBillingImportByBatch = (batchId: string) =>
   getDb().billingImports.find((item) => item.batchId === batchId) ?? null;
 
+export const createRegistryImport = (payload: {
+  userId: string | null;
+  fileName: string | null;
+  summary: string;
+  errorsCount: number;
+}) => {
+  const db = getDb();
+  const registryImport: RegistryImport = {
+    id: createId("registry-import"),
+    createdAt: new Date().toISOString(),
+    userId: payload.userId,
+    fileName: payload.fileName,
+    summary: payload.summary,
+    errorsCount: payload.errorsCount,
+  };
+  db.registryImports.unshift(registryImport);
+  return registryImport;
+};
+
+export const listRegistryImports = (): RegistryImport[] => {
+  const db = getDb();
+  // Ensure we always return an array, even if registryImports is undefined
+  return Array.isArray(db.registryImports) ? db.registryImports : [];
+};
+export const findRegistryImport = (id: string) => {
+  const imports = listRegistryImports();
+  return imports.find((item) => item.id === id) ?? null;
+};
+
+export const createAiEvent = (payload: {
+  userId: string | null;
+  role: string | null;
+  route: string | null;
+  eventType: "assistant_opened" | "question_asked" | "answer_shown";
+  meta?: Record<string, unknown> | null;
+}) => {
+  const db = getDb();
+  const event: AiEvent = {
+    id: createId("ai-event"),
+    createdAt: new Date().toISOString(),
+    userId: payload.userId,
+    role: payload.role,
+    route: payload.route,
+    eventType: payload.eventType,
+    meta: payload.meta || null,
+  };
+  db.aiEvents.unshift(event);
+  // Keep only last 10000 events
+  if (db.aiEvents.length > 10000) {
+    db.aiEvents = db.aiEvents.slice(0, 10000);
+  }
+  return event;
+};
+
+export const listAiEvents = (filters?: {
+  from?: string | null;
+  to?: string | null;
+  eventType?: AiEvent["eventType"] | null;
+  role?: string | null;
+}) => {
+  const db = getDb();
+  let filtered = db.aiEvents;
+  const { from, to, eventType, role } = filters || {};
+  if (from) {
+    const fromDate = new Date(from).getTime();
+    filtered = filtered.filter((e) => new Date(e.createdAt).getTime() >= fromDate);
+  }
+  if (to) {
+    const toDate = new Date(to).getTime();
+    filtered = filtered.filter((e) => new Date(e.createdAt).getTime() <= toDate);
+  }
+  if (eventType) {
+    filtered = filtered.filter((e) => e.eventType === eventType);
+  }
+  if (role) {
+    filtered = filtered.filter((e) => e.role === role);
+  }
+  return filtered;
+};
+
 export const addBillingImportError = (payload: {
   billingImportId: string;
   rowIndex: number;
@@ -1023,6 +1334,7 @@ export const addMeterReading = (data: {
   readingDate: string;
   value: number;
   source: "manual_admin" | "import" | "owner";
+  createdByUserId?: string | null;
 }) => {
   const db = getDb();
   const readings = db.meterReadings
@@ -1039,6 +1351,7 @@ export const addMeterReading = (data: {
     value: data.value,
     source: data.source,
     createdAt: new Date().toISOString(),
+    createdByUserId: data.createdByUserId ?? null,
   };
   db.meterReadings.push(reading);
   return reading;
@@ -1226,13 +1539,67 @@ export const listDebtNotificationsByPlot = (plotId: string) => {
 };
 
 // Expenses
+// Expense Categories
+export const listExpenseCategories = () => {
+  const db = getDb();
+  return [...db.expenseCategories].sort((a, b) => a.name.localeCompare(b.name));
+};
+
+export const findExpenseCategoryById = (id: string) => {
+  const db = getDb();
+  return db.expenseCategories.find((c) => c.id === id) ?? null;
+};
+
+export const createExpenseCategory = (data: {
+  name: string;
+  description?: string | null;
+  createdByUserId: string | null;
+}) => {
+  const now = new Date().toISOString();
+  const category: ExpenseCategory = {
+    id: createId("exp-cat"),
+    name: data.name.trim(),
+    description: data.description?.trim() ?? null,
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId,
+  };
+  const db = getDb();
+  db.expenseCategories.push(category);
+  return category;
+};
+
+export const updateExpenseCategory = (id: string, data: {
+  name?: string;
+  description?: string | null;
+  updatedByUserId: string | null;
+}) => {
+  const db = getDb();
+  const category = db.expenseCategories.find((c) => c.id === id);
+  if (!category) return null;
+  if (data.name !== undefined) category.name = data.name.trim();
+  if (data.description !== undefined) category.description = data.description?.trim() ?? null;
+  category.updatedAt = new Date().toISOString();
+  category.updatedByUserId = data.updatedByUserId;
+  return category;
+};
+
+export const deleteExpenseCategory = (id: string) => {
+  const db = getDb();
+  const idx = db.expenseCategories.findIndex((c) => c.id === id);
+  if (idx === -1) return false;
+  db.expenseCategories.splice(idx, 1);
+  return true;
+};
+
 export const addExpense = (data: {
   date: string;
   amount: number;
-  category: Expense["category"];
+  categoryId: string;
   description: string;
   vendor?: string | null;
   targetFundId?: string | null;
+  attachment?: Expense["attachment"] | null;
   createdByUserId: string | null;
 }) => {
   const now = new Date().toISOString();
@@ -1240,10 +1607,11 @@ export const addExpense = (data: {
     id: createId("exp"),
     date: data.date,
     amount: data.amount,
-    category: data.category,
+    categoryId: data.categoryId,
     description: data.description,
     vendor: data.vendor ?? null,
     targetFundId: data.targetFundId ?? null,
+    attachment: data.attachment ?? null,
     createdAt: now,
     createdByUserId: data.createdByUserId,
   };
@@ -1252,7 +1620,32 @@ export const addExpense = (data: {
   return expense;
 };
 
-export const listExpenses = (filters?: { from?: string | null; to?: string | null; category?: Expense["category"] | null }) => {
+export const updateExpense = (id: string, data: {
+  date?: string;
+  amount?: number;
+  categoryId?: string;
+  description?: string;
+  vendor?: string | null;
+  targetFundId?: string | null;
+  attachment?: Expense["attachment"] | null;
+  updatedByUserId: string | null;
+}) => {
+  const db = getDb();
+  const expense = db.expenses.find((e) => e.id === id);
+  if (!expense) return null;
+  if (data.date !== undefined) expense.date = data.date;
+  if (data.amount !== undefined) expense.amount = data.amount;
+  if (data.categoryId !== undefined) expense.categoryId = data.categoryId;
+  if (data.description !== undefined) expense.description = data.description;
+  if (data.vendor !== undefined) expense.vendor = data.vendor;
+  if (data.targetFundId !== undefined) expense.targetFundId = data.targetFundId;
+  if (data.attachment !== undefined) expense.attachment = data.attachment;
+  expense.updatedAt = new Date().toISOString();
+  expense.updatedByUserId = data.updatedByUserId;
+  return expense;
+};
+
+export const listExpenses = (filters?: { from?: string | null; to?: string | null; categoryId?: string | null }) => {
   const db = getDb();
   const fromTs = filters?.from ? new Date(filters.from).getTime() : null;
   const toTs = filters?.to ? new Date(filters.to).getTime() : null;
@@ -1260,7 +1653,7 @@ export const listExpenses = (filters?: { from?: string | null; to?: string | nul
     const ts = new Date(e.date).getTime();
     if (fromTs && ts < fromTs) return false;
     if (toTs && ts > toTs) return false;
-    if (filters?.category && e.category !== filters.category) return false;
+    if (filters?.categoryId && e.categoryId !== filters.categoryId) return false;
     return true;
   });
 };
@@ -1270,20 +1663,49 @@ export const addTargetFund = (data: {
   title: string;
   description: string;
   targetAmount: number;
+  deadline?: string | null;
   status?: TargetFund["status"];
   aliases?: string[] | null;
+  createdByUserId?: string | null;
 }) => {
+  const now = new Date().toISOString();
   const fund: TargetFund = {
     id: createId("fund"),
     title: data.title,
     description: data.description,
     targetAmount: data.targetAmount,
+    deadline: data.deadline || null,
     status: data.status ?? "active",
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId ?? null,
     aliases: data.aliases ?? [],
   };
   const db = getDb();
   db.targetFunds.unshift(fund);
+  return fund;
+};
+
+export const updateTargetFund = (id: string, data: {
+  title?: string;
+  description?: string;
+  targetAmount?: number;
+  deadline?: string | null;
+  status?: TargetFund["status"];
+  aliases?: string[] | null;
+  updatedByUserId?: string | null;
+}) => {
+  const db = getDb();
+  const fund = db.targetFunds.find((f) => f.id === id);
+  if (!fund) return null;
+  if (data.title !== undefined) fund.title = data.title;
+  if (data.description !== undefined) fund.description = data.description;
+  if (data.targetAmount !== undefined) fund.targetAmount = data.targetAmount;
+  if (data.deadline !== undefined) fund.deadline = data.deadline;
+  if (data.status !== undefined) fund.status = data.status;
+  if (data.aliases !== undefined) fund.aliases = data.aliases ?? [];
+  fund.updatedAt = new Date().toISOString();
+  fund.updatedByUserId = data.updatedByUserId ?? null;
   return fund;
 };
 
@@ -1388,4 +1810,720 @@ export const listEntityVersions = (filters: {
 export const getEntityVersionById = (id: string): EntityVersion | null => {
   const db = getDb();
   return db.entityVersions.find((v) => v.id === id) ?? null;
+};
+
+// Unified Billing Periods
+export const listUnifiedBillingPeriods = () => {
+  const db = getDb();
+  return [...db.unifiedBillingPeriods].sort((a, b) => b.from.localeCompare(a.from));
+};
+
+export const findUnifiedBillingPeriodById = (id: string): UnifiedBillingPeriod | null => {
+  const db = getDb();
+  return db.unifiedBillingPeriods.find((p) => p.id === id) ?? null;
+};
+
+export const createUnifiedBillingPeriod = (data: {
+  from: string;
+  to: string;
+  status?: BillingPeriodStatus;
+  title?: string | null;
+  createdByUserId?: string | null;
+}): UnifiedBillingPeriod => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const period: UnifiedBillingPeriod = {
+    id: createId("ubp"),
+    from: data.from,
+    to: data.to,
+    status: data.status ?? "draft",
+    title: data.title ?? null,
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId ?? null,
+    updatedByUserId: null,
+  };
+  db.unifiedBillingPeriods.push(period);
+  return period;
+};
+
+export const updateUnifiedBillingPeriod = (
+  id: string,
+  data: {
+    from?: string;
+    to?: string;
+    status?: BillingPeriodStatus;
+    title?: string | null;
+    updatedByUserId?: string | null;
+  }
+): UnifiedBillingPeriod | null => {
+  const db = getDb();
+  const period = db.unifiedBillingPeriods.find((p) => p.id === id);
+  if (!period) return null;
+  const updated: UnifiedBillingPeriod = {
+    ...period,
+    ...data,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: data.updatedByUserId ?? period.updatedByUserId,
+  };
+  db.unifiedBillingPeriods = db.unifiedBillingPeriods.map((p) => (p.id === id ? updated : p));
+  return updated;
+};
+
+export const listPeriodAccruals = (periodId: string, filters?: { type?: "membership" | "target" | "electric" }) => {
+  const db = getDb();
+  let items = db.periodAccruals.filter((a) => a.periodId === periodId);
+  if (filters?.type) {
+    items = items.filter((a) => a.type === filters.type);
+  }
+  return items;
+};
+
+export const findPeriodAccrual = (
+  periodId: string,
+  plotId: string,
+  type: "membership" | "target" | "electric"
+): PeriodAccrual | null => {
+  const db = getDb();
+  return db.periodAccruals.find((a) => a.periodId === periodId && a.plotId === plotId && a.type === type) ?? null;
+};
+
+export const ensurePeriodAccrual = (
+  periodId: string,
+  plotId: string,
+  type: "membership" | "target" | "electric"
+): PeriodAccrual => {
+  const db = getDb();
+  const existing = findPeriodAccrual(periodId, plotId, type);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  const accrual: PeriodAccrual = {
+    id: createId("pacc"),
+    periodId,
+    plotId,
+    type,
+    amountAccrued: 0,
+    amountPaid: 0,
+    note: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.periodAccruals.push(accrual);
+  return accrual;
+};
+
+export const updatePeriodAccrual = (
+  id: string,
+  data: {
+    amountAccrued?: number;
+    amountPaid?: number;
+    overrideApplied?: boolean | null;
+    note?: string | null;
+  }
+): PeriodAccrual | null => {
+  const db = getDb();
+  const accrual = db.periodAccruals.find((a) => a.id === id);
+  if (!accrual) return null;
+  const updated: PeriodAccrual = {
+    ...accrual,
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
+  db.periodAccruals = db.periodAccruals.map((a) => (a.id === id ? updated : a));
+  return updated;
+};
+
+// Fee Tariffs
+export const listFeeTariffs = (filters?: {
+  type?: FeeTariffType | null;
+  activeAt?: string | null; // YYYY-MM-DD
+}) => {
+  const db = getDb();
+  let result = [...db.feeTariffs];
+  if (filters?.type) {
+    result = result.filter((t) => t.type === filters.type);
+  }
+  if (filters?.activeAt) {
+    const activeAt = filters.activeAt;
+    result = result.filter((t) => {
+      if (t.activeFrom > activeAt) return false;
+      if (t.activeTo && t.activeTo < activeAt) return false;
+      return true;
+    });
+  }
+  return result.sort((a, b) => b.activeFrom.localeCompare(a.activeFrom));
+};
+
+export const findFeeTariffById = (id: string): FeeTariff | null => {
+  const db = getDb();
+  return db.feeTariffs.find((t) => t.id === id) ?? null;
+};
+
+export const createFeeTariff = (data: {
+  type: FeeTariffType;
+  method: FeeTariffMethod;
+  amount: number;
+  activeFrom: string;
+  activeTo?: string | null;
+  title?: string | null;
+  status?: "active" | "draft" | null;
+  createdByUserId?: string | null;
+}): FeeTariff => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const tariff: FeeTariff = {
+    id: createId("ftariff"),
+    type: data.type,
+    method: data.method,
+    amount: data.amount,
+    activeFrom: data.activeFrom,
+    activeTo: data.activeTo ?? null,
+    title: data.title ?? null,
+    status: data.status ?? "active",
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId ?? null,
+    updatedByUserId: null,
+  };
+  db.feeTariffs.push(tariff);
+  return tariff;
+};
+
+export const updateFeeTariff = (
+  id: string,
+  data: {
+    type?: FeeTariffType;
+    method?: FeeTariffMethod;
+    amount?: number;
+    activeFrom?: string;
+    activeTo?: string | null;
+    title?: string | null;
+    status?: "active" | "draft" | null;
+    updatedByUserId?: string | null;
+  }
+): FeeTariff | null => {
+  const db = getDb();
+  const tariff = db.feeTariffs.find((t) => t.id === id);
+  if (!tariff) return null;
+  const updated: FeeTariff = {
+    ...tariff,
+    ...data,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: data.updatedByUserId ?? tariff.updatedByUserId,
+  };
+  db.feeTariffs = db.feeTariffs.map((t) => (t.id === id ? updated : t));
+  return updated;
+};
+
+export const deleteFeeTariff = (id: string): boolean => {
+  const db = getDb();
+  const index = db.feeTariffs.findIndex((t) => t.id === id);
+  if (index === -1) return false;
+  db.feeTariffs.splice(index, 1);
+  return true;
+};
+
+// Fee Tariff Overrides
+export const listFeeTariffOverrides = (filters?: {
+  tariffId?: string | null;
+  plotId?: string | null;
+}) => {
+  const db = getDb();
+  let result = [...db.feeTariffOverrides];
+  if (filters?.tariffId) {
+    result = result.filter((o) => o.tariffId === filters.tariffId);
+  }
+  if (filters?.plotId) {
+    result = result.filter((o) => o.plotId === filters.plotId);
+  }
+  return result;
+};
+
+export const findFeeTariffOverride = (tariffId: string, plotId: string): FeeTariffOverride | null => {
+  const db = getDb();
+  return db.feeTariffOverrides.find((o) => o.tariffId === tariffId && o.plotId === plotId) ?? null;
+};
+
+export const createFeeTariffOverride = (data: {
+  tariffId: string;
+  plotId: string;
+  amount: number;
+  comment?: string | null;
+  createdByUserId?: string | null;
+}): FeeTariffOverride => {
+  const db = getDb();
+  const existing = findFeeTariffOverride(data.tariffId, data.plotId);
+  if (existing) {
+    const patch: { amount: number; comment?: string | null; updatedByUserId?: string | null } = {
+      amount: data.amount,
+      updatedByUserId: data.createdByUserId ?? null,
+    };
+    if (data.comment !== undefined) patch.comment = data.comment;
+    return updateFeeTariffOverride(existing.id, patch)!;
+  }
+  const now = new Date().toISOString();
+  const override: FeeTariffOverride = {
+    id: createId("ftoverride"),
+    tariffId: data.tariffId,
+    plotId: data.plotId,
+    amount: data.amount,
+    comment: data.comment ?? null,
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId ?? null,
+    updatedByUserId: null,
+  };
+  db.feeTariffOverrides.push(override);
+  return override;
+};
+
+export const updateFeeTariffOverride = (
+  id: string,
+  data: {
+    amount?: number;
+    comment?: string | null;
+    updatedByUserId?: string | null;
+  }
+): FeeTariffOverride | null => {
+  const db = getDb();
+  const override = db.feeTariffOverrides.find((o) => o.id === id);
+  if (!override) return null;
+  const updated: FeeTariffOverride = {
+    ...override,
+    ...data,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: data.updatedByUserId ?? override.updatedByUserId,
+  };
+  db.feeTariffOverrides = db.feeTariffOverrides.map((o) => (o.id === id ? updated : o));
+  return updated;
+};
+
+export const deleteFeeTariffOverride = (id: string): boolean => {
+  const db = getDb();
+  const index = db.feeTariffOverrides.findIndex((o) => o.id === id);
+  if (index === -1) return false;
+  db.feeTariffOverrides.splice(index, 1);
+  return true;
+};
+
+// Helper: Get effective tariff amount for a plot
+export const getEffectiveTariffAmount = (
+  tariffId: string,
+  plotId: string,
+  plotArea?: number | null
+): number | null => {
+  const db = getDb();
+  const tariff = findFeeTariffById(tariffId);
+  if (!tariff) return null;
+
+  // Check for override first
+  const override = findFeeTariffOverride(tariffId, plotId);
+  if (override) {
+    return override.amount;
+  }
+
+  // Calculate based on method
+  if (tariff.method === "fixed") {
+    return tariff.amount;
+  } else if (tariff.method === "per_plot") {
+    return tariff.amount;
+  } else if (tariff.method === "per_sotka") {
+    if (!plotArea) return null;
+    return tariff.amount * plotArea;
+  }
+
+  return null;
+};
+
+// Payment Imports
+export const listPaymentImports = (filters?: { status?: PaymentImport["status"] | null }) => {
+  const db = getDb();
+  let result = [...db.paymentImports];
+  if (filters?.status) {
+    result = result.filter((imp) => imp.status === filters.status);
+  }
+  return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+
+export const findPaymentImportById = (id: string): PaymentImport | null => {
+  const db = getDb();
+  return db.paymentImports.find((imp) => imp.id === id) ?? null;
+};
+
+export const createPaymentImport = (data: {
+  fileName: string;
+  totalRows: number;
+  createdByUserId?: string | null;
+}): PaymentImport => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const import_: PaymentImport = {
+    id: createId("pimport"),
+    fileName: data.fileName,
+    status: "draft",
+    totalRows: data.totalRows,
+    matchedRows: 0,
+    unmatchedRows: 0,
+    appliedRows: 0,
+    createdAt: now,
+    appliedAt: null,
+    createdByUserId: data.createdByUserId ?? null,
+    appliedByUserId: null,
+  };
+  db.paymentImports.push(import_);
+  return import_;
+};
+
+export const updatePaymentImport = (
+  id: string,
+  data: {
+    status?: PaymentImport["status"];
+    matchedRows?: number;
+    unmatchedRows?: number;
+    errorRows?: number;
+    appliedRows?: number;
+    appliedAt?: string | null;
+    appliedByUserId?: string | null;
+  }
+): PaymentImport | null => {
+  const db = getDb();
+  const import_ = db.paymentImports.find((imp) => imp.id === id);
+  if (!import_) return null;
+  const updated: PaymentImport = {
+    ...import_,
+    ...data,
+    errorRows: data.errorRows !== undefined ? data.errorRows : import_.errorRows,
+    appliedAt: data.appliedAt !== undefined ? data.appliedAt : import_.appliedAt,
+    appliedByUserId: data.appliedByUserId !== undefined ? data.appliedByUserId : import_.appliedByUserId,
+  };
+  db.paymentImports = db.paymentImports.map((imp) => (imp.id === id ? updated : imp));
+  return updated;
+};
+
+export const listPaymentImportRows = (importId: string) => {
+  const db = getDb();
+  return db.paymentImportRows
+    .filter((row) => row.importId === importId)
+    .sort((a, b) => a.rowIndex - b.rowIndex);
+};
+
+export const findPaymentImportRowById = (id: string): PaymentImportRow | null => {
+  const db = getDb();
+  return db.paymentImportRows.find((row) => row.id === id) ?? null;
+};
+
+export const createPaymentImportRow = (data: {
+  importId: string;
+  rowIndex: number;
+  date: string;
+  amount: number;
+  purpose?: string | null;
+  fullName?: string | null;
+  phone?: string | null;
+  plotNumber?: string | null;
+  externalId?: string | null;
+  matchedPlotId?: string | null;
+  matchType?: "plot_number" | "phone" | "fullname" | "manual" | null;
+  validationErrors?: string[] | null;
+  rawData: Record<string, string | number | null>;
+}): PaymentImportRow => {
+  const db = getDb();
+  const row: PaymentImportRow = {
+    id: createId("pimportrow"),
+    importId: data.importId,
+    rowIndex: data.rowIndex,
+    date: data.date,
+    amount: data.amount,
+    purpose: data.purpose ?? null,
+    fullName: data.fullName ?? null,
+    phone: data.phone ?? null,
+    plotNumber: data.plotNumber ?? null,
+    externalId: data.externalId ?? null,
+    matchedPlotId: data.matchedPlotId ?? null,
+    matchType: data.matchType ?? null,
+    validationErrors: data.validationErrors ?? null,
+    paymentId: null,
+    rawData: data.rawData,
+    createdAt: new Date().toISOString(),
+  };
+  db.paymentImportRows.push(row);
+  return row;
+};
+
+export const updatePaymentImportRow = (
+  id: string,
+  data: {
+    matchedPlotId?: string | null;
+    matchType?: "plot_number" | "phone" | "fullname" | "manual" | null;
+    paymentId?: string | null;
+  }
+): PaymentImportRow | null => {
+  const db = getDb();
+  const row = db.paymentImportRows.find((r) => r.id === id);
+  if (!row) return null;
+  const updated: PaymentImportRow = {
+    ...row,
+    ...data,
+    matchedPlotId: data.matchedPlotId !== undefined ? data.matchedPlotId : row.matchedPlotId,
+    matchType: data.matchType !== undefined ? data.matchType : row.matchType,
+    paymentId: data.paymentId !== undefined ? data.paymentId : row.paymentId,
+  };
+  db.paymentImportRows = db.paymentImportRows.map((r) => (r.id === id ? updated : r));
+  return updated;
+};
+
+// Debt Repayment Plans
+export const listDebtRepaymentPlans = (filters?: {
+  plotId?: string | null;
+  periodId?: string | null;
+}) => {
+  const db = getDb();
+  let result = [...db.debtRepaymentPlans];
+  if (filters?.plotId) {
+    result = result.filter((plan) => plan.plotId === filters.plotId);
+  }
+  if (filters?.periodId !== undefined) {
+    if (filters.periodId === null) {
+      result = result.filter((plan) => plan.periodId === null);
+    } else {
+      result = result.filter((plan) => plan.periodId === filters.periodId);
+    }
+  }
+  return result.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+};
+
+export const findDebtRepaymentPlanById = (id: string): DebtRepaymentPlan | null => {
+  const db = getDb();
+  return db.debtRepaymentPlans.find((plan) => plan.id === id) ?? null;
+};
+
+export const findDebtRepaymentPlanByPlotPeriod = (
+  plotId: string,
+  periodId: string | null
+): DebtRepaymentPlan | null => {
+  const db = getDb();
+  return (
+    db.debtRepaymentPlans.find((plan) => plan.plotId === plotId && plan.periodId === periodId) ?? null
+  );
+};
+
+export const createDebtRepaymentPlan = (data: {
+  plotId: string;
+  periodId?: string | null;
+  status: DebtRepaymentPlan["status"];
+  comment?: string | null;
+  agreedAmount?: number | null;
+  agreedDate?: string | null;
+  createdByUserId?: string | null;
+}): DebtRepaymentPlan => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const plan: DebtRepaymentPlan = {
+    id: createId("debtplan"),
+    plotId: data.plotId,
+    periodId: data.periodId ?? null,
+    status: data.status,
+    comment: data.comment ?? null,
+    agreedAmount: data.agreedAmount ?? null,
+    agreedDate: data.agreedDate ?? null,
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId ?? null,
+    updatedByUserId: null,
+  };
+  db.debtRepaymentPlans.push(plan);
+  return plan;
+};
+
+export const updateDebtRepaymentPlan = (
+  id: string,
+  data: {
+    status?: DebtRepaymentPlan["status"];
+    comment?: string | null;
+    agreedAmount?: number | null;
+    agreedDate?: string | null;
+    updatedByUserId?: string | null;
+  }
+): DebtRepaymentPlan | null => {
+  const db = getDb();
+  const plan = db.debtRepaymentPlans.find((p) => p.id === id);
+  if (!plan) return null;
+  const updated: DebtRepaymentPlan = {
+    ...plan,
+    ...data,
+    comment: data.comment !== undefined ? data.comment : plan.comment,
+    agreedAmount: data.agreedAmount !== undefined ? data.agreedAmount : plan.agreedAmount,
+    agreedDate: data.agreedDate !== undefined ? data.agreedDate : plan.agreedDate,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: data.updatedByUserId !== undefined ? data.updatedByUserId : plan.updatedByUserId,
+  };
+  db.debtRepaymentPlans = db.debtRepaymentPlans.map((p) => (p.id === id ? updated : p));
+  return updated;
+};
+
+// Debt Notification Templates
+export const listDebtNotificationTemplates = () => {
+  const db = getDb();
+  return [...db.debtNotificationTemplates].sort((a, b) => {
+    if (a.isDefault && !b.isDefault) return -1;
+    if (!a.isDefault && b.isDefault) return 1;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+};
+
+export const findDebtNotificationTemplateById = (id: string): DebtNotificationTemplate | null => {
+  const db = getDb();
+  return db.debtNotificationTemplates.find((t) => t.id === id) ?? null;
+};
+
+export const createDebtNotificationTemplate = (data: {
+  title: string;
+  body: string;
+  isDefault?: boolean;
+  createdByUserId?: string | null;
+}): DebtNotificationTemplate => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  
+  // If this is default, unset other defaults
+  if (data.isDefault) {
+    db.debtNotificationTemplates.forEach((t) => {
+      if (t.isDefault) {
+        t.isDefault = false;
+      }
+    });
+  }
+  
+  const template: DebtNotificationTemplate = {
+    id: createId("debtnotif"),
+    title: data.title,
+    body: data.body,
+    isDefault: data.isDefault ?? false,
+    createdAt: now,
+    updatedAt: now,
+    createdByUserId: data.createdByUserId ?? null,
+    updatedByUserId: null,
+  };
+  db.debtNotificationTemplates.push(template);
+  return template;
+};
+
+export const updateDebtNotificationTemplate = (
+  id: string,
+  data: {
+    title?: string;
+    body?: string;
+    isDefault?: boolean;
+    updatedByUserId?: string | null;
+  }
+): DebtNotificationTemplate | null => {
+  const db = getDb();
+  const template = db.debtNotificationTemplates.find((t) => t.id === id);
+  if (!template) return null;
+  
+  // If setting as default, unset other defaults
+  if (data.isDefault === true) {
+    db.debtNotificationTemplates.forEach((t) => {
+      if (t.id !== id && t.isDefault) {
+        t.isDefault = false;
+      }
+    });
+  }
+  
+  const updated: DebtNotificationTemplate = {
+    ...template,
+    ...data,
+    title: data.title !== undefined ? data.title : template.title,
+    body: data.body !== undefined ? data.body : template.body,
+    isDefault: data.isDefault !== undefined ? data.isDefault : template.isDefault,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: data.updatedByUserId !== undefined ? data.updatedByUserId : template.updatedByUserId,
+  };
+  db.debtNotificationTemplates = db.debtNotificationTemplates.map((t) => (t.id === id ? updated : t));
+  return updated;
+};
+
+export const deleteDebtNotificationTemplate = (id: string): boolean => {
+  const db = getDb();
+  const index = db.debtNotificationTemplates.findIndex((t) => t.id === id);
+  if (index === -1) return false;
+  db.debtNotificationTemplates.splice(index, 1);
+  return true;
+};
+
+// Debt Notification History
+export const listDebtNotificationHistory = (filters?: {
+  plotId?: string | null;
+  periodId?: string | null;
+  status?: DebtNotificationHistory["status"] | null;
+}) => {
+  const db = getDb();
+  let result = [...db.debtNotificationHistory];
+  if (filters?.plotId) {
+    result = result.filter((h) => h.plotId === filters.plotId);
+  }
+  if (filters?.periodId !== undefined) {
+    if (filters.periodId === null) {
+      result = result.filter((h) => h.periodId === null);
+    } else {
+      result = result.filter((h) => h.periodId === filters.periodId);
+    }
+  }
+  if (filters?.status) {
+    result = result.filter((h) => h.status === filters.status);
+  }
+  return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+
+export const findDebtNotificationHistoryById = (id: string): DebtNotificationHistory | null => {
+  const db = getDb();
+  return db.debtNotificationHistory.find((h) => h.id === id) ?? null;
+};
+
+export const createDebtNotificationHistory = (data: {
+  plotId: string;
+  periodId?: string | null;
+  templateId?: string | null;
+  generatedText: string;
+  status: DebtNotificationHistory["status"];
+  createdByUserId?: string | null;
+}): DebtNotificationHistory => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const history: DebtNotificationHistory = {
+    id: createId("debtnotifhist"),
+    plotId: data.plotId,
+    periodId: data.periodId ?? null,
+    templateId: data.templateId ?? null,
+    generatedText: data.generatedText,
+    status: data.status,
+    sentAt: null,
+    createdAt: now,
+    createdByUserId: data.createdByUserId ?? null,
+    sentByUserId: null,
+  };
+  db.debtNotificationHistory.push(history);
+  return history;
+};
+
+export const updateDebtNotificationHistory = (
+  id: string,
+  data: {
+    status?: DebtNotificationHistory["status"];
+    sentAt?: string | null;
+    sentByUserId?: string | null;
+  }
+): DebtNotificationHistory | null => {
+  const db = getDb();
+  const history = db.debtNotificationHistory.find((h) => h.id === id);
+  if (!history) return null;
+  const updated: DebtNotificationHistory = {
+    ...history,
+    ...data,
+    status: data.status !== undefined ? data.status : history.status,
+    sentAt: data.sentAt !== undefined ? data.sentAt : history.sentAt,
+    sentByUserId: data.sentByUserId !== undefined ? data.sentByUserId : history.sentByUserId,
+  };
+  db.debtNotificationHistory = db.debtNotificationHistory.map((h) => (h.id === id ? updated : h));
+  return updated;
 };

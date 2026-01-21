@@ -47,7 +47,7 @@ export default async function RootLayout({
   await ensureMockDbFromFile();
   const enableUx = process.env.NEXT_PUBLIC_ENABLE_UX === "1" || process.env.NODE_ENV !== "production";
   return (
-    <html lang="ru" className={inter.variable}>
+    <html lang="ru" className={inter.variable} suppressHydrationWarning>
       <body className="antialiased bg-[#F8F1E9] text-zinc-900 font-sans">
         {enableUx ? (
           <RouteLoaderProvider>

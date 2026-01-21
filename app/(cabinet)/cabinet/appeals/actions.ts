@@ -11,6 +11,6 @@ export async function createAppealAction(formData: FormData) {
   if (!title || !body) {
     return;
   }
-  const appeal = createAppeal({ title, body, authorId, authorName });
+  const appeal = await createAppeal({ title, body, authorId, authorName });
   redirect(`/cabinet/appeals/${appeal.id}`);
 }

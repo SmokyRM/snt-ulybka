@@ -5,6 +5,7 @@ import { useAppRouter } from "@/hooks/useAppRouter";
 import { LogoutButton } from "@/components/LogoutButton";
 import { getSessionClient } from "@/lib/session";
 import { User } from "@/types/snt";
+import { ApiError, readOk } from "@/lib/api/client";
 
 export default function AdminRequestsPage() {
   const router = useAppRouter();
@@ -13,18 +14,22 @@ export default function AdminRequestsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchPending = useCallback(async () => {
-    const res = await fetch("/api/admin/pending-users");
-    if (res.status === 403) {
-      setIsAllowed(false);
-      return;
+    try {
+      const res = await fetch("/api/admin/pending-users");
+      if (res.status === 403) {
+        setIsAllowed(false);
+        return;
+      }
+      const data = await readOk<{ users: User[] }>(res);
+      setPending(data.users || []);
+      setIsAllowed(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        setIsAllowed(false);
+        return;
+      }
+      setError(error instanceof Error ? error.message : "Не удалось загрузить данные");
     }
-    if (!res.ok) {
-      setError("Не удалось загрузить данные");
-      return;
-    }
-    const data = await res.json();
-    setPending(data.users || []);
-    setIsAllowed(true);
   }, []);
 
   useEffect(() => {
@@ -40,17 +45,17 @@ export default function AdminRequestsPage() {
   }, [router, fetchPending]);
 
   const updateStatus = async (userId: string, status: "verified" | "rejected") => {
-    const res = await fetch("/api/admin/user-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, status }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || "Не удалось обновить статус");
-      return;
+    try {
+      const res = await fetch("/api/admin/user-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, status }),
+      });
+      await readOk<{ ok: true; user: User }>(res);
+      fetchPending();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Не удалось обновить статус");
     }
-    fetchPending();
   };
 
   if (isAllowed === null) {

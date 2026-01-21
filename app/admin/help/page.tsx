@@ -57,14 +57,14 @@ export default async function AdminHelpPage() {
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-700">
           <li>
             Откройте{" "}
-            <Link className="text-[#5E704F] underline" href="/admin/plots">
+            <Link className="text-[#5E704F] underline" href="/admin/registry?tab=plots">
               реестр участков
             </Link>{" "}
             и проверьте статусы.
           </li>
           <li>
             Проверьте{" "}
-            <Link className="text-[#5E704F] underline" href="/admin/tariffs">
+            <Link className="text-[#5E704F] underline" href="/admin/billing/tariffs">
               тарифы взносов
             </Link>{" "}
             и сроки.
@@ -78,21 +78,21 @@ export default async function AdminHelpPage() {
           </li>
           <li>
             Загрузите платежи в{" "}
-            <Link className="text-[#5E704F] underline" href="/admin/billing/import">
+            <Link className="text-[#5E704F] underline" href="/admin/billing/payments-import">
               импорте
             </Link>
             .
           </li>
           <li>
             Проверьте{" "}
-            <Link className="text-[#5E704F] underline" href="/admin/debts">
+            <Link className="text-[#5E704F] underline" href="/admin/billing/debts">
               долги
             </Link>{" "}
             и подготовьте уведомления.
           </li>
           <li>
             Если нужно, откройте{" "}
-            <Link className="text-[#5E704F] underline" href="/admin/notifications/debtors">
+            <Link className="text-[#5E704F] underline" href="/admin/billing/debtors">
               должников
             </Link>{" "}
             для рассылки.

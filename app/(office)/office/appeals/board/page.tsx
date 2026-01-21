@@ -4,15 +4,14 @@ import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { hasPermission, isOfficeRole } from "@/lib/rbac";
 import { listAppeals, type AppealStatus } from "@/lib/office/appeals.server";
+import { getAppealSlaContainerClass, getDueDateTextClass } from "@/lib/appealsSlaStyling";
 
 const columns: { key: AppealStatus; title: string; color: string }[] = [
   { key: "new", title: "Новые", color: "border-blue-200 bg-blue-50" },
   { key: "in_progress", title: "В работе", color: "border-amber-200 bg-amber-50" },
-  { key: "done", title: "Закрыто", color: "border-emerald-200 bg-emerald-50" },
+  { key: "needs_info", title: "Требует уточнения", color: "border-orange-200 bg-orange-50" },
+  { key: "closed", title: "Закрыто", color: "border-emerald-200 bg-emerald-50" },
 ];
-
-const overdue = (dueAt?: string | null, status?: AppealStatus) =>
-  !!dueAt && status !== "done" && new Date(dueAt).getTime() < Date.now();
 
 export default async function OfficeAppealsBoardPage() {
   const user = await getEffectiveSessionUser();
@@ -39,7 +38,7 @@ export default async function OfficeAppealsBoardPage() {
         </AppLink>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {columns.map((col) => (
           <div key={col.key} className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
             <div className={`rounded-t-2xl border-b px-4 py-3 text-sm font-semibold text-zinc-800 ${col.color}`}>
@@ -57,9 +56,7 @@ export default async function OfficeAppealsBoardPage() {
                     <AppLink
                       key={appeal.id}
                       href={`/office/appeals/${appeal.id}`}
-                      className={`block rounded-xl border border-zinc-200 bg-white px-3 py-3 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                        overdue(appeal.dueAt, appeal.status) ? "border-rose-200 bg-rose-50/60" : ""
-                      }`}
+                      className={`block rounded-xl border px-3 py-3 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${getAppealSlaContainerClass(appeal.dueAt, appeal.status)}`}
                       data-testid={`office-appeals-item-${appeal.id}`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -74,7 +71,7 @@ export default async function OfficeAppealsBoardPage() {
                         {appeal.assigneeRole ? `Исполнитель: ${appeal.assigneeRole}` : "Не назначен"}
                       </div>
                       {appeal.dueAt ? (
-                        <div className={`text-xs font-semibold ${overdue(appeal.dueAt, appeal.status) ? "text-rose-600" : "text-zinc-600"}`}>
+                        <div className={`text-xs font-semibold ${getDueDateTextClass(appeal.dueAt, appeal.status)}`}>
                           Срок: {new Date(appeal.dueAt).toLocaleDateString("ru-RU")}
                         </div>
                       ) : null}

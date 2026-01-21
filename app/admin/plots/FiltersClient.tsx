@@ -32,11 +32,22 @@ export default function FiltersClient({ initialFilters }: { initialFilters: Filt
       q: (formData.get("q") as string) || null,
     };
     const query = buildQuery(nextFilters);
-    router.push(`/admin/plots${query ? `?${query}` : ""}`);
+    // Check if we're on registry page with tabs
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+    if (currentPath === "/admin/registry") {
+      router.push(`/admin/registry?tab=plots${query ? `&${query}` : ""}`);
+    } else {
+      router.push(`/admin/plots${query ? `?${query}` : ""}`);
+    }
   };
 
   const reset = () => {
-    router.push("/admin/plots");
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+    if (currentPath === "/admin/registry") {
+      router.push("/admin/registry?tab=plots");
+    } else {
+      router.push("/admin/plots");
+    }
   };
 
   const exportCsv = () => {
@@ -46,6 +57,7 @@ export default function FiltersClient({ initialFilters }: { initialFilters: Filt
       missingContacts: initialFilters.missingContacts,
       q: initialFilters.q,
     });
+    // Export works the same regardless of current path
     const url = `/api/admin/plots/export.csv${query ? `?${query}` : ""}`;
     window.location.href = url;
   };

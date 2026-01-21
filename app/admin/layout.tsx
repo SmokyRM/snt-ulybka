@@ -1,5 +1,6 @@
+import { headers } from "next/headers";
 import { getEffectiveSessionUser, getSessionUser, isAdmin } from "@/lib/session.server";
-import { isAdminRole } from "@/lib/rbac";
+import { isAdminRole, normalizeRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import AdminSidebar from "./_components/AdminSidebar";
 import { serverFetchJson } from "@/lib/serverFetch";
@@ -15,21 +16,30 @@ import AdminQaBanner from "./_components/AdminQaBanner";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
+  const isDev = process.env.NODE_ENV !== "production";
+
   if (!user) {
-    redirect("/staff/login?next=/admin");
+    const headersList = await headers();
+    const nextPath = headersList.get("x-pathname") || "/admin";
+    if (isDev) {
+      console.log("[guard-redirect]", { path: "/admin (layout)", role: "null", reason: "no_session", redirectTo: "/staff-login", nextPath });
+    }
+    redirect(`/staff-login?next=${encodeURIComponent(nextPath)}`);
   }
-  // КРИТИЧНО: Проверяем что роль admin через isAdminRole
-  // Это гарантирует что только admin может попасть в /admin
-  if (!isAdminRole(user.role)) {
-    // Debug log в dev режиме
-    if (process.env.NODE_ENV !== "production") {
+  // КРИТИЧНО: Используем normalizeRole для нормализации роли (как в middleware)
+  const normalizedRole = normalizeRole(user.role);
+  // Проверяем что роль admin через isAdminRole
+  if (!isAdminRole(normalizedRole)) {
+    if (isDev) {
       console.warn("[admin-layout] Доступ запрещен:", {
         userId: user.id,
         role: user.role,
-        isAdminRole: isAdminRole(user.role),
+        normalizedRole,
+        isAdminRole: isAdminRole(normalizedRole),
       });
+      console.log("[guard-redirect]", { path: "/admin (layout)", role: String(normalizedRole), reason: "admin.only", redirectTo: "/forbidden" });
     }
-    redirect("/forbidden");
+    redirect("/forbidden?reason=admin.only&next=/admin&src=layout");
   }
   const effectiveUser = await getEffectiveSessionUser();
   const qaScenario = await getQaScenarioFromCookies();
@@ -44,7 +54,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       | "chairman"
       | "secretary") ?? user.role;
   const admin = isAdmin(user);
-  const isDev = process.env.NODE_ENV !== "production";
   const flags = await getFeatureFlags().catch(() => null);
   const widgetEnabled = flags ? isFeatureEnabled(flags, "ai_widget_enabled") : false;
   const allowPreview = user?.role === "admin" || user?.role === "board";
