@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasImportAccess } from "@/lib/session.server";
+import { fail, forbidden, ok, serverError } from "@/lib/api/respond";
 
 type PreviewRow = {
   rowIndex: number;
@@ -129,28 +129,28 @@ const parseConfirmed = (value: string) => {
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!hasImportAccess(user)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    return forbidden(request);
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "file_required" }, { status: 400 });
-  }
+  try {
+    const formData = await request.formData();
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      return fail(request, "validation_error", "file_required", 400);
+    }
 
-  const rawText = (await file.text()).replace(/^\uFEFF/, "");
-  const firstLine = rawText.split(/\r?\n/)[0] ?? "";
-  const delimiter = detectDelimiter(firstLine);
-  const rows = parseCsv(rawText, delimiter);
+    const rawText = (await file.text()).replace(/^\uFEFF/, "");
+    const firstLine = rawText.split(/\r?\n/)[0] ?? "";
+    const delimiter = detectDelimiter(firstLine);
+    const rows = parseCsv(rawText, delimiter);
 
-  if (!rows.length) {
-    return NextResponse.json({
-      ok: true,
-      summary: { total: 0, valid: 0, invalid: 0 },
-      previewRows: [],
-      errors: [],
-    });
-  }
+    if (!rows.length) {
+      return ok(request, {
+        summary: { total: 0, valid: 0, invalid: 0 },
+        previewRows: [],
+        errors: [],
+      });
+    }
 
   const [headerRow, ...dataRows] = rows;
   const normalizedHeaders = headerRow.map(normalizeHeader);
@@ -222,10 +222,12 @@ export async function POST(request: Request) {
   const total = previewRows.length;
   const valid = total - invalid;
 
-  return NextResponse.json({
-    ok: true,
-    summary: { total, valid, invalid },
-    previewRows: previewRows.slice(0, 50),
-    errors,
-  });
+    return ok(request, {
+      summary: { total, valid, invalid },
+      previewRows: previewRows.slice(0, 50),
+      errors,
+    });
+  } catch (e) {
+    return serverError(request, "Internal error", e);
+  }
 }

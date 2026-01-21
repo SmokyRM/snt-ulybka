@@ -6,7 +6,17 @@ export async function serverFetchJson<T>(pathWithQuery: string, init?: RequestIn
   const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
   const normalized = pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`;
   const url = `${protocol}://${host}${normalized}`;
-  const res = await fetch(url, { cache: "no-store", ...init });
+  // Передаем cookies для server-side fetch чтобы обеспечить авторизацию
+  const cookieHeader = h.get("cookie");
+  const res = await fetch(url, {
+    cache: "no-store",
+    credentials: "include",
+    headers: {
+      ...(cookieHeader ? { cookie: cookieHeader } : {}),
+      ...init?.headers,
+    },
+    ...init,
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`serverFetchJson ${res.status} ${res.statusText}: ${text}`);

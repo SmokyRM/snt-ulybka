@@ -3,7 +3,7 @@
 import AppLink from "@/components/AppLink";
 import { useState } from "react";
 import { formatAdminTime } from "@/lib/settings.shared";
-import EmptyState from "@/components/EmptyState";
+import EmptyStateCardClient from "@/components/EmptyStateCardClient";
 import { plotStatusLabel } from "@/lib/plotStatusLabels";
 
 export default function RegistryTableClient({
@@ -13,7 +13,7 @@ export default function RegistryTableClient({
 }: {
   plots: Array<{
     id: string;
-    street: string;
+    sntStreetNumber: string;
     plotNumber: string;
     membershipStatus?: string | null;
     status?: string | null;
@@ -117,7 +117,7 @@ export default function RegistryTableClient({
                   onChange={toggleAll}
                 />
               </th>
-              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Улица</th>
+              <th className="px-3 py-2 text-left font-semibold text-zinc-700">Линия (номер)</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Участок</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Членство</th>
               <th className="px-3 py-2 text-left font-semibold text-zinc-700">Статус</th>
@@ -138,9 +138,9 @@ export default function RegistryTableClient({
                     onChange={() => toggleOne(plot.id)}
                   />
                 </td>
-                <td className="px-3 py-2 text-zinc-900">{plot.street}</td>
+                <td className="px-3 py-2 text-zinc-900">{plot.sntStreetNumber}</td>
                 <td className="px-3 py-2">
-                  <AppLink href={`/admin/registry/${plot.id}`} className="text-[#5E704F] underline">
+                  <AppLink href={`/admin/registry/plots/${plot.id}`} className="text-[#5E704F] underline">
                     {plot.plotNumber}
                   </AppLink>
                 </td>
@@ -172,7 +172,7 @@ export default function RegistryTableClient({
             {plots.length === 0 && (
               <tr>
                 <td className="px-4 py-6" colSpan={9}>
-                  <EmptyState
+                  <EmptyStateCardClient
                     title={query || status ? "Ничего не найдено" : "Реестр пуст"}
                     description={
                       query || status

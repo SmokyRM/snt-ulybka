@@ -2,23 +2,25 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { processOutbox, listOutbox } from "@/lib/office/appeals.server";
-import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import { hasPermission, isOfficeRole, isStaffOrAdmin } from "@/lib/rbac";
 import { getEffectiveSessionUser } from "@/lib/session.server";
+import type { Role } from "@/lib/permissions";
 import { processOutboxAction, retryOutboxAction } from "./actions";
 
 export default async function OutboxPage() {
   const session = await getEffectiveSessionUser();
   const role = session?.role;
 
-  if (!isOfficeRole(role)) {
-    redirect("/forbidden");
+  if (!isStaffOrAdmin(role)) {
+    redirect("/forbidden?reason=office.only&next=/office");
   }
-  if (!hasPermission(role, "office.view")) {
-    redirect("/forbidden");
+  if (!hasPermission(role as Role, "office.view")) {
+    redirect("/forbidden?reason=office.only&next=/office");
   }
 
   const items = listOutbox();
-  const canManage = role === "admin" || role === "chairman" || role === "secretary";
+  const roleValue = role as Role | undefined;
+  const canManage = roleValue === "admin" || roleValue === "chairman" || roleValue === "secretary";
 
   return (
     <div className="space-y-6" data-testid="office-outbox-root">

@@ -1,45 +1,29 @@
-import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { getAllAppeals } from "@/lib/appeals";
 import { verifySameOrigin } from "@/lib/security/verifySameOrigin";
 import { rateLimit } from "@/lib/security/rateLimit";
-import { getRequestId, setRequestIdHeader } from "@/lib/api/requestId";
-import { handleApiError } from "@/lib/api/failClosed";
 import fs from "fs/promises";
 import path from "path";
+import { fail, forbidden, methodNotAllowed, ok, serverError } from "@/lib/api/respond";
 
 const filePath = (name: string) => path.join(process.cwd(), "data", `${name}.json`);
 
 export async function POST(request: Request) {
-  const requestId = getRequestId(request);
-  
   try {
     // Fail-closed: проверка метода
     if (request.method !== "POST") {
-      const response = NextResponse.json(
-        { error: "Method not allowed" },
-        { status: 405, headers: { Allow: "POST" } }
-      );
-      setRequestIdHeader(response, requestId);
-      return response;
+      return methodNotAllowed(request, ["POST"]);
     }
 
     // Fail-closed: только dev + ENABLE_QA
     if (process.env.NODE_ENV === "production" || process.env.ENABLE_QA !== "true") {
-      const response = NextResponse.json({ error: "not_found" }, { status: 404 });
-      setRequestIdHeader(response, requestId);
-      return response;
+      return fail(request, "not_found", "not_found", 404);
     }
 
     // CSRF защита
     const originCheck = verifySameOrigin(request);
     if (!originCheck.ok) {
-      const response = NextResponse.json(
-        { error: "Запрос отклонён по политике безопасности (origin)." },
-        { status: 403 }
-      );
-      setRequestIdHeader(response, requestId);
-      return response;
+      return forbidden(request, "Запрос отклонён по политике безопасности (origin).");
     }
 
     // Rate limiting (dev-only, для QA endpoints) - 2 req/sec на ip+path
@@ -49,23 +33,20 @@ export async function POST(request: Request) {
     const rateLimitResult = rateLimit(`qa-cleanup-${clientId}`, 2, 1000); // 2 requests per second
     if (!rateLimitResult.ok) {
       const retryAfter = Math.ceil((rateLimitResult.retryAfterMs || 0) / 1000);
-      const response = NextResponse.json(
-        { error: "Превышен лимит запросов. Попробуйте позже." },
-        { 
-          status: 429,
-          headers: { "Retry-After": String(retryAfter) }
-        }
+      return fail(
+        request,
+        "rate_limited",
+        "Превышен лимит запросов. Попробуйте позже.",
+        429,
+        undefined,
+        { headers: { "Retry-After": String(retryAfter) } }
       );
-      setRequestIdHeader(response, requestId);
-      return response;
     }
 
     // Fail-closed: проверка авторизации
     const session = await getSessionUser();
     if (!session || session.role !== "admin") {
-      const response = NextResponse.json({ error: "not_found" }, { status: 404 });
-      setRequestIdHeader(response, requestId);
-      return response;
+      return fail(request, "not_found", "not_found", 404);
     }
 
     const deleted: { appeals: number; announcements: number } = {
@@ -106,13 +87,8 @@ export async function POST(request: Request) {
       // Файл не существует или пустой - ничего не удаляем
     }
 
-    const response = NextResponse.json({
-      ok: true,
-      deleted,
-    });
-    setRequestIdHeader(response, requestId);
-    return response;
+    return ok(request, { deleted });
   } catch (error) {
-    return handleApiError(request, error, 500);
+    return serverError(request, "Internal error", error);
   }
 }

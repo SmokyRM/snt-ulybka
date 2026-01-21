@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasBillingAccess } from "@/lib/session.server";
 import {
   findBillingImportByBatch,
@@ -8,22 +7,23 @@ import {
   voidPaymentsByBatch,
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
+import { ok, unauthorized, forbidden, fail, serverError } from "@/lib/api/respond";
 
 type ParamsPromise<T> = { params: Promise<T> };
 
-export async function POST(_req: Request, { params }: ParamsPromise<{ id: string }>) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
-  if (!hasBillingAccess(user)) return NextResponse.json({ error: "Нет доступа к отмене импорта" }, { status: 403 });
-
-  const { id } = await params;
-  const batch = findImportBatch(id);
-  if (!batch) return NextResponse.json({ error: "Импорт не найден" }, { status: 404 });
-  if (batch.status === "rolled_back") {
-    return NextResponse.json({ ok: true, voided: 0, status: "already_rolled_back", message: "Импорт уже отменён" });
-  }
-
+export async function POST(request: Request, { params }: ParamsPromise<{ id: string }>) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized(request, "Требуется авторизация");
+    if (!hasBillingAccess(user)) return forbidden(request, "Нет доступа к отмене импорта");
+
+    const { id } = await params;
+    const batch = findImportBatch(id);
+    if (!batch) return fail(request, "not_found", "Импорт не найден", 404);
+    if (batch.status === "rolled_back") {
+      return ok(request, { voided: 0, status: "already_rolled_back", message: "Импорт уже отменён" });
+    }
+
     // Soft rollback: помечаем платежи как voided (не удаляем)
     const voided = voidPaymentsByBatch(id, "rollback import", user.id ?? null);
     updateImportBatch(id, { status: "rolled_back", rollbackAt: new Date().toISOString() });
@@ -43,12 +43,8 @@ export async function POST(_req: Request, { params }: ParamsPromise<{ id: string
       after: { voided },
     });
 
-    return NextResponse.json({ ok: true, voided, message: `Отменено платежей: ${voided}` });
+    return ok(request, { voided, message: `Отменено платежей: ${voided}` });
   } catch (error) {
-    console.error("[billing-import-rollback] Error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Внутренняя ошибка при отмене импорта" },
-      { status: 500 }
-    );
+    return serverError(request, "Внутренняя ошибка при отмене импорта", error);
   }
 }

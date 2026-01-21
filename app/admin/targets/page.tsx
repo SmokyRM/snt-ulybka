@@ -1,13 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import { isOfficeRole, isAdminRole } from "@/lib/rbac";
 import { listTargetFundsWithStats } from "@/lib/targets";
+import AdminHelp from "../_components/AdminHelp";
+import EmptyStateCard from "@/components/EmptyStateCard";
 
 const formatAmount = (n: number) => `${n.toFixed(2)} ₽`;
 
 export default async function TargetsPage() {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) redirect("/staff/login?next=/admin");
+  if (!user) redirect("/staff-login?next=/admin/targets");
+  
+  const role = user.role;
+  if (!hasAdminAccess(user) && !isOfficeRole(role) && !isAdminRole(role)) {
+    redirect("/forbidden?reason=admin.only&next=/admin/targets");
+  }
+  
   const funds = listTargetFundsWithStats(false);
 
   return (
@@ -22,7 +31,10 @@ export default async function TargetsPage() {
             Админка
           </Link>
         </div>
-
+        <AdminHelp
+          title="О целевых сборах"
+          content="Целевые сборы — это программы для сбора средств на конкретные цели (ремонт, благоустройство и т.д.). Создайте цель, отслеживайте прогресс сбора и привязывайте расходы к целям."
+        />
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="text-sm text-zinc-700">Всего целей: {funds.length}</div>
@@ -74,8 +86,13 @@ export default async function TargetsPage() {
                 ))}
                 {funds.length === 0 && (
                   <tr>
-                    <td className="px-3 py-3 text-center text-zinc-600" colSpan={7}>
-                      Целей пока нет
+                    <td className="px-3 py-6" colSpan={7}>
+                      <EmptyStateCard
+                        title="Целей пока нет"
+                        description="Создайте первую целевую программу для сбора средств на конкретные цели."
+                        actionLabel="Создать цель"
+                        actionHref="/admin/targets/new"
+                      />
                     </td>
                   </tr>
                 )}

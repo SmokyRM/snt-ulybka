@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 import { getRequestId } from "./requestId";
+import { optionalRequire } from "../optionalRequire";
+
+// Динамический импорт Sentry (опционально)
+// Используем optionalRequire чтобы избежать статического резолвинга в Turbopack
+let SentryRespond: typeof import("@sentry/nextjs") | null = null;
+try {
+  SentryRespond = optionalRequire<typeof import("@sentry/nextjs")>(["@sentry", "nextjs"]);
+} catch {
+  // Sentry не установлен - это нормально
+}
 
 const REQUEST_ID_HEADER = "x-request-id";
 
@@ -63,9 +73,47 @@ function createResponse(
 
 /**
  * Успешный ответ (200)
+ * @returns { ok: true, data: T }
  */
-export function ok(request: Request, data: unknown, init?: { status?: number; headers?: HeadersInit }): NextResponse {
-  return createResponse(request, data, init?.status ?? 200, init?.headers);
+export function ok<T>(request: Request, data: T, init?: { status?: number; headers?: HeadersInit }): NextResponse {
+  return createResponse(request, { ok: true, data }, init?.status ?? 200, init?.headers);
+}
+
+/**
+ * Пустой успешный ответ (204 No Content)
+ */
+export function noContent(request: Request): NextResponse {
+  const requestId = getRequestId(request);
+  const response = new NextResponse(null, { status: 204 });
+  response.headers.set(REQUEST_ID_HEADER, requestId);
+  return response;
+}
+
+/**
+ * Универсальная функция для ошибок
+ * @returns { ok: false, error: { code, message, details } }
+ */
+export function fail(
+  request: Request,
+  code: string,
+  message: string,
+  status: number,
+  details?: unknown,
+  init?: ResponseInit,
+): NextResponse {
+  return createResponse(
+    request,
+    {
+      ok: false,
+      error: {
+        code,
+        message,
+        ...(details !== undefined ? { details } : {}),
+      },
+    },
+    status,
+    init?.headers,
+  );
 }
 
 /**
@@ -76,43 +124,21 @@ export function badRequest(
   message: string,
   details?: Record<string, unknown>,
 ): NextResponse {
-  return createResponse(
-    request,
-    {
-      error: "bad_request",
-      message,
-      ...(details ? { details } : {}),
-    },
-    400,
-  );
+  return fail(request, "bad_request", message, 400, details);
 }
 
 /**
  * Не авторизован (401)
  */
 export function unauthorized(request: Request, message?: string): NextResponse {
-  return createResponse(
-    request,
-    {
-      error: "unauthorized",
-      message: message ?? "Требуется авторизация",
-    },
-    401,
-  );
+  return fail(request, "unauthorized", message ?? "Требуется авторизация", 401);
 }
 
 /**
  * Запрещено (403)
  */
 export function forbidden(request: Request, message?: string): NextResponse {
-  return createResponse(
-    request,
-    {
-      error: "forbidden",
-      message: message ?? "Доступ запрещён",
-    },
-    403,
-  );
+  return fail(request, "forbidden", message ?? "Доступ запрещён", 403);
 }
 
 /**
@@ -122,8 +148,11 @@ export function methodNotAllowed(request: Request, allowed: string[]): NextRespo
   return createResponse(
     request,
     {
-      error: "method_not_allowed",
-      message: `Метод не разрешён. Разрешённые методы: ${allowed.join(", ")}`,
+      ok: false,
+      error: {
+        code: "method_not_allowed",
+        message: `Метод не разрешён. Разрешённые методы: ${allowed.join(", ")}`,
+      },
     },
     405,
     {
@@ -158,13 +187,30 @@ export function serverError(request: Request, message?: string, error?: unknown)
     ...(process.env.NODE_ENV !== "production" && errorStack ? { stack: errorStack } : {}),
   });
   
+  // Отправляем ошибку в Sentry если доступен
+  if (SentryRespond && error) {
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    SentryRespond.captureException(errorObj, {
+      tags: {
+        pathname,
+        requestId,
+      },
+      extra: {
+        message: message ?? "Произошла внутренняя ошибка",
+      },
+    });
+  }
+  
   // Клиенту отправляем безопасный ответ без stacktrace
   return createResponse(
     request,
     {
-      error: "internal_error",
-      message: message ?? "Произошла внутренняя ошибка",
-      ...(process.env.NODE_ENV !== "production" ? { requestId } : {}),
+      ok: false,
+      error: {
+        code: "internal_error",
+        message: message ?? "Произошла внутренняя ошибка",
+        ...(process.env.NODE_ENV !== "production" ? { details: { requestId } } : {}),
+      },
     },
     500,
   );

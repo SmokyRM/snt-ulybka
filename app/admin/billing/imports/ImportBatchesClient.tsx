@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { BillingImport, BillingImportError } from "@/types/snt";
+import { readOk } from "@/lib/api/client";
 
 type DetailResponse = {
   billingImport: BillingImport;
@@ -29,15 +30,10 @@ export default function ImportBatchesClient({ initialBatches }: Props) {
     setDetailLoading(true);
     try {
       const res = await fetch(`/api/admin/billing/imports/${id}`);
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        setToast({ type: "error", text: payload.error ?? "Не удалось загрузить детали" });
-        return;
-      }
-      const payload = (await res.json()) as DetailResponse & { ok: boolean };
+      const payload = await readOk<DetailResponse>(res);
       setDetail(payload);
-    } catch {
-      setToast({ type: "error", text: "Не удалось загрузить детали" });
+    } catch (e) {
+      setToast({ type: "error", text: (e as Error).message || "Не удалось загрузить детали" });
     } finally {
       setDetailLoading(false);
     }
@@ -51,12 +47,7 @@ export default function ImportBatchesClient({ initialBatches }: Props) {
     setToast(null);
     try {
       const res = await fetch(`/api/admin/billing/imports/${id}/rollback`, { method: "POST" });
-      const payload = await res.json();
-      if (!res.ok) {
-        const errorText = payload.error ?? "Ошибка отмены импорта";
-        setToast({ type: "error", text: errorText });
-        return;
-      }
+      const payload = await readOk<{ voided?: number; message?: string }>(res);
       const voided = payload.voided ?? 0;
       setImports((prev) =>
         prev.map((item) =>
@@ -65,9 +56,9 @@ export default function ImportBatchesClient({ initialBatches }: Props) {
             : item
         )
       );
-      setToast({ 
-        type: "success", 
-        text: payload.message ?? `Импорт отменён. Отменено платежей: ${voided}` 
+      setToast({
+        type: "success",
+        text: payload.message ?? `Импорт отменён. Отменено платежей: ${voided}`,
       });
       if (activeImportId === id && detail) {
         setDetail((prev) =>

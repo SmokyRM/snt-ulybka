@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { upsertUserById } from "@/lib/mockDb";
+import { logAuthEvent } from "@/lib/structuredLogger/node";
+import { getRequestId } from "@/lib/api/requestId";
 
 const SESSION_COOKIE = "snt_session";
 const ADMIN_CODE = (process.env.ADMIN_ACCESS_CODE ?? "").trim();
 const USER_CODE = (process.env.USER_ACCESS_CODE ?? "USER_CODE").trim();
+const DEV_LOGIN_CODE = (process.env.DEV_LOGIN_CODE ?? process.env.MASTER_CODE ?? "").trim();
 const DEV_ADMIN_CODE = "1233";
 const DEV_USER_CODE = "1111";
 const DEV_BOARD_CODE = "2222";
@@ -62,6 +65,10 @@ const mapStaffRoleRu = (
 };
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
+  const requestId = getRequestId(request);
+  const pathname = new URL(request.url).pathname;
+  
   const body = await request.json().catch(() => ({}));
   const code = (body.code as string | undefined)?.trim();
   const loginRaw = (body.login as string | undefined)?.trim();
@@ -78,21 +85,51 @@ export async function POST(request: Request) {
     const staff = mapStaffRoleRu(roleRu);
     const pass = (body.password as string | undefined) ?? "";
     if (!staff || !pass) {
+      const latencyMs = Date.now() - startTime;
+      logAuthEvent({
+        action: "login",
+        path: pathname,
+        role: null,
+        userId: null,
+        status: 401,
+        latencyMs,
+        requestId,
+        message: "Invalid staff login attempt",
+      });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
     const envPass = (process.env[staff.env] ?? "").trim();
-    if (!envPass || !safeEquals(envPass, pass)) {
+    if (!envPass) {
+      return NextResponse.json(
+        { error: "auth_not_configured", envVar: staff.env, message: "Код доступа для роли " + staff.role + " не настроен (env). Задайте " + staff.env + " в .env.local." },
+        { status: 503 },
+      );
+    }
+    if (!safeEquals(envPass, pass)) {
+      const latencyMs = Date.now() - startTime;
+      logAuthEvent({
+        action: "login",
+        path: pathname,
+        role: staff.role,
+        userId: null,
+        status: 401,
+        latencyMs,
+        requestId,
+        message: "Invalid password for staff role",
+      });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
     const role = staff.role;
     const userId = ROLE_USER_IDS[role];
     upsertUserById({ id: userId, role });
     const payload = JSON.stringify({ role, userId });
-    const response = NextResponse.json({
-      ok: true,
-      role,
-      redirectUrl: role === "admin" ? "/admin" : "/office",
-    });
+    const isAdminPath = sanitizedNext?.startsWith("/admin");
+    const isOfficePath = sanitizedNext?.startsWith("/office");
+    const redirectUrl =
+      (role === "admin" && isAdminPath ? sanitizedNext : null) ||
+      ((role === "chairman" || role === "accountant" || role === "secretary") && isOfficePath ? sanitizedNext : null) ||
+      (role === "admin" ? "/admin" : "/office");
+    const response = NextResponse.json({ ok: true, role, redirectUrl });
     response.cookies.set(SESSION_COOKIE, payload, {
       httpOnly: true,
       sameSite: "lax",
@@ -100,20 +137,70 @@ export async function POST(request: Request) {
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 7,
     });
+    const latencyMs = Date.now() - startTime;
+    logAuthEvent({
+      action: "login",
+      path: pathname,
+      role,
+      userId,
+      status: 200,
+      latencyMs,
+      requestId,
+      message: "Staff login successful",
+    });
     return response;
   }
 
   // Credential-based login (staff roles)
   if (login || password) {
     if (!login || !password) {
+      const latencyMs = Date.now() - startTime;
+      logAuthEvent({
+        action: "login",
+        path: pathname,
+        role: null,
+        userId: null,
+        status: 401,
+        latencyMs,
+        requestId,
+        message: "Missing login or password",
+      });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
     const cred = CREDENTIALS[login];
     const envPass = cred ? (process.env[cred.env] ?? "").trim() : "";
     if (!cred) {
+      const latencyMs = Date.now() - startTime;
+      logAuthEvent({
+        action: "login",
+        path: pathname,
+        role: null,
+        userId: null,
+        status: 400,
+        latencyMs,
+        requestId,
+        message: "Unknown role/login",
+      });
       return NextResponse.json({ error: "Неизвестная роль/логин" }, { status: 400 });
     }
-    if (!envPass || !safeEquals(envPass, password)) {
+    if (!envPass) {
+      return NextResponse.json(
+        { error: "auth_not_configured", envVar: cred.env, message: "Код доступа для роли " + cred.role + " не настроен (env). Задайте " + cred.env + " в .env.local." },
+        { status: 503 },
+      );
+    }
+    if (!safeEquals(envPass, password)) {
+      const latencyMs = Date.now() - startTime;
+      logAuthEvent({
+        action: "login",
+        path: pathname,
+        role: cred.role,
+        userId: null,
+        status: 401,
+        latencyMs,
+        requestId,
+        message: "Invalid password",
+      });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
     const role = cred.role;
@@ -132,6 +219,17 @@ export async function POST(request: Request) {
       response.headers.set("x-debug-role", role);
       response.headers.set("x-debug-next", sanitizedNext ?? "");
     }
+    const latencyMs = Date.now() - startTime;
+    logAuthEvent({
+      action: "login",
+      path: pathname,
+      role,
+      userId,
+      status: 200,
+      latencyMs,
+      requestId,
+      message: "Credential login successful",
+    });
     return response;
   }
 
@@ -141,20 +239,46 @@ export async function POST(request: Request) {
 
   let role: "resident" | "admin" | "chairman" | null = null;
   const isDev = process.env.NODE_ENV !== "production";
-  const host = request.headers.get("host") ?? "";
-  const isLocalhost = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-  if (isDev && isLocalhost) {
-    // DEV ONLY: admin access allowed only via 1233 on localhost.
-    if (code === DEV_ADMIN_CODE) role = "admin";
+  const qaEnabled = process.env.ENABLE_QA === "true";
+
+  if (isDev) {
+    // DEV: мастер-код DEV_LOGIN_CODE (приоритет), иначе встроенные 1111/1233/2222
+    if (DEV_LOGIN_CODE && code === DEV_LOGIN_CODE) {
+      role = "resident";
+    } else if (code === DEV_ADMIN_CODE) role = "admin";
     else if (code === DEV_USER_CODE) role = "resident";
     else if (code === DEV_BOARD_CODE) role = "chairman";
   } else {
-    if (ADMIN_CODE && code === ADMIN_CODE) role = "admin";
-    if (code === USER_CODE) role = "resident";
+    // Production: при ENABLE_QA разрешаем тестовые коды (1111/1233 или TEST_ACCESS_CODE/TEST_ADMIN_CODE)
+    if (qaEnabled) {
+      const testResident = (process.env.TEST_ACCESS_CODE ?? "1111").trim();
+      const testAdmin = (process.env.TEST_ADMIN_CODE ?? "1233").trim();
+      if (code === testResident) role = "resident";
+      else if (code === testAdmin) role = "admin";
+    }
+    if (!role && ADMIN_CODE && code === ADMIN_CODE) role = "admin";
+    if (!role && code === USER_CODE) role = "resident";
   }
 
   if (!role) {
-    return NextResponse.json({ error: "Неверный код" }, { status: 401 });
+    const latencyMs = Date.now() - startTime;
+    logAuthEvent({
+      action: "login",
+      path: pathname,
+      role: null,
+      userId: null,
+      status: 401,
+      latencyMs,
+      requestId,
+      message: "Invalid access code",
+    });
+    const hint =
+      (isDev || qaEnabled) &&
+      "Проверьте ENABLE_QA, DEV_LOGIN_CODE / MASTER_CODE, USER_ACCESS_CODE. В prod с ENABLE_QA: TEST_ACCESS_CODE, TEST_ADMIN_CODE.";
+    return NextResponse.json(
+      { error: "Неверный код", ...(hint && { hint }) },
+      { status: 401 },
+    );
   }
 
   const userId =
@@ -188,9 +312,17 @@ export async function POST(request: Request) {
     response.headers.set("x-debug-admin-view-set", role === "admin" && sanitizedNext?.startsWith("/cabinet") ? "1" : "0");
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[auth] login success role=${role}`);
-  }
+  const latencyMs = Date.now() - startTime;
+  logAuthEvent({
+    action: "login",
+    path: pathname,
+    role,
+    userId,
+    status: 200,
+    latencyMs,
+    requestId,
+    message: "Code-based login successful",
+  });
 
   return response;
 }

@@ -190,8 +190,8 @@ export default async function BillingPage({
           steps={[
             { label: "Создать период начислений" },
             { label: "Проверить начисления", href: "/admin/billing" },
-            { label: "Импортировать платежи", href: "/admin/billing/import" },
-            { label: "Контролировать долги", href: "/admin/debts" },
+            { label: "Импортировать платежи", href: "/admin/billing/payments-import" },
+            { label: "Контролировать долги", href: "/admin/billing/debts" },
           ]}
         />
       <div className="flex items-center justify-between">
@@ -307,7 +307,7 @@ export default async function BillingPage({
                 Открыть реестр участков
               </Link>
               <Link
-                href="/admin/billing/import"
+                href="/admin/billing/payments-import"
                 className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
               >
                 Импорт платежей

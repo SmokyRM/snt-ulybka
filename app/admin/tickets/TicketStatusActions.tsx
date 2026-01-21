@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { Ticket } from "@/types/snt";
+import { ApiError, readRaw } from "@/lib/api/client";
 
 const statusOptions: { value: Ticket["status"]; label: string }[] = [
   { value: "NEW", label: "Новый" },
@@ -21,18 +22,19 @@ export default function TicketStatusActions({ ticketId, current }: { ticketId: s
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tickets/${ticketId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: value }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Не удалось обновить статус");
+      await readRaw(
+        await fetch(`/api/tickets/${ticketId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: value }),
+        })
+      );
+      router.refresh();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || "Не удалось обновить статус");
         return;
       }
-      router.refresh();
-    } catch {
       setError("Ошибка сети");
     } finally {
       setLoading(false);

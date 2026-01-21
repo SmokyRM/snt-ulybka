@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { KnowledgeArticle } from "@/lib/knowledge/seed";
 import type { DocumentRecord } from "@/lib/documentsStore";
+import { readOk } from "@/lib/api/client";
 
 type Props = {
   initialArticles: KnowledgeArticle[];
@@ -56,8 +57,7 @@ export default function KnowledgeAdminClient({ initialArticles, documents }: Pro
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("SAVE_FAILED");
-      const json = (await res.json()) as { article: KnowledgeArticle };
+      const json = await readOk<{ article: KnowledgeArticle }>(res);
       setArticles((prev) => {
         const hasItem = prev.some((item) => item.slug === json.article.slug);
         if (hasItem) {

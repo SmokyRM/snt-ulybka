@@ -148,6 +148,30 @@ test.describe("Smoke tests - basic page rendering", () => {
     }
   });
 
+  test("admin -> billing: debts, notifications, payments/import (200 + data-testid)", async ({ page }: { page: Page }) => {
+    await page.context().clearCookies();
+    await page.goto(`${base}/login?next=/admin/billing/debts`, { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    await page.getByTestId("login-access-code").fill(adminCode);
+    await page.getByTestId("login-submit").click();
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15000 }).catch(() => {});
+    if (page.url().includes("/login")) {
+      const err = await page.getByTestId("login-error-block").isVisible().catch(() => false);
+      if (err) throw new Error("Admin login failed");
+    }
+    await page.goto(`${base}/admin/billing/debts`, { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/admin\/billing\/debts/);
+    await expect(page.getByTestId("debts-root")).toBeVisible({ timeout: 10000 });
+
+    await page.goto(`${base}/admin/billing/notifications`, { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/admin\/billing\/notifications/);
+    await expect(page.getByTestId("notifications-root")).toBeVisible({ timeout: 10000 });
+
+    await page.goto(`${base}/admin/billing/payments/import`, { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/admin\/billing\/payments\/import/);
+    await expect(page.getByTestId("payments-import-root")).toBeVisible({ timeout: 10000 });
+  });
+
   test("staff QA fallback -> office shows root and role indicator", async ({ page }: { page: Page }) => {
     // Clear cookies and navigate with QA param
     await page.context().clearCookies();

@@ -1,12 +1,17 @@
-import { NextResponse } from "next/server";
-import { getSessionUser, hasBillingAccess } from "@/lib/session.server";
-import { listBillingImports } from "@/lib/mockDb";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
+import { listPaymentImportJobs } from "@/lib/billing";
+import { ok, unauthorized, serverError } from "@/lib/api/respond";
 
-export async function GET() {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!hasBillingAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+export async function GET(request: Request) {
+  try {
+    const user = await getSessionUser();
+    if (!hasFinanceAccess(user)) {
+      return unauthorized(request);
+    }
 
-  const imports = listBillingImports();
-  return NextResponse.json({ ok: true, items: imports });
+    const jobs = listPaymentImportJobs();
+    return ok(request, { jobs });
+  } catch (error) {
+    return serverError(request, "Internal error", error);
+  }
 }

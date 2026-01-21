@@ -1,11 +1,18 @@
 import { redirect } from "next/navigation";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import { isOfficeRole, isAdminRole } from "@/lib/rbac";
 import ReportClient from "./ReportClient";
+import AdminHelp from "../../_components/AdminHelp";
 
 export default async function ElectricityReportPage() {
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) {
-    redirect("/staff/login?next=/admin");
+  if (!user) {
+    redirect("/staff/login?next=/admin/electricity/report");
+  }
+  
+  const role = user.role;
+  if (!hasAdminAccess(user) && !isOfficeRole(role) && !isAdminRole(role)) {
+    redirect("/forbidden?reason=admin.only&next=/admin/electricity/report");
   }
 
   return (
@@ -20,6 +27,10 @@ export default async function ElectricityReportPage() {
             Назад
           </a>
         </div>
+        <AdminHelp
+          title="Об отчёте по электроэнергии"
+          content="Отчёт показывает начисления и долги по электроэнергии за выбранный период. Используйте фильтры для поиска по участку или просмотра только должников. Экспортируйте данные в CSV для дальнейшей обработки."
+        />
         <ReportClient />
       </div>
     </main>

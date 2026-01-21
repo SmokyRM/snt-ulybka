@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readOk } from "@/lib/api/client";
 
 type MeterRow = {
   id: string;
@@ -35,12 +36,8 @@ export default function ClientTable() {
     setError(null);
     try {
       const res = await fetch("/api/admin/electricity/meters?active=true", { cache: "no-store" });
-      if (!res.ok) {
-        setError("Не удалось загрузить счётчики");
-        return;
-      }
-      const json = (await res.json()) as MeterResponse;
-      setRows(json.meters);
+      const data = await readOk<MeterResponse>(res);
+      setRows(data.meters);
       setSaved({});
       setInputs({});
     } catch (e) {
@@ -74,15 +71,10 @@ export default function ClientTable() {
           source: "manual_admin",
         }),
       });
-      if (!res.ok) {
-        const txt = await res.text();
-        setError(txt || "Ошибка сохранения");
-        return;
-      }
-      const json = (await res.json()) as SaveResult;
-      setSaved((prev) => ({ ...prev, [meter.id]: json }));
+      const data = await readOk<SaveResult>(res);
+      setSaved((prev) => ({ ...prev, [meter.id]: data }));
       setRows((prev) =>
-        prev.map((r) => (r.id === meter.id ? { ...r, lastReading: { value, readingDate: json.reading.readingDate } } : r))
+        prev.map((r) => (r.id === meter.id ? { ...r, lastReading: { value, readingDate: data.reading.readingDate } } : r))
       );
     } catch (e) {
       setError((e as Error).message);

@@ -1,13 +1,16 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getUsersByStatus } from "@/lib/mockDb";
+import { forbidden, ok, serverError } from "@/lib/api/respond";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+    return forbidden(request, "Недостаточно прав");
   }
-
-  const users = getUsersByStatus("pending");
-  return NextResponse.json({ users });
+  try {
+    const users = getUsersByStatus("pending");
+    return ok(request, { users });
+  } catch (e) {
+    return serverError(request, "Internal error", e);
+  }
 }

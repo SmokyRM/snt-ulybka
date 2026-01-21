@@ -6,9 +6,10 @@ import { useState } from "react";
 type Props = {
   action: (formData: FormData) => void;
   error?: string | null;
+  fromCabinet?: boolean;
 };
 
-export function OnboardingForm({ action, error }: Props) {
+export function OnboardingForm({ action, error, fromCabinet }: Props) {
   const [plots, setPlots] = useState<string[]>([""]);
   const [consent, setConsent] = useState(false);
   const [consentError, setConsentError] = useState(false);
@@ -29,6 +30,7 @@ export function OnboardingForm({ action, error }: Props) {
 
   return (
     <form action={action} className="space-y-5" onSubmit={handleSubmit}>
+      {fromCabinet ? <input type="hidden" name="fromCabinet" value="1" /> : null}
       <div className="space-y-2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div>
           <h3 className="text-sm font-semibold text-zinc-900">Контактные данные</h3>

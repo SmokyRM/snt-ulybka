@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeRequestId } from "../../middleware";
+import { edgeRequestId } from "../../proxy";
 
 describe("edgeRequestId", () => {
   it("возвращает непустую строку", () => {

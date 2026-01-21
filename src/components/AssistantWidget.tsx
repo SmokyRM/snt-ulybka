@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
 import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
+import { apiGet, apiGetRaw, readOk } from "@/lib/api/client";
 
 const clampSize = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -50,6 +51,28 @@ type AssistantFacts = {
     electricity: boolean;
   };
   updatedAt?: string;
+};
+type AssistantApiResponse = {
+  topic?: string;
+  answer?: string;
+  links?: AssistantLink[];
+  contextCards?: ContextCard[];
+  actions?: AssistantAction[];
+  drafts?: AssistantDraft[];
+  source?: "faq" | "assistant" | "cache";
+  cached?: boolean;
+  outOfScope?: boolean;
+  suggestedKnowledge?: Array<{ slug: string; title: string; category?: string; reason?: string }>;
+  suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
+  facts?: AssistantFacts | null;
+  isSmalltalk?: boolean;
+  provider?: "openai" | "fallback";
+  latencyMs?: number;
+  requestId?: string;
+  intent?: string;
+  usedFallback?: boolean;
+  sourceHints?: string[];
+  engineSource?: "llm" | "kb" | "fallback";
 };
 type AssistantMessage = {
   id: string;
@@ -181,7 +204,7 @@ export default function AssistantWidget({
     if (pathname.startsWith("/office/appeals")) return "office.appeals";
     if (pathname.startsWith("/office/finance")) return "office.finance";
     if (pathname.startsWith("/office/registry")) return "office.registry";
-    if (pathname.startsWith("/admin/debts") || pathname.startsWith("/admin/billing")) return "admin.fees";
+    if (pathname.startsWith("/admin/billing")) return "admin.fees";
     if (pathname.startsWith("/cabinet/billing")) return "cabinet.fees";
     return undefined;
   }, [pathname]);
@@ -234,6 +257,7 @@ export default function AssistantWidget({
   const [deadEndReason, setDeadEndReason] = useState<"thumbs" | "repeat" | null>(null);
   const [historyKey, setHistoryKey] = useState<string | null>(null);
   const aiSettingsLoadedRef = useRef(false);
+  const openedLoggedRef = useRef(false);
   const historyLoadedRef = useRef(false);
   const scrollTimeoutRef = useRef<number | null>(null);
   const loadingTimersRef = useRef<number[]>([]);
@@ -489,7 +513,10 @@ export default function AssistantWidget({
   }, [sizeStorageKey, widgetSize]);
 
   useEffect(() => {
-    if (viewState !== "open") return;
+    if (viewState !== "open") {
+      openedLoggedRef.current = false;
+      return;
+    }
     if (!widgetSize) return;
     const next = {
       width: clampWidth(widgetSize.width),
@@ -498,14 +525,28 @@ export default function AssistantWidget({
     if (next.width !== widgetSize.width || next.height !== widgetSize.height) {
       setWidgetSize(next);
     }
-  }, [clampHeight, clampWidth, viewState, widgetSize]);
+    // Log assistant opened event (only once per open)
+    if (!openedLoggedRef.current) {
+      openedLoggedRef.current = true;
+      fetch("/api/admin/ai/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventType: "assistant_opened",
+          route: pathname,
+          role: userRole,
+        }),
+      }).catch(() => {
+        // Ignore errors
+      });
+    }
+  }, [clampHeight, clampWidth, viewState, widgetSize, pathname, userRole]);
 
   useEffect(() => {
     if (viewState === "closed") return;
     if (isAuthenticated !== true) return;
     let cancelled = false;
-    fetch("/api/appeals/my")
-      .then((res) => res.json().catch(() => null))
+    apiGet<{ appeals: unknown[]; unreadCount: number }>("/api/appeals/my")
       .then((data) => {
         if (cancelled) return;
         if (data && typeof data.unreadCount === "number") {
@@ -626,25 +667,18 @@ export default function AssistantWidget({
     if (viewState !== "open") return;
     if (typeof initialAuth === "boolean") return;
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then(async (res) => {
+    apiGetRaw<{ user?: { status?: string; role?: string; id?: string } }>("/api/auth/me")
+      .then((data) => {
         if (cancelled) return;
-        setIsAuthenticated(res.ok);
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          const status =
-            typeof data?.user?.status === "string" ? data.user.status : null;
-          const role =
-            typeof data?.user?.role === "string" ? data.user.role : null;
-          const id = typeof data?.user?.id === "string" ? data.user.id : null;
-          setIsVerified(status ? status === "verified" : null);
-          if (role === "admin" || role === "board" || role === "user" || role === "guest") {
-            setUserRole(role);
-          }
-          if (id) setUserId(id);
-        } else {
-          setIsVerified(null);
+        setIsAuthenticated(true);
+        const status = typeof data?.user?.status === "string" ? data.user.status : null;
+        const role = typeof data?.user?.role === "string" ? data.user.role : null;
+        const id = typeof data?.user?.id === "string" ? data.user.id : null;
+        setIsVerified(status ? status === "verified" : null);
+        if (role === "admin" || role === "board" || role === "user" || role === "guest") {
+          setUserRole(role);
         }
+        if (id) setUserId(id);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -749,34 +783,12 @@ export default function AssistantWidget({
           ...aiPayload,
         }),
       });
-      const data = await safeJson<{
-        ok: boolean;
-        topic?: string;
-        answer?: string;
-        links?: AssistantLink[];
-        contextCards?: ContextCard[];
-        actions?: AssistantAction[];
-        drafts?: AssistantDraft[];
-        error?: string;
-        error_code?: string;
-        message?: string;
-        source?: "faq" | "assistant" | "cache";
-        cached?: boolean;
-        outOfScope?: boolean;
-        suggestedKnowledge?: Array<{ slug: string; title: string; category?: string; reason?: string }>;
-        suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
-        facts?: AssistantFacts | null;
-        isSmalltalk?: boolean;
-        provider?: "openai" | "fallback";
-        latencyMs?: number;
-        requestId?: string;
-        intent?: string;
-        usedFallback?: boolean;
-        sourceHints?: string[];
-        engineSource?: "llm" | "kb" | "fallback";
-      }>(response);
-      const hasApiError = Boolean(data.error || data.error_code);
-      if (!response.ok || !data.ok || hasApiError) {
+      let data: AssistantApiResponse;
+      try {
+        data = await readOk<AssistantApiResponse>(response);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Попробуйте другой вопрос.";
         if (response.status === 403) {
           const lockedText =
             isAuthenticated === true
@@ -802,7 +814,7 @@ export default function AssistantWidget({
             title: "Лимит исчерпан",
             message: "Лимит исчерпан. Справка доступна.",
           });
-        } else if (response.status >= 500 || hasApiError) {
+        } else if (response.status >= 500) {
           setLastStatus(500);
           setBanner({
             tone: "neutral",
@@ -817,7 +829,7 @@ export default function AssistantWidget({
           setBanner({
             tone: "neutral",
             title: "Не удалось получить ответ",
-            message: data.error ?? data.error_code ?? "Попробуйте другой вопрос.",
+            message: message,
           });
         }
         return;
@@ -901,6 +913,19 @@ export default function AssistantWidget({
     setBanner(null);
     setLastStatus(null);
     setMessages((prev) => [...prev, userMessage]);
+    // Log question asked event
+    fetch("/api/admin/ai/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventType: "question_asked",
+        route: pathname,
+        role: userRole,
+        meta: { messageLength: trimmed.length },
+      }),
+    }).catch(() => {
+      // Ignore errors
+    });
     const recentUserMessages = [...messages, userMessage].filter((m) => m.role === "user");
     const normalized = (text: string) =>
       text
@@ -934,36 +959,12 @@ export default function AssistantWidget({
           ...aiPayload,
         }),
       });
-      const data = await safeJson<{
-        ok: boolean;
-        topic?: string;
-        answer?: string;
-        links?: AssistantLink[];
-        contextCards?: ContextCard[];
-        actions?: AssistantAction[];
-        drafts?: AssistantDraft[];
-        error?: string;
-        error_code?: string;
-        message?: string;
-        source?: "faq" | "assistant" | "cache";
-        cached?: boolean;
-        outOfScope?: boolean;
-        suggestedKnowledge?: Array<{ slug: string; title: string; category?: string; reason?: string }>;
-        suggestedTemplates?: Array<{ slug: string; title: string; reason?: string }>;
-        isSmalltalk?: boolean;
-        provider?: "openai" | "fallback";
-        engineSource?: "llm" | "kb" | "fallback";
-        latencyMs?: number;
-        requestId?: string;
-        intent?: string;
-        usedFallback?: boolean;
-        sourceHints?: string[];
-      }>(response);
-      const hasApiError = Boolean(data.error || data.error_code);
-      if (!response.ok || !data.ok || hasApiError) {
-        if (hasApiError && !response.ok) {
-          // keep below handlers
-        }
+      let data: AssistantApiResponse;
+      try {
+        data = await readOk<AssistantApiResponse>(response);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Попробуйте другой вопрос.";
         if (response.status === 403) {
           const lockedText =
             isAuthenticated === true
@@ -989,7 +990,7 @@ export default function AssistantWidget({
             title: "Лимит исчерпан",
             message: "Лимит исчерпан. Справка доступна.",
           });
-        } else if (response.status >= 500 || hasApiError) {
+        } else if (response.status >= 500) {
           setLastStatus(500);
           setBanner({
             tone: "neutral",
@@ -1004,7 +1005,7 @@ export default function AssistantWidget({
           setBanner({
             tone: "neutral",
             title: "Не удалось получить ответ",
-            message: data.error ?? "Попробуйте другой вопрос.",
+            message: message,
           });
         }
         return;
@@ -1033,6 +1034,25 @@ export default function AssistantWidget({
         sourceHints: (data as { sourceHints?: string[] }).sourceHints,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+      // Log answer shown event
+      fetch("/api/admin/ai/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventType: "answer_shown",
+          route: pathname,
+          role: userRole,
+          meta: {
+            answerLength: assistantMessage.text.length,
+            source: assistantMessage.source,
+            cached: assistantMessage.cached,
+            latencyMs: assistantMessage.latencyMs,
+            outOfScope: assistantMessage.outOfScope,
+          },
+        }),
+      }).catch(() => {
+        // Ignore errors
+      });
       if (lastTopicRef.current) {
         setLastTopicAnswer(assistantMessage);
       }
@@ -1270,7 +1290,7 @@ export default function AssistantWidget({
     ? "Напишите вопрос (Enter — отправить, Shift+Enter — перенос)"
     : "Спросите про оплату, доступ, документы…";
   const canInsertDraft =
-    variant === "admin" && pathname.startsWith("/admin/notifications/debtors");
+    variant === "admin" && pathname.startsWith("/admin/billing/debtors");
   const tabDescription = isHelpTab
     ? "Выберите тему — покажу порядок действий."
     : isAiTab

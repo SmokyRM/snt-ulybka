@@ -7,7 +7,7 @@ export const resolveCabinetRedirect = async (userId: string) => {
   if (!userId) return null;
   const profile = await getUserProfile(userId);
   if (!profile.fullName || !profile.phone) {
-    return "/cabinet/profile?onboarding=1";
+    return "/cabinet/onboarding/profile";
   }
 
   const [plots, verifications] = await Promise.all([
@@ -25,5 +25,10 @@ export const resolveCabinetRedirect = async (userId: string) => {
 
 export const redirectToCabinetStep = async (userId: string) => {
   const target = await resolveCabinetRedirect(userId);
-  if (target) redirect(target);
+  if (target) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[guard-redirect]", { path: "cabinetRedirect", role: "n/a", reason: "cabinet.step", redirectTo: target });
+    }
+    redirect(target);
+  }
 };

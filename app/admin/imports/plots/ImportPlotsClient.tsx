@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { readOk } from "@/lib/api/client";
 
 type PreviewRow = {
   rowIndex: number;
@@ -48,11 +49,7 @@ export default function ImportPlotsClient() {
         method: "POST",
         body,
       });
-      const data = (await res.json()) as PreviewResponse;
-      if (!res.ok || !data.ok) {
-        setErrorMessage("Не удалось разобрать файл");
-        return;
-      }
+      const data = await readOk<PreviewResponse>(res);
       setRows(data.previewRows);
       setSummary(data.summary);
       setErrors(data.errors);
@@ -77,11 +74,7 @@ export default function ImportPlotsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows }),
       });
-      const data = (await res.json()) as { ok?: boolean; created?: number; updated?: number };
-      if (!res.ok || !data.ok) {
-        setErrorMessage("Не удалось импортировать данные");
-        return;
-      }
+      const data = await readOk<{ created?: number; updated?: number }>(res);
       setApplyResult({ created: data.created ?? 0, updated: data.updated ?? 0 });
     } catch {
       setErrorMessage("Не удалось импортировать данные");
@@ -154,7 +147,7 @@ export default function ImportPlotsClient() {
           <span className="text-sm text-rose-700">Исправьте ошибки перед импортом</span>
         ) : null}
         <Link
-          href="/admin/plots"
+          href="/admin/registry?tab=plots"
           className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
         >
           Открыть реестр участков

@@ -91,29 +91,59 @@ cp .env.example .env.local
 - `TEST_ACCESS_CODE` — код доступа для тестового входа жителя (по умолчанию `1111`)
 - `TEST_ADMIN_CODE` — код доступа для тестового входа администратора (по умолчанию `1233`)
 
-#### Креды для staff ролей
+#### Креды для staff ролей (AUTH_PASS_*)
 
-Для тестов с staff ролями (chairman, secretary, accountant) требуются переменные:
+Для входа на `/staff-login` и `/staff/login` (**обязательно для dev**):
 
-- `AUTH_USER_CHAIRMAN` / `AUTH_PASS_CHAIRMAN` — креды председателя
-- `AUTH_USER_SECRETARY` / `AUTH_PASS_SECRETARY` — креды секретаря
-- `AUTH_USER_ACCOUNTANT` / `AUTH_PASS_ACCOUNTANT` — креды бухгалтера
+- `AUTH_PASS_ADMIN` — пароль администратора (логин: админ, admin)
+- `AUTH_PASS_CHAIRMAN` — пароль председателя
+- `AUTH_PASS_SECRETARY` — пароль секретаря
+- `AUTH_PASS_ACCOUNTANT` — пароль бухгалтера
 
-Пример `.env.local`:
+Если нужная переменная не задана, при попытке входа появится **«Код доступа не настроен»** (а не «Неверный логин или пароль»). Подробнее: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+Для E2E с staff ролями также: `AUTH_USER_CHAIRMAN`, `AUTH_USER_SECRETARY`, `AUTH_USER_ACCOUNTANT`.
+
+#### QA режим
+
+Для доступа к QA инструментам (`/admin/qa`) требуется:
+
+- **В dev/staging окружении**: QA доступен автоматически (не требуется дополнительных переменных)
+- **В production окружении**: необходимо установить `ENABLE_QA=true`
+
+Пример для локальной разработки:
 
 ```bash
+# В dev режиме QA доступен автоматически
+npm run dev
+
+# Для явного включения QA (например, в staging)
+ENABLE_QA=true npm run dev
+```
+
+**Важно**: В production QA функции недоступны по умолчанию и требуют явного включения через `ENABLE_QA=true` для безопасности.
+
+**Переменные окружения для QA:**
+
+- `ENABLE_QA=true` - включает QA функции в production (в dev доступны автоматически)
+- `QA_SECRET` (опционально) - секретный ключ для доступа к QA endpoints без admin сессии
+
+Пример `.env.local` (минимум для dev — задайте хотя бы `AUTH_PASS_ADMIN`):
+
+```bash
+# AUTH_PASS_* — для /staff-login (обязательно в dev)
+AUTH_PASS_ADMIN=your_admin_password
+AUTH_PASS_CHAIRMAN=your_password_here
+AUTH_PASS_SECRETARY=your_password_here
+AUTH_PASS_ACCOUNTANT=your_password_here
+
 PLAYWRIGHT_BASE_URL=http://localhost:3000
 TEST_ACCESS_CODE=1111
 TEST_ADMIN_CODE=1233
 
 AUTH_USER_CHAIRMAN=председатель
-AUTH_PASS_CHAIRMAN=your_password_here
-
 AUTH_USER_SECRETARY=секретарь
-AUTH_PASS_SECRETARY=your_password_here
-
 AUTH_USER_ACCOUNTANT=бухгалтер
-AUTH_PASS_ACCOUNTANT=your_password_here
 ```
 
 ### Запуск тестов

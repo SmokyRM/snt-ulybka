@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listAuditLogs } from "@/lib/mockDb";
+import { forbidden, ok, serverError, unauthorized } from "@/lib/api/respond";
 
 const parseFilters = (request: Request) => {
   const url = new URL(request.url);
@@ -21,12 +21,16 @@ const parseFilters = (request: Request) => {
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return unauthorized(request);
   }
   if (!hasAdminAccess(user)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    return forbidden(request);
   }
-  const filters = parseFilters(request);
-  const logs = listAuditLogs(filters);
-  return NextResponse.json({ logs });
+  try {
+    const filters = parseFilters(request);
+    const logs = listAuditLogs(filters);
+    return ok(request, { logs });
+  } catch (e) {
+    return serverError(request, "Internal error", e);
+  }
 }

@@ -1,25 +1,43 @@
-import { NextResponse } from "next/server";
 import { APPEAL_TOPICS, checkAppealRateLimit, createAppeal } from "@/lib/appeals";
 import { getSessionUser } from "@/lib/session.server";
-import { failClosed, handleApiError } from "@/lib/api/failClosed";
-import { getRequestId, setRequestIdHeader } from "@/lib/api/requestId";
+import { methodNotAllowed, ok, fail, unauthorized, serverError } from "@/lib/api/respond";
+import { getRequestId } from "@/lib/api/requestId";
+import { logApiRequest } from "@/lib/structuredLogger/node";
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
+  const requestId = getRequestId(request);
+  const pathname = new URL(request.url).pathname;
+  
   try {
-    // Fail-closed: проверка метода
-    const methodCheck = await failClosed(request, {
-      allowedMethods: ["POST"],
-      requireAuth: true,
-    });
-    if (methodCheck) return methodCheck;
+    if (request.method !== "POST") {
+      const latencyMs = Date.now() - startTime;
+      logApiRequest({
+        path: pathname,
+        method: request.method,
+        role: null,
+        userId: null,
+        status: 405,
+        latencyMs,
+        requestId,
+      });
+      return methodNotAllowed(request, ["POST"]);
+    }
 
     const user = await getSessionUser();
-    const requestId = getRequestId(request);
     
     if (!user || !user.id) {
-      const response = NextResponse.json({ error: "unauthorized" }, { status: 401 });
-      setRequestIdHeader(response, requestId);
-      return response;
+      const latencyMs = Date.now() - startTime;
+      logApiRequest({
+        path: pathname,
+        method: "POST",
+        role: null,
+        userId: null,
+        status: 401,
+        latencyMs,
+        requestId,
+      });
+      return unauthorized(request);
     }
     
     const body = await request.json().catch(() => ({}));
@@ -28,34 +46,42 @@ export async function POST(request: Request) {
     const trimmed = message.trim();
     
     if (!checkAppealRateLimit(user.id)) {
-      const response = NextResponse.json(
-        { error: "rate_limited", message: "Слишком много обращений. Попробуйте позже." },
-        { status: 429 },
-      );
-      setRequestIdHeader(response, requestId);
-      return response;
+      return fail(request, "rate_limited", "Слишком много обращений. Попробуйте позже.", 429);
     }
     
     if (!trimmed || trimmed.length < 10 || trimmed.length > 4000) {
-      const response = NextResponse.json(
-        { error: "validation", message: "Сообщение должно быть от 10 до 4000 символов." },
-        { status: 400 },
-      );
-      setRequestIdHeader(response, requestId);
-      return response;
+      return fail(request, "validation_error", "Сообщение должно быть от 10 до 4000 символов.", 400);
     }
     
     if (!APPEAL_TOPICS.includes(topic)) {
-      const response = NextResponse.json({ error: "validation", message: "Некорректная тема." }, { status: 400 });
-      setRequestIdHeader(response, requestId);
-      return response;
+      return fail(request, "validation_error", "Некорректная тема.", 400);
     }
     
     const appeal = await createAppeal(user.id, trimmed, topic);
-    const response = NextResponse.json({ ok: true, appeal });
-    setRequestIdHeader(response, requestId);
-    return response;
+    const latencyMs = Date.now() - startTime;
+    logApiRequest({
+      path: pathname,
+      method: "POST",
+      role: user.role ?? null,
+      userId: user.id,
+      status: 200,
+      latencyMs,
+      requestId,
+    });
+    return ok(request, { appeal });
   } catch (error) {
-    return handleApiError(request, error, 500);
+    const latencyMs = Date.now() - startTime;
+    const user = await getSessionUser().catch(() => null);
+    logApiRequest({
+      path: pathname,
+      method: "POST",
+      role: user?.role ?? null,
+      userId: user?.id ?? null,
+      status: 500,
+      latencyMs,
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError(request, "Произошла внутренняя ошибка", error);
   }
 }

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -24,6 +23,7 @@ import { enforceAiRateLimit, logAiUsage, type AiUsageSource } from "@/lib/aiUsag
 import { getUserOwnershipVerifications, getUserPlots } from "@/lib/plots";
 import { getVerificationStatus } from "@/lib/verificationStatus";
 import { getUserFinanceInfo } from "@/lib/getUserFinanceInfo";
+import { fail, forbidden, ok, serverError, unauthorized } from "@/lib/api/respond";
 
 type AssistantBody = {
   message: string;
@@ -182,21 +182,21 @@ const topicLinks: Record<Topic, { label: string; href: string }[]> = {
   ],
   "staff-billing": [
     { label: "Биллинг", href: "/admin/billing" },
-    { label: "Импорт платежей", href: "/admin/billing/import" },
-    { label: "Долги", href: "/admin/debts" },
+    { label: "Импорт платежей", href: "/admin/billing/payments-import" },
+    { label: "Долги", href: "/admin/billing/debts" },
   ],
   "staff-imports": [
-    { label: "Импорт реестра", href: "/admin/imports/plots" },
-    { label: "Импорт платежей", href: "/admin/billing/import" },
+    { label: "Импорт реестра", href: "/admin/registry?tab=import" },
+    { label: "Импорт платежей", href: "/admin/billing/payments-import" },
     { label: "Журнал импортов", href: "/admin/billing/imports" },
   ],
   "staff-debts": [
-    { label: "Долги", href: "/admin/debts" },
-    { label: "Должники", href: "/admin/notifications/debtors" },
+    { label: "Долги", href: "/admin/billing/debts" },
+    { label: "Должники", href: "/admin/billing/debtors" },
   ],
   "staff-debtors": [
-    { label: "Должники", href: "/admin/notifications/debtors" },
-    { label: "Долги", href: "/admin/debts" },
+    { label: "Должники", href: "/admin/billing/debtors" },
+    { label: "Долги", href: "/admin/billing/debts" },
   ],
 };
 
@@ -550,15 +550,15 @@ const buildRoleActions = (role: Role): AssistantAction[] => {
   if (role === "board") {
     return [
       { id: "role-billing", kind: "navigate", label: "Финансы (админ)", href: "/admin/billing" },
-      { id: "role-import", kind: "navigate", label: "Импорт", href: "/admin/imports/plots" },
-      { id: "role-debtors", kind: "navigate", label: "Должники", href: "/admin/debts" },
+      { id: "role-import", kind: "navigate", label: "Импорт", href: "/admin/registry?tab=import" },
+      { id: "role-debtors", kind: "navigate", label: "Должники", href: "/admin/billing/debtors" },
       { id: "role-template", kind: "navigate", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
   }
   if (role === "admin" || role === "chair") {
     return [
       { id: "role-billing", kind: "navigate", label: "Финансы (админ)", href: "/admin/billing" },
-      { id: "role-debtors", kind: "navigate", label: "Должники", href: "/admin/debts" },
+      { id: "role-debtors", kind: "navigate", label: "Должники", href: "/admin/billing/debtors" },
       { id: "role-ai", kind: "navigate", label: "Настройки ИИ", href: "/admin/ai-usage" },
       { id: "role-template", kind: "navigate", label: "Сформировать документ", href: "/cabinet/templates" },
     ];
@@ -871,7 +871,7 @@ const buildStaffDebtsCards = (): { cards: ContextCard[]; lastPeriod: string | nu
         {
           title: "Долги: нет периода",
           lines: ["Добавьте начисления, чтобы увидеть должников."],
-          href: "/admin/debts",
+          href: "/admin/billing/debts",
           status: "warning",
         },
       ],
@@ -901,7 +901,7 @@ const buildStaffDebtsCards = (): { cards: ContextCard[]; lastPeriod: string | nu
           `Должников: ${debtorsCount}`,
           `Всего долга: ${totals.debt.toLocaleString("ru-RU")} ₽`,
         ],
-        href: `/admin/debts?period=${periodLabel}&type=membership`,
+        href: `/admin/billing/debts`,
         status: totals.debt > 0 ? "warning" : "success",
       },
     ],
@@ -986,7 +986,7 @@ const buildActions = (
     }
     return [
       { type: "link", label: "Открыть биллинг", href: `/admin/billing?period=${options.lastPeriod}` },
-      { type: "link", label: "Тарифы взносов", href: "/admin/tariffs" },
+      { type: "link", label: "Тарифы взносов", href: "/admin/billing/tariffs" },
     ];
   }
   if (topic === "staff-debts") {
@@ -994,17 +994,17 @@ const buildActions = (
       return [{ type: "link", label: "Перейти в биллинг", href: "/admin/billing" }];
     }
     return [
-      { type: "link", label: "Открыть долги", href: `/admin/debts?period=${options.lastPeriod}&type=membership` },
+      { type: "link", label: "Открыть долги", href: `/admin/billing/debts` },
       {
         type: "link",
         label: "Открыть должников",
-        href: `/admin/notifications/debtors?period=${options.lastPeriod}&type=membership`,
+        href: `/admin/billing/debtors`,
       },
     ];
   }
   if (topic === "staff-imports") {
     return [
-      { type: "link", label: "Импорт платежей", href: "/admin/billing/import" },
+      { type: "link", label: "Импорт платежей", href: "/admin/billing/payments-import" },
       { type: "link", label: "Журнал импортов", href: "/admin/billing/imports" },
     ];
   }
@@ -1091,7 +1091,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as AssistantBody;
   } catch {
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+    return fail(request, "validation_error", "Bad request", 400);
   }
   const message = typeof body.message === "string" ? body.message : "";
   const pathHint = body.pageContext?.path ?? null;
@@ -1100,21 +1100,26 @@ export async function POST(request: Request) {
   const messageLen = message.trim().length;
   const smalltalk = isSmalltalk(message);
   if (!openaiKey) {
-    return NextResponse.json(
-      { error: "OPENAI_KEY_MISSING", hint: "OPENAI_API_KEY is missing" },
-      { status: 500 },
+    return fail(
+      request,
+      "openai_key_missing",
+      "OPENAI_API_KEY is missing",
+      500,
+      { hint: "OPENAI_API_KEY is missing" },
     );
   }
   if (openaiKey.length < 20) {
-    return NextResponse.json(
+    return fail(
+      request,
+      "openai_key_invalid_format",
+      "OPENAI_API_KEY is invalid",
+      500,
       {
-        error: "OPENAI_KEY_INVALID_FORMAT",
         hint:
           process.env.NODE_ENV !== "production"
             ? `OPENAI_API_KEY слишком короткий (len=${openaiKey.length}); проверь .env.local и переменные окружения`
             : undefined,
       },
-      { status: 500 },
     );
   }
   let openAiKey: string;
@@ -1122,9 +1127,12 @@ export async function POST(request: Request) {
     openAiKey = createOpenAIClient((apiKey) => apiKey);
   } catch (error) {
     if (error instanceof OpenAIKeyMissingError) {
-      return NextResponse.json(
-        { error: "OPENAI_KEY_MISSING", hint: "OPENAI_API_KEY is missing" },
-        { status: 500 },
+      return fail(
+        request,
+        "openai_key_missing",
+        "OPENAI_API_KEY is missing",
+        500,
+        { hint: "OPENAI_API_KEY is missing" },
       );
     }
     throw error;
@@ -1221,7 +1229,7 @@ export async function POST(request: Request) {
       thumb: null,
       error: null,
     });
-    return NextResponse.json({ ok: true,
+    return ok(request, {
       ...applyAiSettings(hinted, aiSettings),
       source,
       cached: cachedFlag,
@@ -1279,13 +1287,7 @@ export async function POST(request: Request) {
       thumb: null,
       error: "AI disabled",
     });
-    return NextResponse.json(
-      {
-        error: "AI not enabled",
-        message: "ИИ-помощник временно отключён. Справка доступна.",
-      },
-      { status: 403 },
-    );
+    return forbidden(request, "AI not enabled");
   }
 
   if (isSmalltalk(message)) {
@@ -1359,8 +1361,7 @@ export async function POST(request: Request) {
     } catch {
       // ignore logging failures
     }
-    return NextResponse.json({
-      ok: true,
+    return ok(request, {
       ...greeting,
       cached: cachedFlag,
       source,
@@ -1530,8 +1531,7 @@ export async function POST(request: Request) {
     } catch {
       // ignore logging failures
     }
-    return NextResponse.json({
-      ok: true,
+    return ok(request, {
       ...payload,
       source,
       cached: cachedFlag,
@@ -1571,7 +1571,7 @@ export async function POST(request: Request) {
       thumb: null,
       error: null,
     });
-    return NextResponse.json({ ok: true,
+    return ok(request, {
       ...refusal,
       cached: cachedFlag,
       source,
@@ -1609,7 +1609,7 @@ export async function POST(request: Request) {
         thumb: null,
         error: "Rate limit exceeded",
       });
-      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+      return fail(request, "rate_limited", "Rate limit exceeded", 429);
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
@@ -1633,7 +1633,7 @@ export async function POST(request: Request) {
       thumb: null,
       error: msg,
     });
-    return NextResponse.json({ error: "AI rate limiter unavailable" }, { status: 500 });
+    return serverError(request, "AI rate limiter unavailable", error);
   }
 
   try {
@@ -1645,7 +1645,7 @@ export async function POST(request: Request) {
       cachedFlag = true;
       success = true;
       logTopic = cached.topic;
-      return NextResponse.json({ ok: true,
+      return ok(request, {
         ...applyAiSettings(applyResponseHints(cached, hint), aiSettings),
         cached: cachedFlag,
         source,
@@ -1822,7 +1822,7 @@ export async function POST(request: Request) {
     await cacheSet(cacheKey, payload);
     source = "assistant";
     cachedFlag = false;
-    return NextResponse.json({ ok: true,
+    return ok(request, {
       ...payload,
       cached: cachedFlag,
       source,
@@ -1834,22 +1834,16 @@ export async function POST(request: Request) {
     const safeMessage = error instanceof Error ? error.message : "Unknown error";
     errorMessage = safeMessage;
     console.error("assistant route error", error);
-    let code = "assistant_failed";
-    let status = 500;
     if (error instanceof OpenAIResponseError) {
-      if (error.status === 401) code = "OPENAI_401";
-      else if (error.status === 429) {
-        code = "OPENAI_429";
-        status = 429;
-      } else {
-        code = "OPENAI_ERROR";
-        status = 502;
-      }
       if (error.status === 401) {
-        status = 401;
+        return fail(request, "openai_unauthorized", safeMessage, 401);
       }
+      if (error.status === 429) {
+        return fail(request, "rate_limited", safeMessage, 429);
+      }
+      return fail(request, "openai_error", safeMessage, 502);
     }
-    return NextResponse.json({ error: code, hint: safeMessage }, { status });
+    return serverError(request, "Internal error", error);
   } finally {
     await logAiUsage({
       userId,

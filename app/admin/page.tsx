@@ -11,6 +11,11 @@ import { startTestScenario } from "./impersonationActions";
 import type { ReactNode } from "react";
 import { getAdminDashboardData, type DashboardData } from "@/lib/adminDashboard";
 import { getCollectionsAnalytics, type CollectionPoint } from "@/lib/analytics";
+import { getPlots, listRegistryImports } from "@/lib/mockDb";
+import { listAppeals } from "@/lib/appeals.store";
+import { isOverdue } from "@/lib/appealsSla";
+import { normalizeArray } from "@/lib/utils/array";
+import type { RegistryImport } from "@/types/snt";
 
 // Динамический импорт тяжёлого компонента аналитики только для admin
 // Компонент уже использует dynamic внутри, поэтому ssr: false не нужен здесь
@@ -50,21 +55,130 @@ const loadBlock = async <T,>(block: string, loader: () => Promise<T>): Promise<L
 export default async function AdminDashboard() {
   const user = await getSessionUser();
   if (!user) {
-    redirect("/staff/login?next=/admin");
+    redirect("/staff-login?next=/admin");
   }
-  const role = (user.role as "admin" | "chairman" | "secretary" | "accountant" | "resident" | undefined) ?? "resident";
-  const { can } = await import("@/lib/rbac");
-  if (!can(role, "admin.access")) {
+  // КРИТИЧНО: Используем normalizeRole для нормализации роли (как в middleware)
+  const { normalizeRole, isAdminRole } = await import("@/lib/rbac");
+  const normalizedRole = normalizeRole(user.role);
+  // Проверяем что роль admin через isAdminRole
+  if (!isAdminRole(normalizedRole)) {
     const { getForbiddenReason } = await import("@/lib/rbac");
-    const reason = getForbiddenReason(role, "admin.access");
+    // normalizedRole может быть "guest", но getForbiddenReason принимает string
+    const reason = getForbiddenReason(normalizedRole as "admin" | "resident" | "chairman" | "secretary" | "accountant", "admin.access");
     redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/admin")}`);
   }
+  // После проверки isAdminRole, normalizedRole гарантированно "admin"
+  const role = normalizedRole as "admin";
   const dashboardBlock = await loadBlock<DashboardData>("dashboard", async () => getAdminDashboardData());
+  
+  // Load additional metrics
+  const metricsBlock = await loadBlock<{
+    registry: {
+      totalPlots: number;
+      verifiedPlots: number;
+      missingOwnerPlots: number;
+      missingPhonePlots: number;
+    };
+    appeals: {
+      totalOpen: number;
+      overdue: number;
+    };
+    lastRegistryImport: {
+      id: string;
+      createdAt: string;
+      fileName: string | null;
+      summary: string;
+      errorsCount: number;
+    } | null;
+    topQualityIssues: Array<{ type: string; count: number }>;
+  }>("metrics", async () => {
+    const plots = getPlots();
+    const appeals = listAppeals({});
+    
+    function mapPlotStatusToVerificationStatus(status?: string | null): "draft" | "pending" | "verified" | null {
+      if (!status) return null;
+      if (status === "VERIFIED" || status === "active") return "verified";
+      if (status === "CLAIMED" || status === "INVITE_READY") return "pending";
+      if (status === "DRAFT") return "draft";
+      return null;
+    }
+
+    // Registry stats
+    const totalPlots = plots.length;
+    const verifiedPlots = plots.filter((p) => mapPlotStatusToVerificationStatus(p.status) === "verified").length;
+    const missingOwnerPlots = plots.filter((p) => !p.ownerFullName).length;
+    const missingPhonePlots = plots.filter((p) => p.ownerFullName && !p.phone).length;
+
+    // Appeals stats
+    const openAppeals = appeals.filter((a) => a.status !== "closed");
+    const totalOpen = openAppeals.length;
+    const overdueCount = openAppeals.filter((a) => isOverdue(a.dueAt, a.status)).length;
+
+    // Last import summary
+    const registryImports = normalizeArray<RegistryImport>(listRegistryImports());
+    const lastRegistryImport: RegistryImport | null = registryImports[0] ?? null;
+
+    // Top quality issues
+    const phoneFrequency = new Map<string, number>();
+    plots.forEach((plot) => {
+      if (plot.phone) {
+        const normalized = plot.phone.replace(/\D/g, "");
+        if (normalized.length >= 10) {
+          phoneFrequency.set(normalized, (phoneFrequency.get(normalized) || 0) + 1);
+        }
+      }
+    });
+
+    const qualityIssues = {
+      plots_without_owner: missingOwnerPlots,
+      owners_without_phone: missingPhonePlots,
+      verification_not_verified: plots.filter((p) => {
+        const status = mapPlotStatusToVerificationStatus(p.status);
+        return status !== "verified" && status !== null;
+      }).length,
+      duplicate_phones: Array.from(phoneFrequency.values()).filter((count) => count > 1).length,
+      appeals_without_plotId: appeals.filter((a) => {
+        if (!a.plotNumber) return false;
+        const plot = plots.find((p) => p.plotNumber === a.plotNumber);
+        return !plot;
+      }).length,
+    };
+
+    const topIssues = Object.entries(qualityIssues)
+      .filter(([_, count]) => count > 0)
+      .sort(([_, a], [__, b]) => b - a)
+      .slice(0, 5)
+      .map(([type, count]) => ({ type, count }));
+
+    return {
+      registry: {
+        totalPlots,
+        verifiedPlots,
+        missingOwnerPlots,
+        missingPhonePlots,
+      },
+      appeals: {
+        totalOpen,
+        overdue: overdueCount,
+      },
+      lastRegistryImport: lastRegistryImport
+        ? {
+            id: lastRegistryImport.id,
+            createdAt: lastRegistryImport.createdAt,
+            fileName: lastRegistryImport.fileName ?? null,
+            summary: lastRegistryImport.summary,
+            errorsCount: lastRegistryImport.errorsCount,
+          }
+        : null,
+      topQualityIssues: topIssues,
+    };
+  });
   const analyticsBlock = await loadBlock("analytics", async () => getAnalyticsPoints());
   const homeViewsBlock = await loadBlock("home_views", getHomeViews);
   const appealsBlock = await loadBlock("appeals", getAllAppeals);
 
   const dashboardData = dashboardBlock.data;
+  const metrics = metricsBlock.data;
   const analytics = analyticsBlock.data ?? [];
   const homeViews = homeViewsBlock.data ?? { homeOld: 0, homeNew: 0 };
   const appeals = appealsBlock.data ?? [];
@@ -99,28 +213,28 @@ export default async function AdminDashboard() {
         <h2 className="mb-3 text-sm font-semibold text-zinc-700">Быстрые действия</h2>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Link
-            href="/admin/plots"
+            href="/admin/registry?tab=people"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
           >
-            Реестр участков
+            Реестр
           </Link>
           <Link
-            href="/admin/imports/plots"
+            href="/admin/registry?tab=import"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
           >
             Импорт реестра
           </Link>
           <Link
-            href="/admin/notifications/debtors"
+            href="/admin/billing/periods-unified"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
           >
-            Должники
+            Начисления
           </Link>
           <Link
-            href="/admin/appeals"
+            href="/admin/billing/debts"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-[#5E704F] hover:bg-zinc-50"
           >
-            Обращения
+            Долги
           </Link>
         </div>
       </div>
@@ -154,10 +268,25 @@ export default async function AdminDashboard() {
             </Card>
             <Card title="Обращения">
               <div className="space-y-1 text-sm text-zinc-800">
+                {metrics && (
+                  <>
+                    <div>Открыто: {metrics.appeals.totalOpen}</div>
+                    {metrics.appeals.overdue > 0 && (
+                      <div className="text-red-600 font-semibold">Просрочено: {metrics.appeals.overdue}</div>
+                    )}
+                  </>
+                )}
                 <div>Новые: {appealsNew}</div>
                 <div>В работе: {appealsInWork}</div>
               </div>
-              <LinkBtn href="/admin/appeals">Открыть</LinkBtn>
+              <div className="flex flex-wrap gap-2">
+                <LinkBtn href="/office/appeals">Открыть</LinkBtn>
+                {metrics && metrics.appeals.overdue > 0 && (
+                  <LinkBtn href="/office/appeals?tab=in_progress" variant="secondary" title="Просроченные обращения (показаны в работе)">
+                    Просроченные ({metrics.appeals.overdue})
+                  </LinkBtn>
+                )}
+              </div>
             </Card>
             <Card title="Долги">
               {debtSummary ? (
@@ -168,18 +297,37 @@ export default async function AdminDashboard() {
               ) : (
                 <Placeholder />
               )}
-              <LinkBtn href="/admin/notifications/debtors?type=membership">Должники</LinkBtn>
+              <LinkBtn href="/admin/billing/debtors">Должники</LinkBtn>
             </Card>
           </Section>
 
           <Section title="Реестр">
-            <Card title="Реестр участков">
+            <Card title="Реестр">
               <div className="space-y-1 text-sm text-zinc-800">
                 <div>Всего участков: {dashboardData.registry.totalPlots}</div>
+                {metrics && (
+                  <>
+                    <div>Подтверждено: {metrics.registry.verifiedPlots}</div>
+                    <div>Без владельца: {metrics.registry.missingOwnerPlots}</div>
+                    <div>Без телефона: {metrics.registry.missingPhonePlots}</div>
+                  </>
+                )}
                 <div>Не подтверждено: {dashboardData.registry.unconfirmedPlots}</div>
                 <div>Без контактов: {dashboardData.registry.missingContactsPlots}</div>
               </div>
-              <LinkBtn href="/admin/plots">Открыть реестр</LinkBtn>
+              <div className="flex flex-wrap gap-2">
+                <LinkBtn href="/admin/registry">Открыть реестр</LinkBtn>
+                {metrics && metrics.registry.missingOwnerPlots > 0 && (
+                  <LinkBtn href="/admin/quality?issueType=plots_without_owner" variant="secondary">
+                    Без владельца
+                  </LinkBtn>
+                )}
+                {metrics && metrics.registry.missingPhonePlots > 0 && (
+                  <LinkBtn href="/admin/quality?issueType=owners_without_phone" variant="secondary">
+                    Без телефона
+                  </LinkBtn>
+                )}
+              </div>
             </Card>
           </Section>
 
@@ -191,7 +339,7 @@ export default async function AdminDashboard() {
                   <div>Начислено: {formatAmount(dashboardData.billing.membership.accruedSum)} ₽</div>
                   <div>Оплачено: {formatAmount(dashboardData.billing.membership.paidSum)} ₽</div>
                   <Link
-                    href="/admin/debts?type=membership"
+                    href="/admin/billing/debts"
                     className="inline-flex items-center gap-1 text-[#5E704F] hover:underline"
                     title="Открыть долги по членским"
                   >
@@ -209,7 +357,7 @@ export default async function AdminDashboard() {
                   title: "Перейти в биллинг",
                 }}
                 secondary={{
-                  href: "/admin/notifications/debtors?type=membership",
+                  href: "/admin/billing/debtors",
                   label: "Должники",
                   title: "Список должников",
                 }}
@@ -223,7 +371,7 @@ export default async function AdminDashboard() {
                   <div>Начислено: {formatAmount(dashboardData.billing.target.accruedSum)} ₽</div>
                   <div>Оплачено: {formatAmount(dashboardData.billing.target.paidSum)} ₽</div>
                   <Link
-                    href="/admin/debts?type=target"
+                    href="/admin/billing/debts"
                     className="inline-flex items-center gap-1 text-[#5E704F] hover:underline"
                     title="Открыть долги по целевым"
                   >
@@ -264,7 +412,7 @@ export default async function AdminDashboard() {
               <CTAGroup
                 className="mt-auto"
                 primary={{
-                  href: "/admin/billing/import",
+                  href: "/admin/billing/payments-import",
                   label: "Импорт",
                   title: "Создать импорт",
                 }}
@@ -272,6 +420,34 @@ export default async function AdminDashboard() {
                   href: "/admin/billing/imports",
                   label: "История",
                   title: "История импортов",
+                }}
+              />
+            </Card>
+
+            <Card title="Последний импорт реестра">
+              {metrics && metrics.lastRegistryImport ? (
+                <div className="space-y-1 text-sm text-zinc-800">
+                  <div>Дата: {new Date(metrics.lastRegistryImport.createdAt).toLocaleString("ru-RU")}</div>
+                  <div>Файл: {metrics.lastRegistryImport.fileName || "—"}</div>
+                  <div>{metrics.lastRegistryImport.summary}</div>
+                  {metrics.lastRegistryImport.errorsCount > 0 && (
+                    <div className="text-red-600">Ошибок: {metrics.lastRegistryImport.errorsCount}</div>
+                  )}
+                </div>
+              ) : (
+                <Placeholder />
+              )}
+              <CTAGroup
+                className="mt-auto"
+                primary={{
+                  href: "/admin/registry/import",
+                  label: "Импорт",
+                  title: "Создать импорт реестра",
+                }}
+                secondary={{
+                  href: "/admin/registry/import/history",
+                  label: "История",
+                  title: "История импортов реестра",
                 }}
               />
             </Card>
@@ -286,8 +462,8 @@ export default async function AdminDashboard() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <LinkBtn href="/admin/notifications/debtors?type=membership">Членские</LinkBtn>
-                <LinkBtn href="/admin/notifications/debtors?type=electricity" variant="secondary">
+                <LinkBtn href="/admin/billing/debtors">Должники</LinkBtn>
+                <LinkBtn href="/admin/billing/notifications" variant="secondary">
                   Электро
                 </LinkBtn>
               </div>
@@ -317,6 +493,44 @@ export default async function AdminDashboard() {
                   Отчёт
                 </LinkBtn>
               </div>
+            </Card>
+          </Section>
+
+          <Section title="Качество данных">
+            <Card title="Топ проблем">
+              {metrics && metrics.topQualityIssues && metrics.topQualityIssues.length > 0 ? (
+                <div className="space-y-2 text-sm text-zinc-800">
+                  {metrics.topQualityIssues.map((issue) => {
+                    const labels: Record<string, string> = {
+                      plots_without_owner: "Участки без владельца",
+                      owners_without_phone: "Владельцы без телефона",
+                      verification_not_verified: "Не подтверждено",
+                      duplicate_phones: "Дублирующиеся телефоны",
+                      appeals_without_plotId: "Обращения без участка",
+                    };
+                    const issueTypeMap: Record<string, string> = {
+                      plots_without_owner: "plots_without_owner",
+                      owners_without_phone: "owners_without_phone",
+                      verification_not_verified: "verification_not_verified",
+                      duplicate_phones: "duplicate_phones",
+                      appeals_without_plotId: "appeals_without_plotId",
+                    };
+                    return (
+                      <Link
+                        key={issue.type}
+                        href={`/admin/quality?issueType=${issueTypeMap[issue.type] || issue.type}`}
+                        className="flex items-center justify-between hover:text-[#5E704F]"
+                      >
+                        <span>{labels[issue.type] || issue.type}</span>
+                        <span className="font-semibold">{issue.count}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-sm text-zinc-600">Проблем не обнаружено</div>
+              )}
+              <LinkBtn href="/admin/quality" className="mt-auto">Открыть качество данных</LinkBtn>
             </Card>
           </Section>
 

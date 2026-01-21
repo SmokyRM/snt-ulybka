@@ -1,4 +1,4 @@
-export type AppealStatus = "new" | "in_progress" | "done";
+export type AppealStatus = "new" | "in_progress" | "needs_info" | "closed";
 
 export type AppealComment = {
   id: string;
@@ -14,6 +14,15 @@ export type AppealHistory = {
   authorRole?: "chairman" | "secretary" | "accountant" | "admin";
 };
 
+export type AppealCategory = 
+  | "finance"
+  | "electricity"
+  | "documents"
+  | "access"
+  | "membership"
+  | "insufficient_data"
+  | "general";
+
 export type Appeal = {
   id: string;
   createdAt: string;
@@ -21,13 +30,17 @@ export type Appeal = {
   title: string;
   body: string;
   status: AppealStatus;
+  type?: AppealCategory; // Тип обращения (категория из triage) для SLA
   plotNumber?: string;
   authorId?: string;
   authorName?: string;
   authorPhone?: string;
-  assigneeRole?: "chairman" | "secretary" | "accountant" | "admin";
-  assigneeUserId?: string;
+  assigneeRole?: "chairman" | "secretary" | "accountant" | "admin"; // Deprecated: используйте assignedToUserId
+  assigneeUserId?: string; // Deprecated: используйте assignedToUserId
+  assignedToUserId: string | null; // ID назначенного пользователя (Sprint 2.1)
+  assignedAt: string | null; // Дата и время назначения
   dueAt?: string | null;
+  dueAtSource?: "auto" | "manual"; // Источник установки срока: auto - автоматически по SLA, manual - вручную
   priority?: "low" | "medium" | "high";
   comments?: AppealComment[];
   history?: AppealHistory[];
@@ -100,4 +113,22 @@ export type DebtRow = {
   accrued: number;
   paid: number;
   debt: number;
+};
+
+/**
+ * Sprint 5.4: Шаблон действия/ответа для обращений
+ */
+export type Template = {
+  id: string;
+  key: string; // unique key
+  title: string;
+  body: string; // текст шаблона
+  allowedRoles: string[]; // массив ролей, которым разрешено использовать
+  actions: {
+    setStatus?: AppealStatus; // изменить статус
+    assignRole?: "chairman" | "secretary" | "accountant" | "admin"; // назначить роль
+    addComment?: boolean; // добавить комментарий (если true, используется body)
+  };
+  createdAt: string;
+  updatedAt: string;
 };

@@ -1,30 +1,22 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, hasBillingAccess } from "@/lib/session.server";
-import { listBillingImports } from "@/lib/mockDb";
-import ImportBatchesClient from "./ImportBatchesClient";
+import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
+import ImportsJournalClient from "./ImportsJournalClient";
 
-export default async function ImportBatchesPage() {
+export default async function ImportsJournalPage() {
   const user = await getSessionUser();
-  if (!hasBillingAccess(user)) redirect("/staff/login?next=/admin");
-  const batches = listBillingImports();
+  if (!hasFinanceAccess(user)) {
+    redirect("/staff-login?next=/admin/billing/imports");
+  }
 
   return (
-    <main className="min-h-screen bg-[#F8F1E9] px-4 py-8 text-zinc-900 sm:px-6">
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Журнал импортов платежей</h1>
-          <a
-            href="/admin/billing/import"
-            className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-          >
-            Новый импорт
-          </a>
-        </div>
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold text-zinc-900">Журнал импортов платежей</h1>
         <p className="text-sm text-zinc-600">
-          История CSV-импортов с их статусами и количеством обработанных строк.
+          История всех импортов платежей с результатами обработки и ошибками.
         </p>
-        <ImportBatchesClient initialBatches={batches} />
       </div>
-    </main>
+      <ImportsJournalClient />
+    </div>
   );
 }

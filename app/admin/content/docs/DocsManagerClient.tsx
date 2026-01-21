@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { DocumentAudience, DocumentRecord } from "@/lib/documentsStore";
+import { readOk } from "@/lib/api/client";
 
 type Props = {
   initialDocs: DocumentRecord[];
@@ -92,7 +93,7 @@ export default function DocsManagerClient({ initialDocs }: Props) {
     setMessage(null);
     try {
       const res = await fetch(`/api/admin/content/docs/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("DELETE_FAILED");
+      await readOk<{ ok: true }>(res);
       setDocs((prev) => prev.filter((item) => item.id !== id));
       if (draft.id === id) resetDraft();
       setMessage("Документ удалён.");
@@ -129,8 +130,7 @@ export default function DocsManagerClient({ initialDocs }: Props) {
           body: JSON.stringify(payload),
         },
       );
-      if (!res.ok) throw new Error("SAVE_FAILED");
-      const json = (await res.json()) as { document: DocumentRecord };
+      const json = await readOk<{ document: DocumentRecord }>(res);
       setDocs((prev) => {
         if (draft.id) {
           return prev.map((item) => (item.id === json.document.id ? json.document : item));
@@ -153,8 +153,7 @@ export default function DocsManagerClient({ initialDocs }: Props) {
     body.append("file", file);
     try {
       const res = await fetch("/api/admin/content/docs/upload", { method: "POST", body });
-      if (!res.ok) throw new Error("UPLOAD_FAILED");
-      const json = (await res.json()) as { url: string; mime: string; size: number };
+      const json = await readOk<{ url: string; mime: string; size: number }>(res);
       setDraft((prev) => ({ ...prev, fileUrl: json.url, mime: json.mime, size: json.size }));
       setMessage("Файл загружен.");
     } catch {

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { updateAppealStatus, AppealStatus } from "@/lib/appeals";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
+import { fail, forbidden, ok, serverError } from "@/lib/api/respond";
 
 export async function PATCH(
   request: Request,
@@ -8,25 +8,29 @@ export async function PATCH(
 ) {
   const user = await getSessionUser();
   if (!hasAdminAccess(user)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    return forbidden(request);
   }
-  const body = await request.json().catch(() => ({}));
-  const status = body.status as AppealStatus | undefined;
-  const adminReply = typeof body.adminReply === "string" ? body.adminReply : undefined;
-  if (!status) {
-    return NextResponse.json({ error: "status_required" }, { status: 400 });
+  try {
+    const body = await request.json().catch(() => ({}));
+    const status = body.status as AppealStatus | undefined;
+    const adminReply = typeof body.adminReply === "string" ? body.adminReply : undefined;
+    if (!status) {
+      return fail(request, "validation_error", "status_required", 400);
+    }
+    const updated = await updateAppealStatus(
+      params.id,
+      status,
+      adminReply,
+      {
+        id: user?.id,
+        role: user?.role,
+      },
+    );
+    if (!updated) {
+      return fail(request, "not_found", "not_found", 404);
+    }
+    return ok(request, { appeal: updated });
+  } catch (e) {
+    return serverError(request, "Internal error", e);
   }
-  const updated = await updateAppealStatus(
-    params.id,
-    status,
-    adminReply,
-    {
-      id: user?.id,
-      role: user?.role,
-    },
-  );
-  if (!updated) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
-  return NextResponse.json({ ok: true, appeal: updated });
 }

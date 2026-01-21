@@ -58,15 +58,15 @@ describe("RBAC helpers", () => {
 
   describe("isOfficeRole", () => {
     it("возвращает true для office ролей", () => {
-      expect(isOfficeRole("admin")).toBe(true);
       expect(isOfficeRole("chairman")).toBe(true);
       expect(isOfficeRole("secretary")).toBe(true);
       expect(isOfficeRole("accountant")).toBe(true);
     });
 
-    it("возвращает false для resident и guest", () => {
+    it("возвращает false для resident, guest и admin", () => {
       expect(isOfficeRole("resident")).toBe(false);
       expect(isOfficeRole("guest")).toBe(false);
+      expect(isOfficeRole("admin")).toBe(false);
       expect(isOfficeRole(null)).toBe(false);
     });
   });
@@ -98,7 +98,6 @@ describe("RBAC helpers", () => {
 
   describe("assertOfficeRole", () => {
     it("возвращает роль для валидных office ролей", () => {
-      expect(assertOfficeRole("admin")).toBe("admin");
       expect(assertOfficeRole("chairman")).toBe("chairman");
       expect(assertOfficeRole("secretary")).toBe("secretary");
       expect(assertOfficeRole("accountant")).toBe("accountant");
@@ -106,6 +105,7 @@ describe("RBAC helpers", () => {
 
     it("выбрасывает ошибку для невалидной роли", () => {
       expect(() => assertOfficeRole("resident")).toThrow("FORBIDDEN");
+      expect(() => assertOfficeRole("admin")).toThrow("FORBIDDEN");
       expect(() => assertOfficeRole(null)).toThrow("FORBIDDEN");
     });
   });

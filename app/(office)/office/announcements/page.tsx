@@ -2,49 +2,69 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
-import { hasPermission, isOfficeRole } from "@/lib/rbac";
+import { assertCan, isStaffOrAdmin, can } from "@/lib/rbac";
 import type { Role } from "@/lib/permissions";
-import {
-  listAnnouncements,
-  setAnnouncementPublished,
-  type OfficeAnnouncementStatus,
-} from "@/lib/office/announcements.server";
+import { listAnnouncements, publishAnnouncement } from "@/server/services/announcements";
+import type { OfficeAnnouncementStatus } from "@/server/services/announcements";
 
-const statusLabels: Record<OfficeAnnouncementStatus, string> = {
+const statusLabels: Record<OfficeAnnouncementStatus | "archived", string> = {
   draft: "Черновик",
   published: "Опубликовано",
+  archived: "Архив",
 };
 
-type SearchParams = { q?: string; status?: OfficeAnnouncementStatus };
+type SearchParams = { q?: string; status?: OfficeAnnouncementStatus | "archived" };
 
 export default async function OfficeAnnouncementsPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getEffectiveSessionUser();
-  if (!session) redirect("/staff-login?next=/office/announcements");
+  if (!session) redirect("/staff/login?next=/office/announcements");
   const role = (session.role as Role | undefined) ?? "resident";
-  if (!isOfficeRole(role)) redirect("/forbidden");
-  const canManage = hasPermission(role, "announcements.manage");
+  if (!isStaffOrAdmin(role)) redirect("/forbidden?reason=office.only&next=/office");
+  
+  try {
+    assertCan(role, "announcements.view", undefined);
+  } catch {
+    redirect("/forbidden?reason=office.only&next=/office");
+  }
+  const canManage = can(role, "announcements.manage", undefined);
 
   const q = searchParams.q?.trim() ?? "";
-  const status = searchParams.status ?? undefined;
-  const items = listAnnouncements({ status }).filter((item) => {
-    if (!q) return true;
-    const haystack = `${item.title} ${item.body}`.toLowerCase();
-    return haystack.includes(q.toLowerCase());
-  });
+  const status = searchParams.status;
+  
+  let items;
+  try {
+    items = await listAnnouncements({ status, q });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      redirect("/staff/login?next=/office/announcements");
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      redirect("/forbidden?reason=office.only&next=/office");
+    }
+    throw error;
+  }
 
-  async function togglePublish(id: string, nextStatus: OfficeAnnouncementStatus) {
+  async function togglePublish(id: string, published: boolean) {
     "use server";
     const session = await getEffectiveSessionUser();
-    if (!session) redirect("/staff-login?next=/office/announcements");
+    if (!session) redirect("/staff/login?next=/office/announcements");
     const sessionRole = (session.role as Role | undefined) ?? "resident";
-    if (!hasPermission(sessionRole, "announcements.manage")) redirect("/forbidden");
-    setAnnouncementPublished(id, nextStatus === "published");
+    try {
+      assertCan(sessionRole, "announcements.manage", undefined);
+    } catch {
+      redirect("/forbidden");
+    }
+    try {
+      await publishAnnouncement(id, published);
+    } catch {
+      // Игнорируем ошибки
+    }
     revalidatePath("/office/announcements");
     revalidatePath(`/office/announcements/${id}`);
   }
 
   return (
-    <div className="space-y-4" data-testid="office-announcements-root">
+    <div className="space-y-4" data-testid="office-announcements-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Объявления</h1>
@@ -77,6 +97,7 @@ export default async function OfficeAnnouncementsPage({ searchParams }: { search
           <option value="">Все</option>
           <option value="published">Опубликованные</option>
           <option value="draft">Черновики</option>
+          <option value="archived">Архив</option>
         </select>
         <button
           type="submit"
@@ -117,11 +138,11 @@ export default async function OfficeAnnouncementsPage({ searchParams }: { search
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {canManage ? (
-                    <form action={async () => togglePublish(item.id, item.status === "published" ? "draft" : "published")}>
+                    <form action={async () => togglePublish(item.id, item.status !== "published")}>
                       <button
                         type="submit"
                         className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:border-[#5E704F]"
-                        data-testid="office-announcement-toggle-publish"
+                        data-testid="announcement-publish"
                       >
                         {item.status === "published" ? "В черновик" : "Опубликовать"}
                       </button>

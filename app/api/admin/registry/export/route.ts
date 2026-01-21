@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { listPlotsWithFilters, listPersons } from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings.shared";
 import { membershipLabel } from "@/lib/membershipLabels";
+import { forbidden, unauthorized, serverError } from "@/lib/api/respond";
 
 const parseFilters = (request: Request) => {
   const url = new URL(request.url);
@@ -16,71 +16,75 @@ const parseFilters = (request: Request) => {
 };
 
 export async function GET(request: Request) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!hasAdminAccess(user)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized(request, "unauthorized");
+    if (!hasAdminAccess(user)) return forbidden(request, "forbidden");
 
-  const filters = parseFilters(request);
-  const membership =
-    filters.membershipStatus && filters.membershipStatus.toUpperCase
-      ? (filters.membershipStatus.toUpperCase() as
-          | "MEMBER"
-          | "NON_MEMBER"
-          | "PENDING"
-          | "UNKNOWN")
-      : null;
-  const persons = listPersons();
-  const { items } = listPlotsWithFilters({
-    query: filters.query,
-    street: filters.street,
-    membershipStatus: membership,
-    archived: filters.archived,
-    page: 1,
-    pageSize: 1000,
-  });
+    const filters = parseFilters(request);
+    const membership =
+      filters.membershipStatus && filters.membershipStatus.toUpperCase
+        ? (filters.membershipStatus.toUpperCase() as
+            | "MEMBER"
+            | "NON_MEMBER"
+            | "PENDING"
+            | "UNKNOWN")
+        : null;
+    const persons = listPersons();
+    const { items } = listPlotsWithFilters({
+      query: filters.query,
+      street: filters.street,
+      membershipStatus: membership,
+      archived: filters.archived,
+      page: 1,
+      pageSize: 1000,
+    });
 
-  const BOM = "\uFEFF";
-  const header = [
-    "Улица",
-    "Участок",
-    "Статус членства",
-    "Архив",
-    "Владелец",
-    "Телефон",
-    "Email",
-    "Обновлено",
-  ];
+    const BOM = "\uFEFF";
+    const header = [
+      "Улица",
+      "Участок",
+      "Статус членства",
+      "Архив",
+      "Владелец",
+      "Телефон",
+      "Email",
+      "Обновлено",
+    ];
 
-  const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-  const rows = items.map((p) => {
-    const ownerIds = persons.filter((person) => person.fullName === p.ownerFullName);
-    const phones = [p.phone, ...ownerIds.map((o) => o.phone)].filter(Boolean).join(", ");
-    const emails = [p.email, ...ownerIds.map((o) => o.email)].filter(Boolean).join(", ");
-    return [
-      p.street,
-      p.plotNumber,
-      membershipLabel[(p.membershipStatus ?? "UNKNOWN") as keyof typeof membershipLabel] ?? "",
-      p.status === "archived" ? "Да" : "Нет",
-      p.ownerFullName ?? "",
-      phones,
-      emails,
-      formatAdminTime(p.updatedAt),
-    ]
-      .map(escapeCsv)
-      .join(";");
-  });
+    const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = items.map((p) => {
+      const ownerIds = persons.filter((person) => person.fullName === p.ownerFullName);
+      const phones = [p.phone, ...ownerIds.map((o) => o.phone)].filter(Boolean).join(", ");
+      const emails = [p.email, ...ownerIds.map((o) => o.email)].filter(Boolean).join(", ");
+      return [
+        p.street,
+        p.plotNumber,
+        membershipLabel[(p.membershipStatus ?? "UNKNOWN") as keyof typeof membershipLabel] ?? "",
+        p.status === "archived" ? "Да" : "Нет",
+        p.ownerFullName ?? "",
+        phones,
+        emails,
+        formatAdminTime(p.updatedAt),
+      ]
+        .map(escapeCsv)
+        .join(";");
+    });
 
-  const filename = `registry_export_${formatAdminTime(new Date().toISOString())
-    .replace(/\s+/g, "_")
-    .replace(/[:]/g, "-")}.csv`;
+    const filename = `registry_export_${formatAdminTime(new Date().toISOString())
+      .replace(/\s+/g, "_")
+      .replace(/[:]/g, "-")}.csv`;
 
-  const csv = BOM + [header.map(escapeCsv).join(";"), ...rows].join("\r\n");
+    const csv = BOM + [header.map(escapeCsv).join(";"), ...rows].join("\r\n");
 
-  return new NextResponse(csv, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+    return new Response(csv, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (error) {
+    return serverError(request, "Internal error", error);
+  }
 }

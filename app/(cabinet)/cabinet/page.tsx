@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session.server";
 
@@ -31,6 +30,9 @@ import { redirectToCabinetStep } from "@/lib/cabinetRedirect";
 import RecentAnnouncements from "@/components/RecentAnnouncements";
 import { getCabinetContext } from "@/lib/cabinetContext";
 import { qaEnabled } from "@/lib/qaScenario";
+import { mapQaStageToPath, type QaCabinetStage } from "@/lib/qaCabinetStage.shared";
+import { getQaCabinetStageFromCookies, readQaCabinetMockEnabled } from "@/lib/qaCabinetStage.server";
+import CabinetDevPanel from "./CabinetDevPanel";
 import {
   SubmitElectricityButton,
   SubmitAppealButton,
@@ -38,6 +40,12 @@ import {
   MarkAllEventsButton,
   AckDocButton,
 } from "./CabinetFormButtons";
+import { CABINET_LAB_STAGES } from "../../admin/qa/cabinet-lab/stages";
+import { getQaCabinetMockData } from "../../cabinet/_dev/qaMockData";
+import CabinetDashboard from "../../cabinet/_components/CabinetDashboard";
+import { CabinetHeader } from "../../cabinet/_components/CabinetHeader";
+import { getCabinetHeaderInfo } from "../../cabinet/_components/headerInfo";
+import { readOnboardingStateFromCookies } from "../../cabinet/_components/onboardingState";
 
 const logCabinetError = (label: string, error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown error";
@@ -77,11 +85,6 @@ async function submitAppeal(formData: FormData) {
   if (membership.status !== "member") {
     redirect("/cabinet?locked=1");
   }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
-  }
   const text = (formData.get("appeal") as string | null) ?? "";
   await createAppeal(user.id ?? "", text);
   redirect("/cabinet?section=appeals");
@@ -96,11 +99,6 @@ async function submitElectricity(formData: FormData) {
   const membership = await getMembershipStatus(user.id ?? "");
   if (membership.status !== "member") {
     redirect("/cabinet?locked=1");
-  }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
   }
   const value = Number(formData.get("reading"));
   const plotId = (formData.get("plotId") as string | null) ?? null;
@@ -122,11 +120,6 @@ async function markEvent(formData: FormData) {
   if (membership.status !== "member") {
     redirect("/cabinet?locked=1");
   }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
-  }
   const id = formData.get("eventId") as string | null;
   if (!id) redirect("/cabinet");
   await markEventRead(user.id ?? "", id);
@@ -143,11 +136,6 @@ async function markAllEvents() {
   if (membership.status !== "member") {
     redirect("/cabinet?locked=1");
   }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
-  }
   await markAllRead(user.id ?? "");
   redirect("/cabinet?section=events");
 }
@@ -162,64 +150,118 @@ async function ackDoc(formData: FormData) {
   if (membership.status !== "member") {
     redirect("/cabinet?locked=1");
   }
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
-  }
   const docId = formData.get("docId") as string | null;
   if (!docId) redirect("/cabinet");
   await acknowledgeDoc(user.id ?? "", docId);
   redirect("/cabinet?section=docs");
 }
 
-export default async function CabinetPage({
+export async function CabinetStageRenderer({
   searchParams,
+  stageOverride = null,
+  isLabPreview = false,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  stageOverride?: QaCabinetStage | null;
+  /** В Lab (/admin/qa/cabinet-lab) не делаем редиректы: ни на qaPath, ни redirectToCabinetStep. */
+  isLabPreview?: boolean;
 }) {
   const sp = (await Promise.resolve(searchParams)) ?? {};
   const user = await getSessionUser();
   if (!user) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[guard-redirect]", { path: "/cabinet", role: "n/a", reason: "no_session", redirectTo: "/login" });
+    }
     redirect("/login?next=/cabinet");
   }
   const role = (user.role as "admin" | "chairman" | "secretary" | "accountant" | "resident" | "user" | "board" | undefined) ?? "resident";
   const { can, getForbiddenReason } = await import("@/lib/rbac");
   const normalizedRole: "admin" | "chairman" | "secretary" | "accountant" | "resident" = 
     role === "user" || role === "board" ? "resident" : role;
+  const isDevEnv = process.env.NODE_ENV !== "production";
   // Проверяем RBAC доступ первым делом
   if (!can(normalizedRole, "cabinet.access")) {
     const reason = getForbiddenReason(normalizedRole, "cabinet.access");
+    if (isDevEnv) {
+      console.log("[guard-redirect]", { path: "/cabinet", role: String(normalizedRole), reason, redirectTo: "/forbidden" });
+    }
     redirect(`/forbidden?reason=${encodeURIComponent(reason)}&next=${encodeURIComponent("/cabinet")}`);
   }
-  // Для admin проверяем режим просмотра: если не "user", редиректим в админку
-  // Это безопасно, т.к. admin всегда имеет cabinet.access по RBAC, но может переключаться между режимами
-  if (user.role === "admin") {
-    const store = await Promise.resolve(cookies());
-    const view = store.get("admin_view")?.value || "admin";
-    if (view !== "user") redirect("/admin");
+  // /cabinet НЕ редиректит в /admin. Admin может открывать /cabinet для QA.
+
+  const stageFromOverride = stageOverride && CABINET_LAB_STAGES.includes(stageOverride) ? stageOverride : null;
+  const qaStage: QaCabinetStage | null = stageFromOverride ?? (isDevEnv ? await getQaCabinetStageFromCookies() : null);
+  const qaMockEnabled = isDevEnv && (await readQaCabinetMockEnabled());
+  const qaPath = qaStage ? mapQaStageToPath(qaStage) : null;
+  const shouldRedirectToQaPath = !isLabPreview && !stageOverride && isDevEnv && qaStage && qaPath && qaStage !== "cabinet_home";
+  if (shouldRedirectToQaPath) {
+    if (isDevEnv) {
+      console.log("[guard-redirect]", { path: "/cabinet", role: String(normalizedRole), reason: "qa.stage", redirectTo: qaPath });
+    }
+    redirect(qaPath);
   }
 
-  await redirectToCabinetStep(user.id ?? "");
+  const headerInfo = await getCabinetHeaderInfo("Главная");
+
+  const forceOnboarding = qaStage === "profile";
+  if (!isLabPreview && !forceOnboarding && !(isDevEnv && qaStage)) {
+    await redirectToCabinetStep(user.id ?? "");
+  }
+
+  if (isDevEnv) {
+    const onboardingState = await readOnboardingStateFromCookies();
+    // eslint-disable-next-line no-console
+    console.info("[cabinet:dev] render", {
+      env: process.env.NODE_ENV,
+      stageOverride,
+      qaStage,
+      mock: qaMockEnabled,
+      onboardingState: {
+        step: onboardingState.step,
+        completed: onboardingState.completed,
+        hasDraft: Boolean(onboardingState.draft && Object.keys(onboardingState.draft).length > 0),
+      },
+    });
+  }
+
+  if (forceOnboarding) {
+    const OnboardingPage = (await import("../../(public)/onboarding/page")).default;
+    return <OnboardingPage searchParams={Promise.resolve({})} fromCabinet={true} />;
+  }
+
+  if (qaMockEnabled) {
+    const mock = getQaCabinetMockData();
+    return (
+      <div className="mx-auto max-w-5xl space-y-4 px-4 py-4 sm:px-6">
+        <CabinetHeader
+          title={headerInfo.title}
+          statusLine={headerInfo.statusLine}
+          progressLabel={headerInfo.progressLabel}
+          progressHref={headerInfo.progressHref}
+        />
+        <CabinetDashboard mock={mock} />
+      </div>
+    );
+  }
 
   const nowIso = new Date().toISOString();
   const dataErrors: string[] = [];
   const userId = user.id ?? "";
-  const userPlots = await safeFetch("userPlots", [], () => getUserPlots(userId), dataErrors);
-  const ownershipVerifications = await safeFetch(
+  let userPlots = await safeFetch("userPlots", [], () => getUserPlots(userId), dataErrors);
+  let ownershipVerifications = await safeFetch(
     "ownershipVerifications",
     [],
     () => getUserOwnershipVerifications(userId),
     dataErrors,
   );
-  const prefs = await safeFetch(
+  let prefs = await safeFetch(
     "userPreferences",
     { userId, activePlotId: null, updatedAt: nowIso },
     () => getUserPreferences(userId),
     dataErrors,
   );
-  const userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.linkStatus === "active") || userPlots[0] || null;
-  const membership = await safeFetch(
+  let userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.linkStatus === "active") || userPlots[0] || null;
+  let membership = await safeFetch(
     "membershipStatus",
     { userId, status: "unknown", updatedAt: nowIso, updatedBy: "system", notes: null },
     () => getMembershipStatus(userId),
@@ -266,24 +308,24 @@ export default async function CabinetPage({
   }
   const profileComplete = Boolean(profile.fullName && profile.phone);
 
-  const appeals = await safeFetch("appeals", [], () => getUserAppeals(userId), dataErrors);
-  const unreadAppealsCount = appeals.filter((a) => a.unreadByUser).length;
+  let appeals = await safeFetch("appeals", [], () => getUserAppeals(userId), dataErrors);
+  let unreadAppealsCount = appeals.filter((a) => a.unreadByUser).length;
   const financeFallback = { membershipDebt: null, electricityDebt: null, status: "unknown" as const };
-  const cabinetContext = await safeFetch(
+  let cabinetContext = await safeFetch(
     "cabinetContext",
     { hasDebt: false, finance: financeFallback },
     () => getCabinetContext(userId),
     dataErrors,
   );
-  const finance = cabinetContext.finance;
-  const { hasDebt } = cabinetContext;
-  const electricity = await safeFetch(
+  let finance = cabinetContext.finance;
+  let hasDebt = cabinetContext.hasDebt;
+  let electricity = await safeFetch(
     "electricity",
     null,
     () => getUserElectricity(userId, userPlot?.plotId ?? null),
     dataErrors,
   );
-  const paymentDetails = await safeFetch(
+  let paymentDetails = await safeFetch(
     "paymentDetails",
     {
       recipientName: "—",
@@ -297,20 +339,20 @@ export default async function CabinetPage({
     () => getPaymentDetails(),
     dataErrors,
   );
-  const events = await safeFetch("userEvents", [], () => getUserEvents(userId, 10), dataErrors);
-  const electricityHistory = await safeFetch(
+  let events = await safeFetch("userEvents", [], () => getUserEvents(userId, 10), dataErrors);
+  let electricityHistory = await safeFetch(
     "electricityHistory",
     [],
     () => getUserElectricityHistory(userId, 6, userPlot?.plotId ?? null),
     dataErrors,
   );
-  const financeHistory = await safeFetch(
+  let financeHistory = await safeFetch(
     "financeHistory",
     [],
     () => getUserFinanceHistory(userId, 6),
     dataErrors,
   );
-  const requiredDocs = await safeFetch(
+  let requiredDocs = await safeFetch(
     "requiredDocs",
     [],
     () =>
@@ -325,14 +367,38 @@ export default async function CabinetPage({
       }),
     dataErrors,
   );
-  const charges = await safeFetch("charges", [], () => getUserCharges(userId), dataErrors);
-  const decisions = await safeFetch("decisions", [], () => getDecisions(), dataErrors);
-  const announcements = await safeFetch(
+  let charges = await safeFetch("charges", [], () => getUserCharges(userId), dataErrors);
+  let decisions = await safeFetch("decisions", [], () => getDecisions(), dataErrors);
+  let announcements = await safeFetch(
     "announcements",
     [],
     () => listPublishedForAudience(hasDebt),
     dataErrors,
   );
+  if (qaMockEnabled) {
+    const mock = getQaCabinetMockData();
+    userPlots = mock.userPlots;
+    ownershipVerifications = mock.ownershipVerifications;
+    prefs = mock.prefs;
+    membership = mock.membership;
+    profile = mock.profile;
+    appeals = mock.appeals as typeof appeals;
+    cabinetContext = mock.cabinetContext;
+    finance = mock.cabinetContext.finance;
+    hasDebt = mock.cabinetContext.hasDebt;
+    electricity = mock.electricity;
+    paymentDetails = mock.paymentDetails;
+    events = mock.events;
+    electricityHistory = mock.electricityHistory;
+    financeHistory = mock.financeHistory;
+    requiredDocs = mock.requiredDocs as typeof requiredDocs;
+    charges = mock.charges;
+    decisions = mock.decisions as typeof decisions;
+    announcements = mock.announcements as typeof announcements;
+    userPlot = userPlots.find((p) => p.plotId === prefs.activePlotId) || userPlots.find((p) => p.linkStatus === "active") || userPlots[0] || null;
+    unreadAppealsCount = appeals.filter((a) => a.unreadByUser).length;
+    dataErrors.splice(0, dataErrors.length);
+  }
   const decisionMap = new Map(decisions.map((d) => [d.id, d]));
   const userPlotMap = new Map(userPlots.map((p) => [p.plotId, p]));
   const settings = getSntSettings();
@@ -1176,9 +1242,22 @@ export default async function CabinetPage({
         ]
       : [];
 
+  const qaSectionMap: Partial<Record<QaCabinetStage, SectionKey>> = {
+    cabinet_home: "home",
+    cabinet_payments: "finance",
+    cabinet_power: "electricity",
+    cabinet_appeals: "appeals",
+    cabinet_docs: "docs",
+    cabinet_help: "docs",
+  };
+
   const initialSection = (() => {
     const param = typeof sp.section === "string" ? sp.section : "home";
     const allowed: SectionKey[] = sections.map((s) => s.key);
+    const qaSection = qaStage ? qaSectionMap[qaStage] : null;
+    if (qaSection && allowed.includes(qaSection)) {
+      return qaSection;
+    }
     return allowed.includes(param as SectionKey) ? (param as SectionKey) : "home";
   })();
 
@@ -1188,9 +1267,22 @@ export default async function CabinetPage({
     user.role === "chairman" ? "chair" :
     user.role === "user" || user.role === "resident" ? "user" :
     null;
+  const qaStageActive = isDevEnv ? qaStage : null;
 
   return (
-    <div data-testid="cabinet-page-root">
+    <div className="mx-auto max-w-5xl space-y-4 px-4 py-4 sm:px-6" data-testid="cabinet-page-root">
+      <CabinetHeader
+        title={headerInfo.title}
+        statusLine={headerInfo.statusLine}
+        progressLabel={headerInfo.progressLabel}
+        progressHref={headerInfo.progressHref}
+      />
+      {normalizedRole === "admin" ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
+          Вы администратор — режим теста
+        </div>
+      ) : null}
+      {isDevEnv ? <CabinetDevPanel currentStage={qaStageActive} /> : null}
       <CabinetShell
         sections={sections}
         quickActions={quickActions}
@@ -1202,4 +1294,12 @@ export default async function CabinetPage({
       />
     </div>
   );
+}
+
+export default function CabinetPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <CabinetStageRenderer searchParams={searchParams} />;
 }

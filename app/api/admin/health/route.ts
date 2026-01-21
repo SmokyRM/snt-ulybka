@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ok, unauthorized, forbidden } from "@/lib/api/respond";
 import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
 import { getSetting } from "@/lib/mockDb";
 import { formatAdminTime } from "@/lib/settings.shared";
@@ -18,13 +18,13 @@ const pingDb = async () => {
   }
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return unauthorized(request);
   }
   if (!hasAdminAccess(user)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    return forbidden(request);
   }
 
   const now = new Date();
@@ -40,7 +40,7 @@ export async function GET() {
     buildTime: process.env.VERCEL_DEPLOYMENT_ID || null,
   };
 
-  return NextResponse.json({
+  return ok(request, {
     ok: db.ok && sessionOk,
     serverTimeIso: now.toISOString(),
     serverTimeLocalFormatted: formatLocal(now),

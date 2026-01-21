@@ -17,12 +17,13 @@ test.describe("E2E Regression - Admin Flow", () => {
     await expect(page.getByTestId("admin-shell")).toBeVisible();
     await expect(page.getByTestId("admin-quick-actions")).toBeVisible();
 
-    // 2. Переходим на реестр участков через quick actions
-    await page.getByTestId("admin-quick-actions").getByRole("link", { name: /реестр участков/i }).click();
-    await page.waitForURL((url) => url.pathname === "/admin/plots", { timeout: 10000 });
+    // 2. Переходим на реестр через quick actions (теперь вкладки)
+    await page.getByTestId("admin-quick-actions").getByRole("link", { name: /реестр/i }).click();
+    await page.waitForURL((url) => url.pathname === "/admin/registry", { timeout: 10000 });
     
-    // Проверяем что мы на странице реестра
-    await expect(page.getByTestId("admin-plots-page")).toBeVisible();
+    // Проверяем что мы на странице реестра (вкладка участки)
+    await page.waitForURL((url) => url.pathname === "/admin/registry" && (url.searchParams.get("tab") === "plots" || !url.searchParams.get("tab")), { timeout: 10000 });
+    await expect(page.locator("button").filter({ hasText: /участки|владельцы/i })).toBeVisible();
 
     // 3. Переходим на биллинг (через меню или прямой переход)
     await page.goto(`${baseURL}/admin/billing`, { waitUntil: "domcontentloaded" });

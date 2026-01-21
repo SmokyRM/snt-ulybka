@@ -1,5 +1,5 @@
-import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
-import { PAYMENT_DETAILS } from "@/config/paymentDetails";
+import { OFFICIAL_CHANNELS, type OfficialChannels } from "@/config/officialChannels";
+import { PAYMENT_DETAILS, type PaymentDetails } from "@/config/paymentDetails";
 import { fallbackSetting, formatAdminTime } from "./settings.shared";
 import {
   addEntityVersion,
@@ -11,11 +11,11 @@ import {
 import { ContactsSetting, ScheduleSetting, SettingEntry, UserRole } from "@/types/snt";
 
 export const getPaymentDetailsSettingServer = () =>
-  getSetting<typeof PAYMENT_DETAILS>("payment_details") ||
-  (fallbackSetting("payment_details", PAYMENT_DETAILS) as SettingEntry<typeof PAYMENT_DETAILS>);
+  getSetting<PaymentDetails>("payment_details") ||
+  (fallbackSetting("payment_details", PAYMENT_DETAILS) as SettingEntry<PaymentDetails>);
 
 export const updatePaymentDetailsSetting = (
-  value: typeof PAYMENT_DETAILS,
+  value: PaymentDetails,
   meta?: { actorUserId?: string | null; actorRole?: UserRole | null; comment?: string | null }
 ) => {
   const before = getPaymentDetailsSettingServer();
@@ -32,11 +32,11 @@ export const updatePaymentDetailsSetting = (
 };
 
 export const getOfficialChannelsSettingServer = () =>
-  getSetting<typeof OFFICIAL_CHANNELS>("official_channels") ||
-  (fallbackSetting("official_channels", OFFICIAL_CHANNELS) as SettingEntry<typeof OFFICIAL_CHANNELS>);
+  getSetting<OfficialChannels>("official_channels") ||
+  (fallbackSetting("official_channels", OFFICIAL_CHANNELS) as SettingEntry<OfficialChannels>);
 
 export const updateOfficialChannelsSetting = (
-  value: typeof OFFICIAL_CHANNELS,
+  value: OfficialChannels,
   meta?: { actorUserId?: string | null; actorRole?: UserRole | null; comment?: string | null }
 ) => {
   const before = getOfficialChannelsSettingServer();

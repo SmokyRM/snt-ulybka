@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
 
 const roles = [
   { value: "admin", label: "Админ" },
@@ -27,20 +28,18 @@ export default function StaffLoginPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ mode: "staff", roleRu: role, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error || "Неверный логин или пароль");
-        return;
-      }
+      const data = await apiPostRaw<{ redirectUrl?: string; error?: string }>(
+        "/api/auth/login",
+        { mode: "staff", roleRu: role, password },
+        { credentials: "include" },
+      );
       const redirectUrl = data?.redirectUrl || "/office";
       router.push(redirectUrl);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message || "Неверный логин или пароль");
+        return;
+      }
       setError("Ошибка входа, попробуйте позже.");
     } finally {
       setLoading(false);

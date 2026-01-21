@@ -1,6 +1,6 @@
 import AppLink from "@/components/AppLink";
-import { PAYMENT_DETAILS } from "@/config/paymentDetails";
-import { OFFICIAL_CHANNELS } from "@/config/officialChannels";
+import { getPaymentDetailsSettingServer } from "@/lib/settings.server";
+import { getOfficialChannelsSettingServer } from "@/lib/settings.server";
 import { siteName } from "@/config/site";
 
 export const metadata = {
@@ -18,7 +18,9 @@ const formatUrlLabel = (url: string) => {
   }
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const paymentDetails = getPaymentDetailsSettingServer();
+  const channels = getOfficialChannelsSettingServer();
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-4xl space-y-10">
@@ -45,31 +47,47 @@ export default function AboutPage() {
           <div className="grid gap-4 text-sm text-zinc-700 sm:grid-cols-2">
             <div className="space-y-1">
               <div className="font-semibold text-zinc-900">Реквизиты</div>
-              <div>Получатель: {PAYMENT_DETAILS.receiver}</div>
-              <div>ИНН/КПП: {PAYMENT_DETAILS.inn} / {PAYMENT_DETAILS.kpp}</div>
-              <div>Р/с: {PAYMENT_DETAILS.account}</div>
-              <div>Банк: {PAYMENT_DETAILS.bank}</div>
-              <div>БИК: {PAYMENT_DETAILS.bic}</div>
-              <div>Корр. счёт: {PAYMENT_DETAILS.corr}</div>
+              <div>Получатель: {paymentDetails.value.receiver}</div>
+              <div>ИНН/КПП: {paymentDetails.value.inn} / {paymentDetails.value.kpp}</div>
+              <div>Р/с: {paymentDetails.value.account}</div>
+              <div>Банк: {paymentDetails.value.bank}</div>
+              <div>БИК: {paymentDetails.value.bic}</div>
+              <div>Корр. счёт: {paymentDetails.value.corr}</div>
+              {paymentDetails.value.address && (
+                <div>Адрес: {paymentDetails.value.address}</div>
+              )}
+              {paymentDetails.value.chairman && (
+                <div>Председатель: {paymentDetails.value.chairman}</div>
+              )}
             </div>
             <div className="space-y-1">
               <div className="font-semibold text-zinc-900">Официальные каналы</div>
-              <a
-                href={OFFICIAL_CHANNELS.vk}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-[#5E704F] underline"
-              >
-                VK: {formatUrlLabel(OFFICIAL_CHANNELS.vk)}
-              </a>
-              <a
-                href={OFFICIAL_CHANNELS.telegram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-[#5E704F] underline"
-              >
-                Telegram: {formatUrlLabel(OFFICIAL_CHANNELS.telegram)}
-              </a>
+              {channels.value.vk && (
+                <a
+                  href={channels.value.vk}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-[#5E704F] underline"
+                >
+                  VK: {formatUrlLabel(channels.value.vk)}
+                </a>
+              )}
+              {channels.value.telegram && (
+                <a
+                  href={channels.value.telegram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-[#5E704F] underline"
+                >
+                  Telegram: {formatUrlLabel(channels.value.telegram)}
+                </a>
+              )}
+              {channels.value.email && (
+                <div>Email: {channels.value.email}</div>
+              )}
+              {channels.value.phone && (
+                <div>Телефон: {channels.value.phone}</div>
+              )}
               <AppLink href="/contacts" className="block text-[#5E704F] underline">
                 Контакты правления
               </AppLink>

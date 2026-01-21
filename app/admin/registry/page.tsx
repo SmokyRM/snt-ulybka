@@ -1,97 +1,70 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
-import { listPlotsWithFilters } from "@/lib/mockDb";
-import RegistryTableClient from "./RegistryTableClient";
-import RegistryImportModalClient from "./RegistryImportModalClient";
-import RegistryFiltersClient from "./RegistryFiltersClient";
+import { getSessionUser } from "@/lib/session.server";
+import { isAdminRole, isOfficeRole } from "@/lib/rbac";
+import { listPersons, listPlots } from "@/lib/registry/core";
+import RegistryTabsClient from "./RegistryTabsClient";
+import AdminHelp from "../_components/AdminHelp";
 
 export default async function RegistryPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = (await searchParams) ?? {};
   const user = await getSessionUser();
-  if (!hasAdminAccess(user)) {
-    redirect("/staff/login?next=/admin");
+  if (!user) {
+    redirect("/staff-login?next=/admin/registry");
   }
 
-  const query = typeof params.query === "string" ? params.query : "";
-  const statusRaw = typeof params.status === "string" ? params.status : "";
-  const allowedStatuses = ["DRAFT", "INVITE_READY", "CLAIMED", "VERIFIED"] as const;
-  const status: (typeof allowedStatuses)[number] | null = allowedStatuses.includes(
-    statusRaw as (typeof allowedStatuses)[number]
-  )
-    ? (statusRaw as (typeof allowedStatuses)[number])
-    : null;
-  const page = Number((params.page as string | undefined) || "1");
-  const statusParam = status ?? "";
-  const { items, total, pageSize } = listPlotsWithFilters({
-    query,
-    status,
-    page: Number.isFinite(page) && page > 0 ? page : 1,
-    pageSize: 20,
-  });
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const role = user.role;
+  if (!isAdminRole(role) && !isOfficeRole(role)) {
+    redirect("/forbidden?reason=admin.only&next=/admin/registry");
+  }
+
+  const params = (await searchParams) ?? {};
+  const tab = typeof params.tab === "string" ? params.tab : "people";
+  const q = typeof params.q === "string" ? params.q : undefined;
+  const verificationStatus =
+    typeof params.verificationStatus === "string"
+      ? (params.verificationStatus as "not_verified" | "pending" | "verified" | "rejected")
+      : undefined;
+
+  // Load data for people tab
+  const persons = listPersons({ q, verificationStatus: verificationStatus || undefined });
+  const plots = listPlots();
+
+  // Enrich persons with plot details
+  const enrichedPersons = persons.map((person) => ({
+    ...person,
+    plotsData: person.plots
+      .map((plotId) => plots.find((p) => p.id === plotId))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined)
+      .map((p) => ({
+        id: p.id,
+        plotNumber: p.plotNumber,
+        sntStreetNumber: p.sntStreetNumber,
+        cityAddress: p.cityAddress,
+      })),
+  }));
 
   return (
     <main className="min-h-screen bg-[#F8F1E9] px-4 py-12 text-zinc-900 sm:px-6">
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Реестр участков</h1>
-          <Link
-            href="/admin"
-            className="rounded-full border border-[#5E704F] px-4 py-2 text-sm font-semibold text-[#5E704F] transition hover:bg-[#5E704F] hover:text-white"
-          >
-            Назад
-          </Link>
-        </div>
-
-        <div className="space-y-2">
-          <RegistryFiltersClient initialQuery={query} initialStatus={statusParam} />
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/api/admin/registry/template"
-              className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
-            >
-              Скачать шаблон
-            </Link>
-            <RegistryImportModalClient />
-            <Link
-              href="/api/admin/registry/export.csv"
-              className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
-            >
-              Экспорт
-            </Link>
-          </div>
-        </div>
-
-        <RegistryTableClient plots={items} query={query} status={statusParam} />
-
-        <div className="flex items-center justify-between text-sm text-zinc-700">
           <div>
-            Страница {page} из {totalPages} (всего {total})
-          </div>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <Link
-                href={`/admin/registry?query=${encodeURIComponent(query)}&status=${encodeURIComponent(statusParam)}&page=${page - 1}`}
-                className="rounded border border-zinc-300 px-3 py-1 hover:bg-зinc-100"
-              >
-                Назад
-              </Link>
-            )}
-            {page < totalPages && (
-              <Link
-                href={`/admin/registry?query=${encodeURIComponent(query)}&status=${encodeURIComponent(statusParam)}&page=${page + 1}`}
-                className="rounded border border-зinc-300 px-3 py-1 hover:bg-зinc-100"
-              >
-                Вперёд
-              </Link>
-            )}
+            <h1 className="text-2xl font-semibold text-zinc-900">Реестр СНТ</h1>
+            <p className="mt-1 text-sm text-zinc-600">Управление данными участков и владельцев</p>
           </div>
         </div>
+        <AdminHelp
+          title="О реестре"
+          content="Реестр содержит информацию о жителях и участках. Используйте вкладки для переключения между людьми, участками, импортом и проблемами данных. Для массового импорта используйте вкладку 'Импорт'."
+        />
+        <RegistryTabsClient
+          initialTab={tab}
+          initialPersons={enrichedPersons}
+          initialQuery={q}
+          initialVerificationStatus={verificationStatus}
+        />
       </div>
     </main>
   );

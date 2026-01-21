@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { buildEnvSnapshot, formatEnvSnapshot, type EnvInfo, type EnvSnapshot, type SessionSnapshot } from "@/lib/qa/report";
+import { readOk } from "@/lib/api/client";
 
 type QaSnapshotCardProps = {
   envInfo: EnvInfo;
@@ -46,19 +47,17 @@ export default function QaSnapshotCard({ envInfo, sessionSnapshot }: QaSnapshotC
         if (responseRequestId && !requestIds.includes(responseRequestId)) {
           requestIds.push(responseRequestId);
         }
-        if (response.ok) {
-          const data = await response.json();
-          if (data.flags && typeof data.flags === "object") {
-            // Фильтруем только true/false значения, без чувствительных данных
-            featureFlags = {};
-            Object.entries(data.flags).forEach(([key, value]) => {
-              if (typeof value === "boolean") {
-                featureFlags![key] = value;
-              }
-            });
-            // Сохраняем в localStorage для будущего использования
-            window.localStorage.setItem("qa-feature-flags", JSON.stringify(featureFlags));
-          }
+        const data = await readOk<{ flags?: Record<string, unknown> }>(response);
+        if (data.flags && typeof data.flags === "object") {
+          // Фильтруем только true/false значения, без чувствительных данных
+          featureFlags = {};
+          Object.entries(data.flags).forEach(([key, value]) => {
+            if (typeof value === "boolean") {
+              featureFlags![key] = value;
+            }
+          });
+          // Сохраняем в localStorage для будущего использования
+          window.localStorage.setItem("qa-feature-flags", JSON.stringify(featureFlags));
         }
       } catch {
         // Если API недоступен, пытаемся получить из localStorage

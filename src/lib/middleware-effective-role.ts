@@ -1,4 +1,4 @@
-import { normalizeRole, isOfficeRole } from "./rbac";
+import { normalizeRole, isOfficeRole, isAdminRole } from "./rbac";
 
 export type SessionRole =
   | "user"
@@ -12,11 +12,14 @@ export type SessionRole =
   | "secretary";
 
 /**
- * Вычисляет effectiveRole с учётом приоритета staff ролей из cookie над QA override
- * 
- * КРИТИЧНО: Если role из cookie это staff роль (admin/chairman/secretary/accountant),
- * она НЕ должна перезаписываться QA override для resident.
- * 
+ * Вычисляет effectiveRole с учётом QA override
+ *
+ * Правила приоритета:
+ * 1. QA guest override всегда делает роль null
+ * 2. QA staff override (admin/chairman/secretary/accountant) работает для ЛЮБОЙ роли
+ * 3. QA resident override работает только для non-staff ролей
+ * 4. Staff роли из cookie (admin/office) защищены ТОЛЬКО от QA resident override
+ *
  * @param role - роль из cookie (уже нормализована через normalizeRole)
  * @param qaCookie - значение QA cookie (для тестирования)
  * @param isDev - режим разработки
@@ -37,23 +40,21 @@ export function computeEffectiveRole(
     return null;
   }
 
-  if (qaCookie === "resident_ok" || qaCookie === "resident_debtor" || qaCookie === "resident") {
-    // QA: resident override - только если role из cookie НЕ staff роль
-    if (role && (normalizeRole(role) === "admin" || isOfficeRole(role))) {
-      // КРИТИЧНО: Если role это staff роль - игнорируем QA override для resident
-      // Это предотвращает перезапись staff ролей в resident
-      return role;
-    } else {
-      return "resident";
-    }
-  }
-
+  // QA staff role override работает для ЛЮБОЙ роли (включая staff -> staff)
   if (qaCookie === "chairman" || qaCookie === "accountant" || qaCookie === "secretary" || qaCookie === "admin") {
-    // QA: staff role override
     return qaCookie as SessionRole;
   }
 
-  // Нет QA - используем role из cookie напрямую (уже нормализован)
-  // КРИТИЧНО: role из cookie имеет абсолютный приоритет для staff ролей
+  // QA resident override
+  if (qaCookie === "resident_ok" || qaCookie === "resident_debtor" || qaCookie === "resident") {
+    // КРИТИЧНО: Staff роли из cookie НЕ перезаписываются QA resident override
+    // (иначе админ может быть случайно понижен до resident и потерять доступ)
+    if (role && (isAdminRole(role) || isOfficeRole(role))) {
+      return role;
+    }
+    return "resident";
+  }
+
+  // Нет QA - используем role из cookie напрямую
   return role;
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { membershipLabel } from "@/lib/membershipLabels";
 import { Plot } from "@/types/snt";
+import { ApiError, readRaw } from "@/lib/api/client";
 
 export default function ClientTable({ plots }: { plots: Plot[] }) {
   const [selected, setSelected] = useState<string[]>([]);
@@ -24,20 +25,21 @@ export default function ClientTable({ plots }: { plots: Plot[] }) {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/plots/bulk", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selected, patch }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setMessage(data.error || "Не удалось применить");
-      } else {
-        setMessage(`Готово: обновлено ${data.updated ?? 0}`);
-        setSelected([]);
-      }
+      const data = await readRaw<{ updated?: number }>(
+        await fetch("/api/plots/bulk", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: selected, patch }),
+        })
+      );
+      setMessage(`Готово: обновлено ${data.updated ?? 0}`);
+      setSelected([]);
       window.location.reload();
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setMessage(error.message || "Не удалось применить");
+        return;
+      }
       setMessage("Ошибка сети");
     } finally {
       setBusy(false);

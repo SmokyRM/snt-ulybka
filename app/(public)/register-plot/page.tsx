@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { getSessionClient } from "@/lib/session";
+import { ApiError, apiPostRaw } from "@/lib/api/client";
 
 export default function RegisterPlotPage() {
   const router = useAppRouter();
@@ -86,10 +87,9 @@ export default function RegisterPlotPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/plots/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiPostRaw(
+        "/api/plots/register",
+        {
           plotNumber: form.plotNumber,
           street: form.street,
           cadastral: form.cadastral,
@@ -99,16 +99,15 @@ export default function RegisterPlotPage() {
           plotCode: form.plotCode,
           consentPD: form.consentPD,
           acceptedCharter: form.acceptedCharter,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Не удалось отправить заявку.");
-        return;
-      }
+        },
+      );
       router.push("/cabinet");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось отправить заявку.");
+      if (err instanceof ApiError) {
+        setError(err.message || "Не удалось отправить заявку.");
+      } else {
+        setError(err instanceof Error ? err.message : "Не удалось отправить заявку.");
+      }
     } finally {
       setSubmitting(false);
     }
