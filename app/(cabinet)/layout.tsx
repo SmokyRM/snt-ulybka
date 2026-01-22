@@ -37,7 +37,7 @@ export default async function CabinetLayout({ children }: { children: React.Reac
   const personalEnabled = flags ? isFeatureEnabled(flags, "ai_personal_enabled") : false;
 
   return (
-    <div className="min-h-screen bg-[#F8F1E9]">
+    <div className="min-h-screen bg-[#F8F1E9]" data-testid="cabinet-root">
       <Header />
       <CabinetNav />
       {children}

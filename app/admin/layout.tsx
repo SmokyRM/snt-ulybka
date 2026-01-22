@@ -69,7 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <AdminDirtyProvider>
       <AdminNavigationProgressProvider>
-        <div className="flex min-h-screen bg-[#F8F1E9] text-zinc-900">
+        <div className="flex min-h-screen bg-[#F8F1E9] text-zinc-900" data-testid="admin-root">
           <AdminSidebar isAdmin={effectiveRole === "admin"} isDev={isDev} role={effectiveRole} />
           <div className="flex-1">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-white px-6 py-4">
