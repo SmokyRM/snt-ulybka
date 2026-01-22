@@ -81,6 +81,7 @@ steps:
 | `npm run e2e:office:ci` | Run office smoke tests with managed dev server |
 | `npm run test:e2e` | Run all E2E tests |
 | `npm run test:matrix` | Run access matrix tests |
+| `npm run prepare` | Install husky git hooks |
 
 ## Environment Variables
 
@@ -110,6 +111,10 @@ The `smoke-billing` projects include 4 tests:
 4. **Admin billing import** - Verifies payments import UI renders correctly
 
 ## Troubleshooting
+
+### Pre-commit checks fail
+
+Pre-commit runs `npm run check:conflicts`, `npm run check:api-contracts`, and `lint-staged` (eslint on staged files). Fix the reported violations and re-commit.
 
 ### Tests timeout waiting for server
 
