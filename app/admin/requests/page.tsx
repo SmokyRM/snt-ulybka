@@ -5,7 +5,7 @@ import { useAppRouter } from "@/hooks/useAppRouter";
 import { LogoutButton } from "@/components/LogoutButton";
 import { getSessionClient } from "@/lib/session";
 import { User } from "@/types/snt";
-import { ApiError, readOk } from "@/lib/api/client";
+import { ApiError, apiGet, apiPost } from "@/lib/api/client";
 
 export default function AdminRequestsPage() {
   const router = useAppRouter();
@@ -15,12 +15,7 @@ export default function AdminRequestsPage() {
 
   const fetchPending = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/pending-users");
-      if (res.status === 403) {
-        setIsAllowed(false);
-        return;
-      }
-      const data = await readOk<{ users: User[] }>(res);
+      const data = await apiGet<{ users: User[] }>("/api/admin/pending-users");
       setPending(data.users || []);
       setIsAllowed(true);
     } catch (error) {
@@ -46,12 +41,7 @@ export default function AdminRequestsPage() {
 
   const updateStatus = async (userId: string, status: "verified" | "rejected") => {
     try {
-      const res = await fetch("/api/admin/user-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, status }),
-      });
-      await readOk<{ ok: true; user: User }>(res);
+      await apiPost<{ user: User }>("/api/admin/user-status", { userId, status });
       fetchPending();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Не удалось обновить статус");

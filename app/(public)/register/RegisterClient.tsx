@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getPerson } from "@/lib/registry/core";
 import { listPlots } from "@/lib/registry/core";
-import { ApiError, apiPostRaw } from "@/lib/api/client";
+import { ApiError, apiPost } from "@/lib/api/client";
 
 interface RegisterClientProps {
   code: string;
@@ -78,7 +78,7 @@ export default function RegisterClient({ code, personId }: RegisterClientProps) 
     setRegistering(true);
 
     try {
-      const data = await apiPostRaw<{ ok?: boolean; userId?: string; error?: string }>(
+      const data = await apiPost<{ userId: string }>(
         "/api/auth/register",
         {
           code,
@@ -88,12 +88,11 @@ export default function RegisterClient({ code, personId }: RegisterClientProps) 
           personId,
         },
       );
-
-      if (data.ok) {
+      if (data.userId) {
         router.push("/cabinet?registered=true");
         return;
       }
-      setError(data.error || "Ошибка регистрации");
+      setError("Ошибка регистрации");
     } catch (e) {
       if (e instanceof ApiError) {
         setError(e.message || "Ошибка регистрации");
