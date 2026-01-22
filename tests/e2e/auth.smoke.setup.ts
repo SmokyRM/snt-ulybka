@@ -13,11 +13,6 @@ function ensureAuthDir() {
   }
 }
 
-// Check if at least one of the resident env vars is set
-function hasResidentEnv(): boolean {
-  return Boolean(process.env.TEST_ACCESS_CODE || process.env.AUTH_PASS_RESIDENT || process.env.USER_ACCESS_CODE);
-}
-
 test("smoke-billing admin auth setup", async ({ page }) => {
   skipIfMissingEnv(test, ["AUTH_PASS_ADMIN"]);
   ensureAuthDir();
@@ -27,10 +22,8 @@ test("smoke-billing admin auth setup", async ({ page }) => {
 });
 
 test("smoke-billing resident auth setup", async ({ page }) => {
-  // Skip if neither TEST_ACCESS_CODE nor AUTH_PASS_RESIDENT is set
-  if (!hasResidentEnv()) {
-    test.skip(true, "Missing TEST_ACCESS_CODE or AUTH_PASS_RESIDENT");
-  }
+  // In dev mode, defaults to "1111" which is the built-in dev resident code
+  // In prod mode with ENABLE_QA, uses TEST_ACCESS_CODE
   ensureAuthDir();
   await loginResidentByCode(page, "/cabinet");
   await expect(page).toHaveURL(/\/(cabinet|onboarding)(\/|$)/, { timeout: 15000 });

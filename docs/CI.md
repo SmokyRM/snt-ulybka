@@ -88,12 +88,12 @@ steps:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PLAYWRIGHT_BASE_URL` | Base URL for E2E tests | `http://localhost:3000` |
-| `AUTH_PASS_ADMIN` | Admin access code for smoke tests | `1233` (dev) |
-| `TEST_ACCESS_CODE` | Resident access code (preferred) | `1111` (dev) |
-| `AUTH_PASS_RESIDENT` | Resident access code (fallback) | - |
-| `USER_ACCESS_CODE` | Resident access code (app-level fallback) | - |
+| `AUTH_PASS_ADMIN` | Admin password for staff login (credential-based) | - |
+| `TEST_ACCESS_CODE` | Resident code for E2E tests | `1111` (dev default) |
+| `DEV_LOGIN_CODE` | Custom resident code in dev mode | - |
+| `USER_ACCESS_CODE` | Resident code in production | - |
 
-**Note:** For resident login, priority is: `TEST_ACCESS_CODE` > `AUTH_PASS_RESIDENT` > `USER_ACCESS_CODE`.
+**Note:** For code-based resident login, priority is: `TEST_ACCESS_CODE` > `DEV_LOGIN_CODE` > `USER_ACCESS_CODE` > `"1111"` (dev default).
 
 In dev mode, the app accepts these built-in codes:
 - `1111` → resident

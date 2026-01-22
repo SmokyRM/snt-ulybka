@@ -2,9 +2,19 @@ import { expect, test, type Page } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
-// Priority: TEST_ACCESS_CODE > AUTH_PASS_RESIDENT > USER_ACCESS_CODE
+// For code-based login (not credential-based):
+// - Dev mode accepts: DEV_LOGIN_CODE, "1111" (resident), "1233" (admin), "2222" (chairman)
+// - Prod mode accepts: TEST_ACCESS_CODE (if ENABLE_QA), USER_ACCESS_CODE
+// AUTH_PASS_RESIDENT is for credential-based login (login/password), NOT code-based login
 function getResidentCode(): string {
-  return process.env.TEST_ACCESS_CODE ?? process.env.AUTH_PASS_RESIDENT ?? process.env.USER_ACCESS_CODE ?? "";
+  // Explicit test code takes priority
+  if (process.env.TEST_ACCESS_CODE) return process.env.TEST_ACCESS_CODE;
+  // DEV_LOGIN_CODE works in dev mode
+  if (process.env.DEV_LOGIN_CODE) return process.env.DEV_LOGIN_CODE;
+  // USER_ACCESS_CODE works in prod mode
+  if (process.env.USER_ACCESS_CODE) return process.env.USER_ACCESS_CODE;
+  // Default to dev resident code "1111" (works in NODE_ENV=development)
+  return "1111";
 }
 
 export async function fillAccessCodeAndSubmit(page: Page, code: string) {
@@ -75,7 +85,13 @@ export async function loginResidentByCode(page: Page, next: string = "/cabinet")
     );
   }
 
-  const codeSource = process.env.TEST_ACCESS_CODE ? "TEST_ACCESS_CODE" : process.env.AUTH_PASS_RESIDENT ? "AUTH_PASS_RESIDENT" : "USER_ACCESS_CODE";
+  const codeSource = process.env.TEST_ACCESS_CODE
+    ? "TEST_ACCESS_CODE"
+    : process.env.DEV_LOGIN_CODE
+      ? "DEV_LOGIN_CODE"
+      : process.env.USER_ACCESS_CODE
+        ? "USER_ACCESS_CODE"
+        : "default (1111)";
   console.log(`[loginResidentByCode] Using code from: ${codeSource}`);
 
   await page.goto(`${baseURL}/login?next=${encodeURIComponent(next)}`, { waitUntil: "domcontentloaded" });
