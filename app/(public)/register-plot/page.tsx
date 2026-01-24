@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAppRouter } from "@/hooks/useAppRouter";
 import { getSessionClient } from "@/lib/session";
-import { ApiError, apiPostRaw } from "@/lib/api/client";
+import { ApiError, apiGetRaw, apiPostRaw } from "@/lib/api/client";
 
 export default function RegisterPlotPage() {
   const router = useAppRouter();
@@ -23,8 +23,7 @@ export default function RegisterPlotPage() {
       }
       setHasSession(true);
       // проверяем, есть ли участок у пользователя
-      fetch("/api/auth/me")
-        .then((res) => (res.ok ? res.json() : null))
+      apiGetRaw<{ user?: { plotNumber?: string } }>("/api/auth/me")
         .then((data) => {
           if (data?.user?.plotNumber) {
             router.replace("/cabinet");

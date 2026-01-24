@@ -9,7 +9,7 @@ export default async function CabinetAppealNew() {
   return (
     <div className="space-y-4" data-testid="cabinet-appeals-new-root">
       <h1 className="text-2xl font-semibold text-zinc-900">Новое обращение</h1>
-      <form action={createAppealAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <form action={createAppealAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="cabinet-appeals-new-form">
         <input type="hidden" name="authorId" value={user.id} />
         <label className="block space-y-2 text-sm font-semibold text-zinc-900">
           Тема
@@ -19,6 +19,7 @@ export default async function CabinetAppealNew() {
             minLength={3}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#5E704F]"
             placeholder="Коротко опишите суть"
+            data-testid="cabinet-appeals-new-title"
           />
         </label>
         <label className="block space-y-2 text-sm font-semibold text-zinc-900">
@@ -30,11 +31,13 @@ export default async function CabinetAppealNew() {
             rows={5}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#5E704F]"
             placeholder="Подробности обращения"
+            data-testid="cabinet-appeals-new-body"
           />
         </label>
         <button
           type="submit"
           className="rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#4d5d41]"
+          data-testid="cabinet-appeals-new-submit"
         >
           Отправить
         </button>

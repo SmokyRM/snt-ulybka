@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const scopes = ["app/admin", "app/(office)", "app/(cabinet)"];
+const scopes = ["app/admin", "app/(office)", "app/(cabinet)", "app/(public)"];
 const pattern = "(\\.json\\s*\\()|(\\bjson\\.ok\\b)|(\\bpayload\\.ok\\b)|(\\bdata\\.ok\\b)";
 const rgArgs = [
   "--column",

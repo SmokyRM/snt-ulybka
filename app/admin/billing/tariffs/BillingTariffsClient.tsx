@@ -71,24 +71,21 @@ export default function BillingTariffsClient() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const payload = await parseApiJson(res);
-        const details = !isApiOk(payload) ? payload.error.details : null;
+      const payload = await parseApiJson(res);
+      if (!isApiOk(payload)) {
+        const details = payload.error.details;
         const overlap =
           typeof details === "object" &&
           details !== null &&
           "overlap" in details &&
           Boolean((details as { overlap?: boolean }).overlap);
-        const message = !isApiOk(payload) ? payload.error.message : null;
         if (overlap) {
           setError("Тарифы пересекаются. Установите флаг 'Переопределить перекрытие' для принудительного сохранения.");
         } else {
-          setError(message || "Ошибка сохранения");
+          setError(payload.error.message || "Ошибка сохранения");
         }
         return;
       }
-
-      await readOk<{ tariff?: FeeTariff }>(res);
 
       setMessage(editingTariff ? "Тариф обновлён" : "Тариф создан");
       setDialogOpen(false);

@@ -149,6 +149,7 @@ export default function LoginForm({ nextParam, devLoginCode, showDevHints }: Log
             onChange={(e) => setCode(e.target.value)}
             placeholder="Введите код"
             className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#5E704F] focus:ring-2 focus:ring-[#5E704F]/30"
+            data-testid="login-access-code"
           />
         </div>
         {showTestCodes && (
@@ -176,6 +177,7 @@ export default function LoginForm({ nextParam, devLoginCode, showDevHints }: Log
           type="submit"
           disabled={loading}
           className="w-full rounded-full bg-[#5E704F] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#4d5d41] disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid="login-submit"
         >
           {loading ? "Вход..." : "Войти"}
         </button>

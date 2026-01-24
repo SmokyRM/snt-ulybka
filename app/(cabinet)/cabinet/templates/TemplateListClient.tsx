@@ -46,6 +46,7 @@ export default function TemplateListClient({ templates }: { templates: TemplateC
   const handleDownload = async (tpl: TemplateCard) => {
     setLoadingSlug(tpl.slug);
     try {
+      // raw endpoint (pdf blob)
       const res = await fetch("/api/documents/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

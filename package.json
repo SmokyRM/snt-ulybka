@@ -9,6 +9,8 @@
     "clean": "rm -rf .next .turbo node_modules/.cache",
     "clean:dev": "rm -rf .next .turbo node_modules/.cache && echo '✓ Cleaned build artifacts (preserved data/ and tmp/)' && npm run dev",
     "build": "cross-env NEXT_PUBLIC_BUILD_TIME=$(node -e \"process.stdout.write(new Date().toISOString())\") next build --webpack",
+    "build:safe": "bash scripts/safe-build.sh --webpack",
+    "build:ci": "rm -f .next/lock && cross-env NEXT_PUBLIC_BUILD_TIME=$(node -e \"process.stdout.write(new Date().toISOString())\") next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "lint:public": "eslint \"app/(public)\"",
@@ -19,8 +21,12 @@
     "test:e2e": "PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:matrix": "PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test tests/e2e/access-matrix.spec.ts --project=access-matrix",
+    "e2e:install": "playwright install --with-deps",
+    "e2e:smoke": "wait-on http://localhost:3000 && PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test --project=smoke-billing-admin --project=smoke-billing-resident",
+    "e2e:smoke:ci": "sh -c 'npm run dev -- --port 3000 > /tmp/next-dev.log 2>&1 & DEV_PID=$!; trap \"pkill -P $DEV_PID 2>/dev/null || true; kill $DEV_PID 2>/dev/null || true; wait $DEV_PID 2>/dev/null || true\" EXIT INT TERM; wait-on --timeout 120000 http://localhost:3000; set +e; PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test --project=smoke-billing-admin --project=smoke-billing-resident; CODE=$?; if [ $CODE -ne 0 ]; then tail -n 200 /tmp/next-dev.log || true; fi; exit $CODE'",
+    "e2e:office:ci": "sh -c 'if lsof -i tcp:3000 -sTCP:LISTEN >/dev/null 2>&1; then echo \"Port 3000 already in use. Stop the server or change the port.\"; exit 1; fi; LOG=/tmp/next-dev.log; npm run dev -- --port 3000 > $LOG 2>&1 & DEV_PID=$!; trap \"pkill -P $DEV_PID 2>/dev/null || true; kill $DEV_PID 2>/dev/null || true; wait $DEV_PID 2>/dev/null || true\" EXIT INT TERM; wait-on --timeout 240000 http://localhost:3000; WAIT_CODE=$?; if [ $WAIT_CODE -ne 0 ]; then tail -n 200 $LOG || true; exit $WAIT_CODE; fi; set +e; PLAYWRIGHT_BASE_URL=http://localhost:3000 playwright test --project=smoke-office-admin; CODE=$?; if [ $CODE -ne 0 ]; then tail -n 200 $LOG || true; fi; exit $CODE'",
     "qa:report": "node scripts/qa-report.mjs",
-    "check:conflicts": "node -e \"const {execSync}=require('node:child_process');const patterns=['<<<<<<','=======','>>>>>>'];const files=execSync('git ls-files').toString().trim().split('\\\\n').filter(Boolean);let bad=[];for(const f of files){try{const txt=execSync('cat '+f.replace(/[^a-zA-Z0-9/._-]/g,''),{encoding:'utf8'}).toString();if(patterns.some(p=>txt.includes(p))) bad.push(f);}catch(e){}}if(bad.length){console.error('Conflict markers found in:\\\\n'+bad.join('\\\\n'));process.exit(1);}\"",
+    "check:conflicts": "node scripts/check-conflicts.mjs",
     "deploy": "npm run lint && npm run typecheck && npm run build && node scripts/release.js",
     "deploy:prod": "npm run deploy",
     "deploy:dry": "node scripts/release.js --dry-run",
@@ -31,7 +37,8 @@
     "check:imports": "npm run lint -- --quiet",
     "vercel": "npx vercel@latest",
     "vercel:deploy": "npx vercel@latest deploy",
-    "vercel:pull": "npx vercel@latest pull"
+    "vercel:pull": "npx vercel@latest pull",
+    "prepare": "husky"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.34.0",
@@ -53,6 +60,8 @@
     "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.9",
     "tailwindcss": "^4",
     "tsx": "^4.7.1",
     "typescript": "^5",
@@ -61,5 +70,8 @@
   },
   "overrides": {
     "undici": "^6.23.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "eslint --quiet"
   }
 }

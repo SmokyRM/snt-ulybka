@@ -1,0 +1,3 @@
+npm run check:conflicts
+npm run check:api-contracts
+npx lint-staged

@@ -27,6 +27,7 @@ export default function ImportCSV() {
 
   const handleDownloadTemplate = async () => {
     try {
+      // raw endpoint (csv download)
       const res = await fetch("/api/admin/electricity/readings/import/template");
       if (!res.ok) {
         setError("Не удалось скачать шаблон");
