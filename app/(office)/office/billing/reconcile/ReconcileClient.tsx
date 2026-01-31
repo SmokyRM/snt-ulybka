@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import OfficeLoadingState from "../../_components/OfficeLoadingState";
 import OfficeErrorState from "../../_components/OfficeErrorState";
 import OfficeEmptyState from "../../_components/OfficeEmptyState";
+import { apiGet, apiPost } from "@/lib/api/client";
 
 type PaymentRow = {
   id: string;
@@ -45,12 +46,8 @@ export default function ReconcileClient() {
       if (filters.from) params.set("from", filters.from);
       if (filters.to) params.set("to", filters.to);
 
-      const res = await fetch(`/api/office/billing/payments?${params.toString()}`);
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; data?: { items: PaymentRow[] }; error?: { message?: string } } | null;
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error?.message || "Ошибка загрузки платежей");
-      }
-      setItems(json.data?.items ?? []);
+      const data = await apiGet<{ items: PaymentRow[] }>(`/api/office/billing/payments?${params.toString()}`);
+      setItems(data.items ?? []);
       setSelected({});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка загрузки платежей");
@@ -68,15 +65,7 @@ export default function ReconcileClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/office/billing/reconcile/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds, action }),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: { message?: string } } | null;
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error?.message || "Ошибка массового действия");
-      }
+      await apiPost("/api/office/billing/reconcile/bulk", { ids: selectedIds, action });
       await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка массового действия");
@@ -89,15 +78,7 @@ export default function ReconcileClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/office/billing/reconcile/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [id], action }),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: { message?: string } } | null;
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error?.message || "Ошибка действия");
-      }
+      await apiPost("/api/office/billing/reconcile/bulk", { ids: [id], action });
       await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка действия");
@@ -115,15 +96,7 @@ export default function ReconcileClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/office/billing/reconcile/manual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentId: id, plotId }),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: { message?: string } } | null;
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error?.message || "Ошибка ручного сопоставления");
-      }
+      await apiPost("/api/office/billing/reconcile/manual", { paymentId: id, plotId });
       await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка ручного сопоставления");
@@ -136,15 +109,7 @@ export default function ReconcileClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/office/billing/reconcile/auto", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: { message?: string } } | null;
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error?.message || "Ошибка автосопоставления");
-      }
+      await apiPost("/api/office/billing/reconcile/auto", {});
       await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка автосопоставления");

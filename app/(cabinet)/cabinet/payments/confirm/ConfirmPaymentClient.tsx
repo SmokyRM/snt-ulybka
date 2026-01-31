@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CabinetCard } from "../../../../cabinet/_components/CabinetCard";
 import { CabinetHeader } from "../../../../cabinet/_components/CabinetHeader";
+import { apiPost, apiPostRaw } from "@/lib/api/client";
 
 type PaymentMethod = "cash" | "card" | "bank" | "other";
 
@@ -53,17 +54,12 @@ export default function ConfirmPaymentClient({ plotNumber }: Props) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/cabinet/payments/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Ошибка загрузки файла");
-      }
-
+      const data = await apiPostRaw<{
+        url: string;
+        mime: string;
+        size: number;
+        filename: string;
+      }>("/api/cabinet/payments/upload", formData);
       setUploadedFile({
         url: data.url,
         mime: data.mime,
@@ -107,17 +103,7 @@ export default function ConfirmPaymentClient({ plotNumber }: Props) {
         };
       }
 
-      const res = await fetch("/api/cabinet/payments/confirmations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || data.message || "Ошибка отправки подтверждения");
-      }
+      await apiPost("/api/cabinet/payments/confirmations", payload);
 
       setSuccess(true);
       setTimeout(() => {
