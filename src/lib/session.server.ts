@@ -22,6 +22,8 @@ export interface SessionUser {
   email?: string;
   phone?: string;
   fullName?: string;
+  plotNumber?: string;
+  street?: string;
   role: SessionRole;
   status?: string;
   isImpersonating?: boolean;
@@ -126,6 +128,8 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
       email: impersonated?.email,
       phone: impersonated?.phone,
       fullName: impersonated?.fullName,
+      plotNumber: impersonated?.plotNumber,
+      street: impersonated?.street,
       role: normalizeRole(impersonated?.role),
       status: impersonated?.status,
       isImpersonating: true,
@@ -152,6 +156,8 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
     email: userRecord?.email,
     phone: userRecord?.phone,
     fullName: userRecord?.fullName,
+    plotNumber: userRecord?.plotNumber,
+    street: userRecord?.street,
     role,
     status: userRecord?.status,
     isImpersonating: false,
@@ -223,7 +229,7 @@ export const hasAdminAccess = (user: SessionUser | null | undefined): boolean =>
   Boolean(user && ["admin", "board"].includes(user.role));
 
 export const hasFinanceAccess = (user: SessionUser | null | undefined): boolean =>
-  Boolean(user && ["admin", "accountant", "board"].includes(user.role));
+  Boolean(user && ["admin", "accountant", "chairman", "board"].includes(user.role));
 
 export const hasImportAccess = (user: SessionUser | null | undefined): boolean =>
   Boolean(user && ["admin", "accountant", "operator", "board"].includes(user.role));

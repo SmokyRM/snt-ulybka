@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { qaEnabled, QA_COOKIE } from "@/lib/qaScenario";
 import { verifySameOrigin } from "@/lib/security/verifySameOrigin";
-import { rateLimit } from "@/lib/security/rateLimit";
+import { rateLimit, buildRateLimitHeaders } from "@/lib/security/rateLimit";
 import { fail, forbidden, methodNotAllowed, ok, serverError } from "@/lib/api/respond";
 
 const ADMIN_VIEW_COOKIE = "admin_view";
@@ -35,16 +35,15 @@ export async function POST(request: Request) {
     const clientId = request.headers.get("x-forwarded-for") || 
                      request.headers.get("x-real-ip") || 
                      "unknown";
-    const rateLimitResult = rateLimit(`qa-reset-${clientId}`, 2, 1000); // 2 requests per second
+    const rateLimitResult = await rateLimit(`qa-reset-${clientId}`, 2, 1000); // 2 requests per second
     if (!rateLimitResult.ok) {
-      const retryAfter = Math.ceil((rateLimitResult.retryAfterMs || 0) / 1000);
       return fail(
         request,
         "rate_limited",
         "Превышен лимит запросов. Попробуйте позже.",
         429,
         undefined,
-        { headers: { "Retry-After": String(retryAfter) } }
+        { headers: buildRateLimitHeaders(rateLimitResult) }
       );
     }
 

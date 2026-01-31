@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequestId } from "./requestId";
 import { optionalRequire } from "../optionalRequire";
+import { logErrorEvent } from "@/lib/errorEvents.store";
 
 // Динамический импорт Sentry (опционально)
 // Используем optionalRequire чтобы избежать статического резолвинга в Turbopack
@@ -199,6 +200,19 @@ export function serverError(request: Request, message?: string, error?: unknown)
         message: message ?? "Произошла внутренняя ошибка",
       },
     });
+  }
+
+  try {
+    logErrorEvent({
+      source: "api",
+      key: "internal_error",
+      message: message ?? "Произошла внутренняя ошибка",
+      stack: errorStack ?? null,
+      route: pathname,
+      requestId,
+    });
+  } catch {
+    // ignore error event logging failures
   }
   
   // Клиенту отправляем безопасный ответ без stacktrace

@@ -10,7 +10,6 @@ export default async function CabinetAppealNew() {
     <div className="space-y-4" data-testid="cabinet-appeals-new-root">
       <h1 className="text-2xl font-semibold text-zinc-900">Новое обращение</h1>
       <form action={createAppealAction} className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="cabinet-appeals-new-form">
-        <input type="hidden" name="authorId" value={user.id} />
         <label className="block space-y-2 text-sm font-semibold text-zinc-900">
           Тема
           <input

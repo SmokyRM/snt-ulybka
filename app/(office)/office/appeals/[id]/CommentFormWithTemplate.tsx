@@ -3,6 +3,8 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/lib/api/client";
+import OfficeLoadingState from "../../_components/OfficeLoadingState";
+import OfficeErrorState from "../../_components/OfficeErrorState";
 
 type Props = {
   appealId: string;
@@ -13,6 +15,8 @@ export default function CommentFormWithTemplate({ appealId, templates }: Props) 
   const router = useRouter();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [showTemplateSelect, setShowTemplateSelect] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -42,21 +46,34 @@ export default function CommentFormWithTemplate({ appealId, templates }: Props) 
     if (!text.trim()) return;
 
     setLoading(true);
+    setError(null);
+    setSuccess(false);
     try {
-      await apiPost<{ appeal: { id: string } }>(`/api/office/appeals/${appealId}/comment`, {
+      await apiPost<{ comment: { id: string } }>(`/api/office/appeals/${appealId}/comments`, {
         text: text.trim(),
       });
       setText("");
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
       router.refresh();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Ошибка добавления комментария");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка добавления комментария");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
+    <form onSubmit={handleSubmit} className="space-y-2" data-testid="office-appeal-comment-form">
+      {/* Error state */}
+      {error ? <OfficeErrorState message={error} testId="office-appeal-comment-error" /> : null}
+      {/* Success state */}
+      {success && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700" data-testid="office-appeal-comment-notice">
+          Комментарий добавлен
+        </div>
+      )}
+      {loading ? <OfficeLoadingState message="Отправка комментария..." testId="office-appeal-comment-loading" /> : null}
       <div className="flex items-center justify-between">
         <label className="text-sm font-semibold text-zinc-800">Добавить комментарий</label>
         {templates.length > 0 && (
@@ -98,11 +115,13 @@ export default function CommentFormWithTemplate({ appealId, templates }: Props) 
         rows={3}
         placeholder="Введите комментарий..."
         className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none"
+        data-testid="office-appeals-comment-input"
       />
       <button
         type="submit"
         disabled={loading || !text.trim()}
         className="rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4d5d41] disabled:opacity-50"
+        data-testid="office-appeals-comment-submit"
       >
         {loading ? "Отправка..." : "Добавить комментарий"}
       </button>

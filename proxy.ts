@@ -251,11 +251,6 @@ export function proxy(request: NextRequest) {
         if (isDev) {
           console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole ?? "null"), reason: "login.required", redirectTo: STAFF_LOGIN_PATH });
         }
-        if (isApiAdmin) {
-          const apiResponse = NextResponse.json({ error: "unauthorized" }, { status: 401 });
-          apiResponse.headers.set(REQUEST_ID_HEADER, requestId);
-          return apiResponse;
-        }
         const r = redirectToStaffLogin();
         if (isDev && pathname === "/admin/qa/cabinet-lab") r.headers.set("x-redirect-reason", "login.required");
         return r;

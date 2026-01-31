@@ -1,7 +1,5 @@
-import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
-import { checkAdminOrOfficeAccess } from "@/lib/rbac/accessCheck";
-import { ok, unauthorized, forbidden, badRequest, fail, serverError } from "@/lib/api/respond";
+import { requirePermission } from "@/lib/permissionsGuard";
+import { ok, badRequest, fail, serverError } from "@/lib/api/respond";
 import {
   createPaymentImport,
   createPaymentImportRow,
@@ -158,15 +156,13 @@ function matchPlot(
 
 export async function POST(request: Request) {
   try {
-    const accessCheck = await checkAdminOrOfficeAccess(request);
-    if (!accessCheck.allowed) {
-      return accessCheck.reason === "unauthorized" ? unauthorized(request) : forbidden(request);
-    }
-
-    const user = await getSessionUser();
-    if (!user) {
-      return unauthorized(request);
-    }
+    const guard = await requirePermission(request, "billing.import", {
+      route: "/api/admin/billing/payments-import/preview",
+      deniedReason: "billing.import",
+    });
+    if (guard instanceof Response) return guard;
+    const { session } = guard;
+    if (!session) return fail(request, "unauthorized", "Unauthorized", 401);
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -214,7 +210,7 @@ export async function POST(request: Request) {
   const import_ = createPaymentImport({
     fileName: file instanceof File ? file.name : "import.csv",
     totalRows: dataRows.length,
-    createdByUserId: user.id ?? null,
+    createdByUserId: session.id ?? null,
   });
 
   const plots = listPlots();

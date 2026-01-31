@@ -9,20 +9,14 @@ test.describe("Smoke: Admin login and billing UI", () => {
     }
   });
 
-  test("staff login (admin) -> redirects to /admin or /office", async ({ page }) => {
+  test("staff login (admin) -> redirects to /admin", async ({ page }) => {
     await page.goto(`${base}/admin`, { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(/\/(office|admin)(\/|$)/, { timeout: 20000 });
+    await expect(page).toHaveURL(/\/admin(\/|$)/, { timeout: 20000 });
 
     const finalUrl = page.url();
     expect(finalUrl).not.toContain("/login");
     expect(finalUrl).not.toContain("/cabinet");
-
-    if (finalUrl.includes("/admin")) {
-      await expect(page.getByTestId("admin-root")).toBeVisible({ timeout: 10000 });
-    } else {
-      await expect(page.getByTestId("office-root")).toBeVisible({ timeout: 10000 });
-      await expect(page.getByTestId("role-indicator")).toBeVisible({ timeout: 5000 });
-    }
+    await expect(page.getByTestId("admin-root")).toBeVisible({ timeout: 10000 });
   });
 
   test("admin billing: payments import page renders and UI is functional", async ({ page }) => {

@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/session.server";
-import { isAdminRole, normalizeRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/permissionsGuard";
 import {
   findPaymentImportById,
   listPaymentImportRows,
   updatePaymentImport,
   updatePaymentImportRow,
   addPayment,
+  listUnifiedBillingPeriods,
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 import crypto from "crypto";
-import { ok, unauthorized, forbidden, badRequest, fail, serverError } from "@/lib/api/respond";
+import { ok, badRequest, fail, serverError } from "@/lib/api/respond";
+import { findPeriodForDate } from "@/lib/billing/unifiedReconciliation.server";
 
 function rowHash(row: { date: string; amount: number; plotId: string | null; rowIndex: number }): string {
   return crypto.createHash("sha256").update(JSON.stringify(row)).digest("hex").slice(0, 16);
@@ -22,10 +22,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getSessionUser();
-    if (!user) return unauthorized(request);
-    const role = normalizeRole(user.role);
-    if (!isAdminRole(role)) return forbidden(request);
+    const guard = await requirePermission(request, "billing.import", {
+      route: "/api/admin/billing/payments/import/[id]/apply",
+      deniedReason: "billing.import",
+    });
+    if (guard instanceof Response) return guard;
+    const { session } = guard;
+    if (!session) return fail(request, "unauthorized", "Unauthorized", 401);
 
     const { id } = await params;
     const import_ = findPaymentImportById(id);
@@ -35,6 +38,7 @@ export async function POST(
     }
 
   const rows = listPaymentImportRows(id);
+  const periods = listUnifiedBillingPeriods();
   const toApply = rows.filter((r) => r.matchedPlotId && (!r.validationErrors || r.validationErrors.length === 0));
   const needsReview = rows.filter((r) => !r.validationErrors?.length && !r.matchedPlotId).length;
   const errors = rows.filter((r) => r.validationErrors && r.validationErrors.length > 0).length;
@@ -51,16 +55,21 @@ export async function POST(
     if (seen.has(h)) continue;
     seen.add(h);
 
+    const matchedPeriod = row.date ? findPeriodForDate(row.date, periods) : null;
+    if (matchedPeriod?.status === "closed") {
+      continue;
+    }
+
     try {
       const payment = addPayment({
-        periodId: null,
+        periodId: matchedPeriod?.id ?? null,
         plotId: row.matchedPlotId!,
         amount: row.amount,
         paidAt: row.date ? `${row.date}T12:00:00.000Z` : new Date().toISOString(),
         method: "import",
         reference: null,
         comment: row.purpose ?? null,
-        createdByUserId: user.id ?? null,
+        createdByUserId: session.id ?? null,
         importBatchId: id,
       });
       updatePaymentImportRow(row.id, { paymentId: payment.id });
@@ -74,7 +83,7 @@ export async function POST(
     status: "applied",
     appliedRows: applied,
     appliedAt: new Date().toISOString(),
-    appliedByUserId: user.id ?? null,
+    appliedByUserId: session.id ?? null,
   });
 
     await logAdminAction({
@@ -82,7 +91,7 @@ export async function POST(
       entity: "payment_import",
       entityId: id,
       after: { applied, needs_review: needsReview, errors },
-      meta: { actorUserId: user?.id ?? null, actorRole: user?.role ?? null },
+      meta: { actorUserId: session.id ?? null, actorRole: session.role ?? null },
       headers: request.headers,
     });
 

@@ -13,6 +13,7 @@ import {
   updatePeriodAccrual,
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
+import { assertPeriodEditable } from "@/lib/billing/unifiedPolicy";
 
 /** Создать начисления по участкам (membership + target). Если уже есть — 409 без force. Admin + office. */
 export async function POST(request: Request) {
@@ -33,6 +34,12 @@ export async function POST(request: Request) {
 
     const period = findUnifiedBillingPeriodById(periodId);
     if (!period) return fail(request, "not_found", "Период не найден", 404);
+
+    try {
+      assertPeriodEditable(period);
+    } catch {
+      return fail(request, "period_closed", "Период закрыт. Изменения запрещены.", 409);
+    }
 
     if (period.status === "locked") {
       return badRequest(request, "Период зафиксирован. Снимите фиксацию.");

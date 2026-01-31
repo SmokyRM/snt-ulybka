@@ -22,8 +22,13 @@ export async function GET(request: Request) {
     const verificationStatus = verificationStatusParam
       ? (verificationStatusParam as "not_verified" | "pending" | "verified" | "rejected")
       : undefined;
+    const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+    const limit = Math.min(50, Math.max(5, Number(searchParams.get("limit") ?? "10") || 10));
 
     const persons = listPersons({ q, verificationStatus: verificationStatus || undefined });
+    const total = persons.length;
+    const start = (page - 1) * limit;
+    const pageItems = persons.slice(start, start + limit);
     const plots = listPlots();
 
     // Enrich persons with plot details and invite codes
@@ -37,7 +42,7 @@ export async function GET(request: Request) {
           usedAt?: string | null;
         } | null;
       }
-    > = persons.map((person) => {
+    > = pageItems.map((person) => {
       const inviteCode = getInviteCodeByPersonId(person.id);
       const allCodes = listInviteCodes({ personId: person.id });
       const latestCode = allCodes.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
@@ -64,7 +69,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return ok(request, { persons: enriched });
+    return ok(request, { persons: enriched, total, page, limit });
   } catch (error) {
     return serverError(request, "Internal error", error);
   }

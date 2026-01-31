@@ -1,12 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
-import { assertCan, isStaffOrAdmin, can } from "@/lib/rbac";
+import { assertCan, isStaffOrAdmin } from "@/lib/rbac";
+import { can } from "@/lib/permissions";
 import { getPlot } from "@/server/services/plots";
 import { listByPlotId } from "@/server/services/appeals";
 import { listByPlotWithRelated } from "@/server/services/activity";
 import { listDebts } from "@/lib/billing.store";
 import { listOfficeNotes } from "@/lib/officeNotes.store";
+import { listAuditLogs } from "@/lib/mockDb";
 import type { AppealStatus } from "@/lib/office/types";
 import { overdue, dueSoon } from "@/lib/sla";
 import AppLink from "@/components/AppLink";
@@ -63,6 +65,8 @@ export default async function PlotDetailPage({ params }: Props) {
     notFound();
   }
 
+  const canManageRegistry = can(role, "office.registry.manage");
+
   // Получаем связанные обращения
   let appeals: Awaited<ReturnType<typeof listByPlotId>> = [];
   try {
@@ -85,6 +89,8 @@ export default async function PlotDetailPage({ params }: Props) {
 
   // Получаем заметки сотрудников
   const officeNotes = listOfficeNotes(id);
+
+  const auditLogs = listAuditLogs({ entityId: id, limit: 20 });
 
   // Получаем финансы (только для accountant/admin/chairman)
   let financeData = null;
@@ -153,6 +159,9 @@ export default async function PlotDetailPage({ params }: Props) {
               ownerName={plot.ownerName}
               phone={plot.phone}
               email={plot.email}
+              contactVerifiedAt={plot.contactVerifiedAt}
+              contactVerifiedBy={plot.contactVerifiedBy}
+              canManage={canManageRegistry}
             />
           </section>
 
@@ -323,6 +332,34 @@ export default async function PlotDetailPage({ params }: Props) {
                         {activity.actorRole}
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="registry-audit">
+            <h2 className="mb-4 text-lg font-semibold text-zinc-900">Аудит</h2>
+            {auditLogs.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-6 text-center">
+                <p className="text-sm text-zinc-600">Нет событий аудита</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="border-b border-zinc-100 pb-3 last:border-0">
+                    <div className="text-xs text-zinc-500">
+                      {new Date(log.createdAt).toLocaleDateString("ru-RU", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                    <div className="mt-1 text-sm text-zinc-900">
+                      <span className="font-semibold">{log.action}</span>
+                      {log.actorRole && <span className="text-zinc-500"> • {log.actorRole}</span>}
+                    </div>
                   </div>
                 ))}
               </div>

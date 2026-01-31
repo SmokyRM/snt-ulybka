@@ -1,4 +1,4 @@
-import { getSessionUser, hasBillingAccess } from "@/lib/session.server";
+import { requirePermission } from "@/lib/permissionsGuard";
 import {
   findBillingImportByBatch,
   findImportBatch,
@@ -7,15 +7,19 @@ import {
   voidPaymentsByBatch,
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
-import { ok, unauthorized, forbidden, fail, serverError } from "@/lib/api/respond";
+import { ok, fail, serverError } from "@/lib/api/respond";
 
 type ParamsPromise<T> = { params: Promise<T> };
 
 export async function POST(request: Request, { params }: ParamsPromise<{ id: string }>) {
   try {
-    const user = await getSessionUser();
-    if (!user) return unauthorized(request, "Требуется авторизация");
-    if (!hasBillingAccess(user)) return forbidden(request, "Нет доступа к отмене импорта");
+    const guard = await requirePermission(request, "billing.import", {
+      route: "/api/admin/billing/imports/[id]/rollback",
+      deniedReason: "billing.import",
+    });
+    if (guard instanceof Response) return guard;
+    const { session } = guard;
+    if (!session) return fail(request, "unauthorized", "Unauthorized", 401);
 
     const { id } = await params;
     const batch = findImportBatch(id);
@@ -25,7 +29,7 @@ export async function POST(request: Request, { params }: ParamsPromise<{ id: str
     }
 
     // Soft rollback: помечаем платежи как voided (не удаляем)
-    const voided = voidPaymentsByBatch(id, "rollback import", user.id ?? null);
+    const voided = voidPaymentsByBatch(id, "rollback import", session.id ?? null);
     updateImportBatch(id, { status: "rolled_back", rollbackAt: new Date().toISOString() });
     const billingImport = findBillingImportByBatch(id);
     if (billingImport) {

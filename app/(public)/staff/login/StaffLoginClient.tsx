@@ -13,7 +13,11 @@ const roleOptions = [
   { value: "secretary", label: "Секретарь" },
 ];
 
-export default function StaffLoginClient() {
+type Props = {
+  initialNext?: string | null;
+};
+
+export default function StaffLoginClient({ initialNext = null }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [role, setRole] = useState("");
@@ -22,9 +26,10 @@ export default function StaffLoginClient() {
   const [loading, setLoading] = useState(false);
 
   const sanitizedNext = useMemo(() => {
+    if (initialNext) return sanitizeNextUrl(initialNext);
     const raw = searchParams?.get("next") ?? null;
     return sanitizeNextUrl(raw);
-  }, [searchParams]);
+  }, [initialNext, searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

@@ -1,17 +1,16 @@
-import { getSessionUser, hasAdminAccess } from "@/lib/session.server";
-import { isOfficeRole, isAdminRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/permissionsGuard";
 import { getPerson, updatePerson, deletePerson } from "@/lib/registry/core/persons.store";
 import { listPlots, updatePlot } from "@/lib/registry/core/plots.store";
 import { logAdminAction } from "@/lib/audit";
-import { fail, forbidden, ok, serverError } from "@/lib/api/respond";
+import { fail, ok, serverError } from "@/lib/api/respond";
 
 export async function POST(request: Request) {
   try {
-    const user = await getSessionUser();
-    const role = user?.role;
-    if (!hasAdminAccess(user) && !isOfficeRole(role) && !isAdminRole(role)) {
-      return forbidden(request, "Недостаточно прав");
-    }
+    const guard = await requirePermission(request, "registry.merge", {
+      route: "/api/admin/registry/persons/merge",
+      deniedReason: "registry.merge",
+    });
+    if (guard instanceof Response) return guard;
 
     const body = (await request.json().catch(() => ({}))) as {
       primaryPersonId?: string;
@@ -100,6 +99,15 @@ export async function POST(request: Request) {
       }
     });
 
+    const diff = {
+      fullName: { from: before.fullName, to: updated.fullName },
+      phone: { from: before.phone ?? null, to: updated.phone ?? null },
+      email: { from: before.email ?? null, to: updated.email ?? null },
+      plots: { from: before.plots, to: updated.plots },
+      deletedIds,
+      movedPlots,
+    };
+
     await logAdminAction({
       action: "merge_persons",
       entity: "person",
@@ -112,6 +120,7 @@ export async function POST(request: Request) {
       meta: {
         deletedIds,
         movedPlots,
+        diff,
       },
       headers: request.headers,
     });

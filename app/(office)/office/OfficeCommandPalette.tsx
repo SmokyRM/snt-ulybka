@@ -68,7 +68,7 @@ export default function OfficeCommandPalette({ role }: Props) {
         key: "finance-debt",
         label: "Финансы: топ долгов",
         keywords: "finance финансы долги",
-        action: () => router.push("/office/finance?sort=debt_desc"),
+        action: () => router.push("/office/billing"),
         testId: "office-cmdk-item-finance",
       },
       {

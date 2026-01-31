@@ -4,6 +4,7 @@ import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { upsertUserById } from "@/lib/mockDb";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { getRequestId } from "@/lib/api/requestId";
+import { logLoginAudit } from "@/lib/loginAudit.store";
 
 const SESSION_COOKIE = "snt_session";
 const ADMIN_CODE = (process.env.ADMIN_ACCESS_CODE ?? "").trim();
@@ -64,10 +65,18 @@ const mapStaffRoleRu = (
   return null;
 };
 
+const getClientIp = (request: Request) => {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]?.trim() || null;
+  return request.headers.get("x-real-ip");
+};
+
 export async function POST(request: Request) {
   const startTime = Date.now();
   const requestId = getRequestId(request);
   const pathname = new URL(request.url).pathname;
+  const ip = getClientIp(request);
+  const userAgent = request.headers.get("user-agent");
   
   const body = await request.json().catch(() => ({}));
   const code = (body.code as string | undefined)?.trim();
@@ -96,6 +105,15 @@ export async function POST(request: Request) {
         requestId,
         message: "Invalid staff login attempt",
       });
+      logLoginAudit({
+        userId: null,
+        role: staff?.role ?? null,
+        success: false,
+        method: "password",
+        ip,
+        userAgent,
+        requestId,
+      });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
     const envPass = (process.env[staff.env] ?? "").trim();
@@ -116,6 +134,15 @@ export async function POST(request: Request) {
         latencyMs,
         requestId,
         message: "Invalid password for staff role",
+      });
+      logLoginAudit({
+        userId: null,
+        role: staff.role,
+        success: false,
+        method: "password",
+        ip,
+        userAgent,
+        requestId,
       });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
@@ -148,6 +175,15 @@ export async function POST(request: Request) {
       requestId,
       message: "Staff login successful",
     });
+    logLoginAudit({
+      userId,
+      role,
+      success: true,
+      method: "password",
+      ip,
+      userAgent,
+      requestId,
+    });
     return response;
   }
 
@@ -165,6 +201,15 @@ export async function POST(request: Request) {
         requestId,
         message: "Missing login or password",
       });
+      logLoginAudit({
+        userId: null,
+        role: null,
+        success: false,
+        method: "password",
+        ip,
+        userAgent,
+        requestId,
+      });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
     const cred = CREDENTIALS[login];
@@ -180,6 +225,15 @@ export async function POST(request: Request) {
         latencyMs,
         requestId,
         message: "Unknown role/login",
+      });
+      logLoginAudit({
+        userId: null,
+        role: null,
+        success: false,
+        method: "password",
+        ip,
+        userAgent,
+        requestId,
       });
       return NextResponse.json({ error: "Неизвестная роль/логин" }, { status: 400 });
     }
@@ -200,6 +254,15 @@ export async function POST(request: Request) {
         latencyMs,
         requestId,
         message: "Invalid password",
+      });
+      logLoginAudit({
+        userId: null,
+        role: cred.role,
+        success: false,
+        method: "password",
+        ip,
+        userAgent,
+        requestId,
       });
       return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
     }
@@ -230,10 +293,28 @@ export async function POST(request: Request) {
       requestId,
       message: "Credential login successful",
     });
+    logLoginAudit({
+      userId,
+      role,
+      success: true,
+      method: "password",
+      ip,
+      userAgent,
+      requestId,
+    });
     return response;
   }
 
   if (!code) {
+    logLoginAudit({
+      userId: null,
+      role: null,
+      success: false,
+      method: "code",
+      ip,
+      userAgent,
+      requestId,
+    });
     return NextResponse.json({ error: "Не указан код" }, { status: 400 });
   }
 
@@ -271,6 +352,15 @@ export async function POST(request: Request) {
       latencyMs,
       requestId,
       message: "Invalid access code",
+    });
+    logLoginAudit({
+      userId: null,
+      role: null,
+      success: false,
+      method: "code",
+      ip,
+      userAgent,
+      requestId,
     });
     const hint =
       (isDev || qaEnabled) &&
@@ -322,6 +412,15 @@ export async function POST(request: Request) {
     latencyMs,
     requestId,
     message: "Code-based login successful",
+  });
+  logLoginAudit({
+    userId,
+    role,
+    success: true,
+    method: "code",
+    ip,
+    userAgent,
+    requestId,
   });
 
   return response;

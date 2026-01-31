@@ -15,6 +15,10 @@ export const logAdminAction = async (params: {
   action: string;
   entity: string;
   entityId?: string | null;
+  route?: string | null;
+  success?: boolean | null;
+  deniedReason?: string | null;
+  requestId?: string | null;
   before?: unknown;
   after?: unknown;
   meta?: Record<string, unknown> | null;
@@ -26,6 +30,7 @@ export const logAdminAction = async (params: {
     headerValue(params.headers ?? null, "x-forwarded-for") ||
     headerValue(params.headers ?? null, "x-real-ip");
   const userAgent = headerValue(params.headers ?? null, "user-agent");
+  const requestId = params.requestId ?? headerValue(params.headers ?? null, "x-request-id");
 
   return logInDb({
     actorUserId: user?.id ?? null,
@@ -33,6 +38,10 @@ export const logAdminAction = async (params: {
     action: params.action,
     entity: params.entity,
     entityId: params.entityId ?? null,
+    route: params.route ?? null,
+    success: params.success ?? null,
+    deniedReason: params.deniedReason ?? null,
+    requestId: requestId ?? null,
     before: params.before,
     after: params.after,
     meta: params.meta ?? null,

@@ -2,16 +2,30 @@
 
 import { useState } from "react";
 import AppLink from "@/components/AppLink";
+import { apiPost } from "@/lib/api/client";
 
 type Props = {
   plotId: string;
   ownerName?: string | null;
   phone?: string | null;
   email?: string | null;
+  contactVerifiedAt?: string | null;
+  contactVerifiedBy?: string | null;
+  canManage?: boolean;
 };
 
-export default function PlotContactsClient({ plotId, ownerName, phone, email }: Props) {
+export default function PlotContactsClient({
+  plotId,
+  ownerName,
+  phone,
+  email,
+  contactVerifiedAt,
+  contactVerifiedBy,
+  canManage = false,
+}: Props) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const handleCopy = async (text: string, type: "phone" | "email" | "name") => {
     try {
@@ -25,6 +39,22 @@ export default function PlotContactsClient({ plotId, ownerName, phone, email }: 
 
   const handleCall = (phoneNumber: string) => {
     window.location.href = `tel:${phoneNumber}`;
+  };
+
+  const handleVerifyToggle = async () => {
+    if (!canManage) return;
+    setVerifying(true);
+    setVerifyError(null);
+    try {
+      await apiPost(`/api/office/registry/${plotId}/contact-verify`, {
+        verified: !contactVerifiedAt,
+      });
+      window.location.reload();
+    } catch (e) {
+      setVerifyError(e instanceof Error ? e.message : "Ошибка подтверждения");
+    } finally {
+      setVerifying(false);
+    }
   };
 
   if (!ownerName && !phone && !email) {
@@ -118,13 +148,33 @@ export default function PlotContactsClient({ plotId, ownerName, phone, email }: 
       )}
 
       <div className="pt-2">
-        <AppLink
-          href={`/office/registry/${plotId}/edit`}
-          className="inline-block rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
-          data-testid="plot-contacts-edit-link"
-        >
-          Редактировать контакты
-        </AppLink>
+        <div className="flex flex-wrap items-center gap-2">
+          <AppLink
+            href={`/office/registry/${plotId}/edit`}
+            className="inline-block rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+            data-testid="plot-contacts-edit-link"
+          >
+            Редактировать контакты
+          </AppLink>
+          {canManage && (
+            <button
+              type="button"
+              onClick={handleVerifyToggle}
+              disabled={verifying}
+              className="inline-flex items-center rounded-lg border border-[#5E704F] px-3 py-2 text-sm font-semibold text-[#5E704F] hover:bg-[#5E704F]/10 disabled:opacity-50"
+              data-testid="plot-contacts-verify"
+            >
+              {contactVerifiedAt ? "Снять подтверждение" : "Подтвердить контакты"}
+            </button>
+          )}
+          {contactVerifiedAt && (
+            <span className="text-xs text-emerald-700">
+              Подтверждено {new Date(contactVerifiedAt).toLocaleDateString("ru-RU")}
+              {contactVerifiedBy ? ` • ${contactVerifiedBy}` : ""}
+            </span>
+          )}
+        </div>
+        {verifyError && <div className="mt-2 text-xs text-red-600">{verifyError}</div>}
       </div>
     </div>
   );

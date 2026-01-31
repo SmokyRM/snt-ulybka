@@ -13,6 +13,7 @@ import {
 } from "@/lib/mockDb";
 import type { PeriodAccrual } from "@/types/snt";
 import { logAdminAction } from "@/lib/audit";
+import { assertPeriodEditable } from "@/lib/billing/unifiedPolicy";
 
 export async function POST(
   request: Request,
@@ -28,6 +29,12 @@ export async function POST(
   const period = findUnifiedBillingPeriodById(id);
   if (!period) {
     return fail(request, "not_found", "period not found", 404);
+  }
+
+  try {
+    assertPeriodEditable(period);
+  } catch {
+    return fail(request, "period_closed", "Период закрыт. Изменения запрещены.", 409);
   }
 
   if (period.status !== "draft") {

@@ -1,7 +1,5 @@
-import { NextResponse } from "next/server";
-import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
-import { isOfficeRole, isAdminRole } from "@/lib/rbac";
-import { ok, unauthorized, forbidden, badRequest, serverError } from "@/lib/api/respond";
+import { ok, badRequest, serverError } from "@/lib/api/respond";
+import { requirePermission } from "@/lib/permissionsGuard";
 import {
   getPlotByNumber,
   listPlots,
@@ -78,11 +76,11 @@ const norm = (v: string) => String(v ?? "").replace(/\D/g, "");
 /** Preview: парсит CSV, валидация, match, potential duplicates. Не пишет в БД. Admin + office. */
 export async function POST(request: Request) {
   try {
-    const user = await getSessionUser();
-    if (!user) return unauthorized(request);
-    if (!hasFinanceAccess(user) && !isOfficeRole(user.role) && !isAdminRole(user.role)) {
-      return forbidden(request);
-    }
+    const guard = await requirePermission(request, "billing.import", {
+      route: "/api/admin/billing/payments/import/preview",
+      deniedReason: "billing.import",
+    });
+    if (guard instanceof Response) return guard;
 
   let content: string;
   let fileName = "import.csv";

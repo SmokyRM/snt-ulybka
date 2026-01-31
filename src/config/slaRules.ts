@@ -49,7 +49,7 @@ export const DEFAULT_SLA_HOURS = 72;
 
 /**
  * Вычисляет dueAt на основе типа обращения и SLA правил
- * 
+ *
  * @param type - тип обращения (категория из triage)
  * @param rules - конфигурация SLA правил (по умолчанию SLA_RULES)
  * @returns ISO строка с датой и временем dueAt
@@ -62,4 +62,31 @@ export function calculateDueAtByType(
   const dueDate = new Date();
   dueDate.setHours(dueDate.getHours() + hours);
   return dueDate.toISOString();
+}
+
+/**
+ * Sprint 34: Возвращает SLA в днях для отображения
+ * Округляет часы до дней (вверх)
+ *
+ * @param type - тип обращения
+ * @param rules - конфигурация SLA правил (по умолчанию SLA_RULES)
+ * @returns количество дней SLA
+ */
+export function getSlaHours(
+  type: AppealCategory,
+  rules: SlaRules = SLA_RULES
+): number {
+  return rules[type] ?? DEFAULT_SLA_HOURS;
+}
+
+/**
+ * Sprint 34: Возвращает SLA в днях для отображения
+ * Округляет часы до дней (вверх)
+ */
+export function getSlaDays(
+  type: AppealCategory,
+  rules: SlaRules = SLA_RULES
+): number {
+  const hours = rules[type] ?? DEFAULT_SLA_HOURS;
+  return Math.ceil(hours / 24);
 }

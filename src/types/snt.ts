@@ -36,7 +36,7 @@ export type UserRole =
   | "resident"
   | "chairman"
   | "secretary";
-export type UserStatus = "pending" | "verified" | "rejected" | "pending_verification";
+export type UserStatus = "pending" | "verified" | "rejected" | "pending_verification" | "disabled";
 
 export interface User {
   id: string;
@@ -58,6 +58,10 @@ export interface AuditLog {
   action: string;
   entity: string;
   entityId?: string | null;
+  route?: string | null;
+  success?: boolean | null;
+  deniedReason?: string | null;
+  requestId?: string | null;
   before?: unknown;
   after?: unknown;
   meta?: Record<string, unknown>;
@@ -164,6 +168,10 @@ export interface AuditLog {
   action: string;
   entity: string;
   entityId?: string | null;
+  route?: string | null;
+  success?: boolean | null;
+  deniedReason?: string | null;
+  requestId?: string | null;
   before?: unknown;
   after?: unknown;
   meta?: Record<string, unknown>;
@@ -502,6 +510,10 @@ export interface RegistryPerson {
   email?: string | null;
   plots: string[]; // Array of RegistryPlot IDs
   verificationStatus: "not_verified" | "pending" | "verified" | "rejected";
+  status?: "active" | "merged";
+  mergedIntoId?: string | null;
+  contactVerifiedAt?: string | null;
+  contactVerifiedBy?: string | null;
   userId?: string | null; // Linked user ID after registration
   createdAt: string;
   updatedAt: string;

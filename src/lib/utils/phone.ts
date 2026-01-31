@@ -16,5 +16,11 @@
 export function normalizePhone(input: string | null | undefined): string {
   if (!input) return "";
   // Удаляем все нецифровые символы
-  return input.replace(/\D/g, "");
+  const digits = input.replace(/\D/g, "");
+  if (!digits) return "";
+  // Приводим 8XXXXXXXXXX к 7XXXXXXXXXX
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return `7${digits.slice(1)}`;
+  }
+  return digits;
 }

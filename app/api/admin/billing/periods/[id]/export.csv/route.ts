@@ -1,13 +1,9 @@
-import { NextResponse } from "next/server";
 import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
 import { isOfficeRole, isAdminRole } from "@/lib/rbac";
 import { unauthorized, forbidden, fail } from "@/lib/api/respond";
-import {
-  findUnifiedBillingPeriodById,
-  listPeriodAccruals,
-  listPlots,
-  listPayments,
-} from "@/lib/mockDb";
+import { findUnifiedBillingPeriodById, listPeriodAccruals, listPlots } from "@/lib/mockDb";
+import { buildPeriodReconciliation } from "@/lib/billing/unifiedReconciliation.server";
+import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
@@ -25,66 +21,44 @@ export async function GET(
     return fail(request, "not_found", "period not found", 404);
   }
 
-  const accruals = listPeriodAccruals(period.id);
+  const reconciliation = buildPeriodReconciliation(period);
   const plots = listPlots();
-  const payments = listPayments({ includeVoided: false });
-
-  // Calculate paid amounts
-  const paidByPlotAndType: Record<string, Record<"membership" | "target" | "electric", number>> = {};
-  payments.forEach((p) => {
-    if (!p.periodId || p.periodId !== period.id) return;
-    const category = p.category;
-    let type: "membership" | "target" | "electric" | null = null;
-    if (category === "membership_fee") type = "membership";
-    else if (category === "target_fee") type = "target";
-    else if (category === "electricity") type = "electric";
-    if (!type) return;
-
-    if (!paidByPlotAndType[p.plotId]) {
-      paidByPlotAndType[p.plotId] = { membership: 0, target: 0, electric: 0 };
-    }
-    paidByPlotAndType[p.plotId][type] = (paidByPlotAndType[p.plotId][type] ?? 0) + p.amount;
-  });
+  const plotMap = new Map(plots.map((plot) => [plot.id, plot]));
+  const accruals = listPeriodAccruals(period.id);
+  const accrualMap = new Map(accruals.map((a) => [`${a.plotId}:${a.type}`, a]));
 
   // Build CSV
   const rows: string[] = [];
   rows.push("\uFEFFУлица,Участок,Владелец,Тип,Начислено,Оплачено,Долг");
 
-  accruals.forEach((accrual) => {
-    const plot = plots.find((p) => p.id === accrual.plotId);
-    const paid = paidByPlotAndType[accrual.plotId]?.[accrual.type] ?? 0;
-    const debt = accrual.amountAccrued - paid;
-    const typeLabel =
-      accrual.type === "membership"
-        ? "Членские"
-        : accrual.type === "target"
-          ? "Целевые"
-          : "Электроэнергия";
+  reconciliation.rows.forEach((row) => {
+    (["membership", "target", "electric"] as const).forEach((type) => {
+      const accrual = accrualMap.get(`${row.plotId}:${type}`) ?? null;
+      const byType = row.byType[type];
+      if (!accrual && byType.accrued === 0 && byType.paid === 0) return;
+      const plot = plotMap.get(row.plotId);
+      const typeLabel =
+        type === "membership" ? "Членские" : type === "target" ? "Целевые" : "Электроэнергия";
+      const accrued = accrual?.amountAccrued ?? 0;
+      const paid = byType.paid;
+      const debt = accrued - paid;
 
-    rows.push(
-      [
-        plot?.street ?? "",
-        plot?.plotNumber ?? "",
-        plot?.ownerFullName ?? "",
-        typeLabel,
-        accrual.amountAccrued.toFixed(2),
-        paid.toFixed(2),
-        debt.toFixed(2),
-      ].join(",")
-    );
+      rows.push(
+        [
+          plot?.street ?? "",
+          plot?.plotNumber ?? "",
+          plot?.ownerFullName ?? "",
+          typeLabel,
+          accrued.toFixed(2),
+          paid.toFixed(2),
+          debt.toFixed(2),
+        ].join(",")
+      );
+    });
   });
 
   // Add totals
-  const totals = accruals.reduce(
-    (acc, item) => {
-      const paid = paidByPlotAndType[item.plotId]?.[item.type] ?? 0;
-      acc.accrued += item.amountAccrued;
-      acc.paid += paid;
-      acc.debt += item.amountAccrued - paid;
-      return acc;
-    },
-    { accrued: 0, paid: 0, debt: 0 }
-  );
+  const totals = reconciliation.totals;
 
   rows.push("");
   rows.push(`ИТОГО,,,${totals.accrued.toFixed(2)},${totals.paid.toFixed(2)},${totals.debt.toFixed(2)}`);

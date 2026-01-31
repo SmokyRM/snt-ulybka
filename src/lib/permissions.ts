@@ -33,3 +33,125 @@ const capabilityMap: Record<Role, Set<string>> = {
 export const getOfficeCapabilities = (role: Role): Set<string> => capabilityMap[role] ?? new Set();
 
 export const can = (role: Role, capability: string): boolean => capabilityMap[role]?.has(capability) ?? false;
+
+export type PermissionAction =
+  | "admin.manage_users"
+  | "billing.view_debtors"
+  | "billing.import_statement"
+  | "billing.match_payments_manual"
+  | "billing.import"
+  | "billing.import.excel"
+  | "billing.reconcile"
+  | "billing.allocate"
+  | "billing.generate"
+  | "billing.export"
+  | "billing.receipts"
+  | "billing.penalty.apply"
+  | "billing.penalty.recalc"
+  | "billing.penalty.void"
+  | "billing.penalty.freeze"
+  | "registry.view"
+  | "registry.edit"
+  | "registry.merge"
+  | "appeals.view"
+  | "appeals.manage"
+  | "appeals.assign"
+  | "appeals.update_status"
+  | "appeals.bulk_update"
+  | "appeals.run_reminders"
+  | "notifications.send"
+  | "notifications.manage"
+  | "notifications.generate_campaign";
+
+const allActions: PermissionAction[] = [
+  "admin.manage_users",
+  "billing.view_debtors",
+  "billing.import_statement",
+  "billing.match_payments_manual",
+  "billing.import",
+  "billing.import.excel",
+  "billing.reconcile",
+  "billing.allocate",
+  "billing.generate",
+  "billing.export",
+  "billing.receipts",
+  "billing.penalty.apply",
+  "billing.penalty.recalc",
+  "billing.penalty.void",
+  "billing.penalty.freeze",
+  "registry.view",
+  "registry.edit",
+  "registry.merge",
+  "appeals.view",
+  "appeals.manage",
+  "appeals.assign",
+  "appeals.update_status",
+  "appeals.bulk_update",
+  "appeals.run_reminders",
+  "notifications.send",
+  "notifications.manage",
+  "notifications.generate_campaign",
+];
+
+const actionPermissions: Record<Role, Set<PermissionAction>> = {
+  admin: new Set(allActions),
+  chairman: new Set([
+    "billing.view_debtors",
+    "billing.import_statement",
+    "billing.match_payments_manual",
+    "billing.import",
+    "billing.import.excel",
+    "billing.reconcile",
+    "billing.allocate",
+    "billing.generate",
+    "billing.export",
+    "billing.receipts",
+    "billing.penalty.apply",
+    "billing.penalty.recalc",
+    "billing.penalty.void",
+    "billing.penalty.freeze",
+    "registry.view",
+    "registry.edit",
+    "registry.merge",
+    "appeals.view",
+    "appeals.manage",
+    "appeals.assign",
+    "appeals.update_status",
+    "appeals.bulk_update",
+    "appeals.run_reminders",
+    "notifications.send",
+    "notifications.manage",
+    "notifications.generate_campaign",
+  ]),
+  accountant: new Set([
+    "billing.view_debtors",
+    "billing.import_statement",
+    "billing.match_payments_manual",
+    "billing.import",
+    "billing.import.excel",
+    "billing.reconcile",
+    "billing.allocate",
+    "billing.generate",
+    "billing.export",
+    "billing.receipts",
+    "billing.penalty.apply",
+    "billing.penalty.recalc",
+    "billing.penalty.freeze",
+  ]),
+  secretary: new Set([
+    "appeals.view",
+    "appeals.manage",
+    "appeals.assign",
+    "appeals.update_status",
+    "appeals.bulk_update",
+    "registry.view",
+    "registry.edit",
+  ]),
+  resident: new Set(),
+};
+
+export const hasPermission = (role: Role | null | undefined, action: PermissionAction): boolean => {
+  if (!role) return false;
+  if (role === "admin") return true;
+  return actionPermissions[role]?.has(action) ?? false;
+};

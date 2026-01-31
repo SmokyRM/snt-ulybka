@@ -6,9 +6,12 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/cabinet", label: "Главная" },
   { href: "/cabinet/payments", label: "Взносы" },
+  { href: "/cabinet/balance", label: "Баланс" },
+  { href: "/cabinet/receipts", label: "Квитанции" },
   { href: "/cabinet/power", label: "Электро" },
   { href: "/cabinet/appeals", label: "Обращения" },
   { href: "/cabinet/docs", label: "Документы" },
+  { href: "/cabinet/notifications", label: "Уведомления" },
   { href: "/cabinet/help", label: "Помощь" },
 ];
 

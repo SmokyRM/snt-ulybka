@@ -55,3 +55,4 @@ test-results/
 
 # QA report artifacts (local only)
 docs/qa/runs/
+tmp/qa-reports/

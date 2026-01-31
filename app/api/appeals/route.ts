@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session.server";
 import { methodNotAllowed, ok, fail, unauthorized, serverError } from "@/lib/api/respond";
 import { getRequestId } from "@/lib/api/requestId";
 import { logApiRequest } from "@/lib/structuredLogger/node";
+import { buildRateLimitHeaders } from "@/lib/security/rateLimit";
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -45,8 +46,16 @@ export async function POST(request: Request) {
     const message = typeof body.message === "string" ? body.message : "";
     const trimmed = message.trim();
     
-    if (!checkAppealRateLimit(user.id)) {
-      return fail(request, "rate_limited", "Слишком много обращений. Попробуйте позже.", 429);
+    const rateLimitResult = await checkAppealRateLimit(user.id);
+    if (!rateLimitResult.ok) {
+      return fail(
+        request,
+        "rate_limited",
+        "Слишком много обращений. Попробуйте позже.",
+        429,
+        undefined,
+        { headers: buildRateLimitHeaders(rateLimitResult) },
+      );
     }
     
     if (!trimmed || trimmed.length < 10 || trimmed.length > 4000) {

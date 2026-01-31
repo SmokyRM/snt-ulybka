@@ -11,41 +11,85 @@ type HeaderInfo = {
   progressHref?: string | null;
 };
 
+type AccrualItem = {
+  id: string;
+  period: string;
+  description: string;
+  amount: number;
+  status: string;
+  dueDate?: string;
+  docRef?: string;
+  plotRef?: string;
+  items?: Array<{ title: string; amount: number }>;
+};
+
+type PaymentItem = { id: string; date: string; amount: number; method: string; comment?: string | null };
+
+type PaymentsData = {
+  accruals: AccrualItem[];
+  summary: { debt: number; overpay: number; balance: number; lastPayment: string | null };
+  payments: PaymentItem[];
+  years: number[];
+};
+
 type PaymentsMock = {
-  payments?: {
-    accruals: Array<{
-      id: string;
-      period: string;
-      description: string;
-      amount: number;
-      status: string;
-      dueDate?: string;
-      docRef?: string;
-      plotRef?: string;
-      items?: Array<{ title: string; amount: number }>;
-    }>;
-    summary: { debt: number; overpay: number; balance: number; lastPayment: string | null };
-    payments: Array<{ id: string; date: string; amount: number; method: string; comment?: string | null }>;
-  };
+  payments?: Omit<PaymentsData, "years">;
 } | null;
 
 type Props = {
   mockEnabled: boolean;
   mock: PaymentsMock;
   headerInfo: HeaderInfo;
+  data: PaymentsData | null;
 };
 
-export default function PaymentsClient({ mockEnabled, mock, headerInfo }: Props) {
+const getYears = (accruals: AccrualItem[], payments: PaymentItem[]) => {
+  const years = new Set<number>();
+  accruals.forEach((a) => {
+    const year = Number(a.period?.slice(0, 4));
+    if (!Number.isNaN(year)) years.add(year);
+  });
+  payments.forEach((p) => {
+    const year = new Date(p.date).getFullYear();
+    if (!Number.isNaN(year)) years.add(year);
+  });
+  return Array.from(years).sort((a, b) => b - a);
+};
+
+export default function PaymentsClient({ mockEnabled, mock, headerInfo, data }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const accruals = mock?.payments?.accruals ?? [];
+  const display = (() => {
+    if (mockEnabled && mock?.payments) {
+      return {
+        ...mock.payments,
+        years: getYears(mock.payments.accruals, mock.payments.payments),
+      };
+    }
+    return data;
+  })();
+
+  const years = display?.years ?? [];
+  const [selectedYear, setSelectedYear] = useState<string>(() => (years[0] ? String(years[0]) : "all"));
+
+  const accruals = display?.accruals ?? [];
+  const payments = display?.payments ?? [];
+  const summary = display?.summary;
 
   const openAccrual = (id: string) => {
-    if (!mockEnabled || !accruals.length) return;
+    if (!accruals.length) return;
     setOpenId(id);
   };
 
   const active = accruals.find((a) => a.id === openId) || null;
+  const filteredAccruals =
+    selectedYear === "all"
+      ? accruals
+      : accruals.filter((a) => a.period?.startsWith(selectedYear));
+  const filteredPayments =
+    selectedYear === "all"
+      ? payments
+      : payments.filter((p) => String(new Date(p.date).getFullYear()) === selectedYear);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
@@ -56,34 +100,42 @@ export default function PaymentsClient({ mockEnabled, mock, headerInfo }: Props)
         progressHref={headerInfo.progressHref}
       />
 
-      {mockEnabled && mock?.payments ? (
+      {summary ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <CabinetCard title="Долг" subtitle="Текущий баланс">
-            <div className="text-2xl font-semibold text-rose-700">{mock.payments.summary.debt} ₽</div>
-            <div className="text-xs text-zinc-600">Переплата: {mock.payments.summary.overpay} ₽</div>
+            <div className="text-2xl font-semibold text-rose-700">{summary.debt} ₽</div>
+            <div className="text-xs text-zinc-600">Переплата: {summary.overpay} ₽</div>
           </CabinetCard>
           <CabinetCard title="Баланс" subtitle="Долг/переплата">
-            <div className="text-2xl font-semibold text-zinc-900">{mock.payments.summary.balance} ₽</div>
+            <div className="text-2xl font-semibold text-zinc-900">{summary.balance} ₽</div>
             <div className="text-xs text-zinc-600">
               Последняя оплата:{" "}
-              {mock.payments.summary.lastPayment
-                ? new Date(mock.payments.summary.lastPayment).toLocaleDateString("ru-RU")
+              {summary.lastPayment
+                ? new Date(summary.lastPayment).toLocaleDateString("ru-RU")
                 : "—"}
             </div>
           </CabinetCard>
           <CabinetCard title="Фильтр" subtitle="Период">
-            <select className="w-full rounded border border-zinc-300 px-3 py-2 text-sm">
-              <option>2024</option>
-              <option>2023</option>
+            <select
+              className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+              value={selectedYear}
+              onChange={(event) => setSelectedYear(event.target.value)}
+            >
+              <option value="all">Все годы</option>
+              {years.map((year) => (
+                <option key={year} value={String(year)}>
+                  {year}
+                </option>
+              ))}
             </select>
           </CabinetCard>
         </div>
       ) : null}
 
       <CabinetCard title="Начисления" subtitle="Последние начисления">
-        {mockEnabled && accruals.length ? (
+        {filteredAccruals.length ? (
           <div className="divide-y divide-zinc-100 text-sm text-zinc-800">
-            {accruals.map((acc) => (
+            {filteredAccruals.map((acc) => (
               <button
                 type="button"
                 key={acc.id}
@@ -104,7 +156,7 @@ export default function PaymentsClient({ mockEnabled, mock, headerInfo }: Props)
         ) : (
           <EmptyState
             title="Начислений пока нет"
-            description="Добавьте данные или включите QA mock."
+            description="Когда появятся начисления, они отобразятся здесь."
             actionHref="/cabinet"
             actionLabel="На главную"
           />
@@ -112,9 +164,9 @@ export default function PaymentsClient({ mockEnabled, mock, headerInfo }: Props)
       </CabinetCard>
 
       <CabinetCard title="Оплаты" subtitle="История оплат">
-        {mockEnabled && mock?.payments?.payments?.length ? (
+        {filteredPayments.length ? (
           <div className="divide-y divide-zinc-100 text-sm text-zinc-800">
-            {mock.payments.payments.map((p) => (
+            {filteredPayments.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <div>
                   <div className="font-semibold">
@@ -129,7 +181,7 @@ export default function PaymentsClient({ mockEnabled, mock, headerInfo }: Props)
         ) : (
           <EmptyState
             title="Оплат пока нет"
-            description="Когда появятся оплаты, они покажутся здесь. Включите QA mock для примера."
+            description="Когда появятся оплаты, они покажутся здесь."
             actionHref="/cabinet"
             actionLabel="На главную"
           />

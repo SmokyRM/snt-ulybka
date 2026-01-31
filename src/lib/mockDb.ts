@@ -381,6 +381,39 @@ export const listUsers = (limit = 10) => {
   return db.users.slice(0, Math.max(0, limit));
 };
 
+export const listUsersPaged = (params: { q?: string | null; limit?: number; offset?: number } = {}) => {
+  const db = getDb();
+  const query = params.q?.trim().toLowerCase();
+  let rows = [...db.users];
+  if (query) {
+    rows = rows.filter((user) => {
+      const haystack = `${user.fullName ?? ""} ${user.email ?? ""} ${user.phone ?? ""} ${user.id}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+  const total = rows.length;
+  const offset = Math.max(0, params.offset ?? 0);
+  const limit = Math.max(1, Math.min(100, params.limit ?? 20));
+  return { items: rows.slice(offset, offset + limit), total };
+};
+
+export const updateUserRole = (id: string, role: User["role"]) => {
+  const db = getDb();
+  const idx = db.users.findIndex((user) => user.id === id);
+  if (idx === -1) return null;
+  db.users[idx] = { ...db.users[idx], role };
+  return db.users[idx];
+};
+
+export const toggleUserDisabled = (id: string, disabled: boolean) => {
+  const db = getDb();
+  const idx = db.users.findIndex((user) => user.id === id);
+  if (idx === -1) return null;
+  const nextStatus: UserStatus = disabled ? "disabled" : "verified";
+  db.users[idx] = { ...db.users[idx], status: nextStatus };
+  return db.users[idx];
+};
+
 /**
  * Sprint 7.7: Get deterministic mock user ID for a role
  */
@@ -393,6 +426,22 @@ export function getMockUserIdByRole(role: "guest" | "resident" | "chairman" | "s
     accountant: "user-accountant-default",
   };
   return ROLE_USER_ID_MAP[role] || null;
+}
+
+/**
+ * Sprint 34: Get all staff users (chairman, secretary, accountant, admin)
+ * Returns list of users that can be assigned to appeals
+ */
+export function getStaffUsers(): { id: string; name: string; role: string }[] {
+  const db = getDb();
+  const staffRoles = ["admin", "chairman", "secretary", "accountant"];
+  return db.users
+    .filter((user) => staffRoles.includes(user.role))
+    .map((user) => ({
+      id: user.id,
+      name: user.fullName || user.phone || user.email || user.id,
+      role: user.role,
+    }));
 }
 
 export const upsertUserById = (input: {
@@ -697,6 +746,10 @@ export const logAdminAction = (entry: {
   action: string;
   entity: string;
   entityId?: string | null;
+  route?: string | null;
+  success?: boolean | null;
+  deniedReason?: string | null;
+  requestId?: string | null;
   before?: unknown;
   after?: unknown;
   meta?: Record<string, unknown> | null;
@@ -712,6 +765,10 @@ export const logAdminAction = (entry: {
     action: entry.action,
     entity: entry.entity,
     entityId: entry.entityId ?? null,
+    route: entry.route ?? null,
+    success: entry.success ?? null,
+    deniedReason: entry.deniedReason ?? null,
+    requestId: entry.requestId ?? null,
     before: entry.before,
     after: entry.after,
     meta: entry.meta ?? undefined,
@@ -1036,6 +1093,13 @@ export const addPayment = (data: {
   targetFundId?: string | null;
 }) => {
   const now = new Date().toISOString();
+  const db = getDb();
+
+  if (data.fingerprint) {
+    const existing = db.payments.find((p) => p.fingerprint === data.fingerprint);
+    if (existing) return existing;
+  }
+
   const payment: Payment = {
     id: createId("pay"),
     periodId: data.periodId || "",
@@ -1056,7 +1120,6 @@ export const addPayment = (data: {
   fingerprint: data.fingerprint ?? null,
   targetFundId: data.targetFundId ?? null,
 };
-  const db = getDb();
   db.payments.push(payment);
   return payment;
 };

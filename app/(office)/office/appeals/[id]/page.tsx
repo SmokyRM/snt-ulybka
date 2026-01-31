@@ -34,6 +34,7 @@ import AppealActionsClient from "./AppealActionsClient";
 import CommentFormWithTemplate from "./CommentFormWithTemplate";
 import AppealActivityFeed from "./AppealActivityFeed";
 import AppealTriageBlock from "./AppealTriageBlock";
+import WorkLinksClient from "./WorkLinksClient";
 import { listTemplates } from "@/server/services/templates";
 import { getActionTemplates } from "@/lib/actionTemplates.store";
 import { getAppliedRulesInfo } from "@/server/services/appealsRuleInfo";
@@ -226,7 +227,7 @@ export default async function OfficeAppealDetailPage({ params, searchParams }: P
   const canViewOnly = hasPermission(role, "appeals.view") && !hasPermission(role, "appeals.manage");
 
   return (
-    <>
+    <div data-testid="office-appeals-detail-root">
       <AppealToast />
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm" data-testid="office-appeal-details">
       <div className="mb-4">
@@ -287,6 +288,10 @@ export default async function OfficeAppealDetailPage({ params, searchParams }: P
         })()}
       </div>
       <p className="mt-4 whitespace-pre-wrap text-base text-zinc-800">{appeal.body}</p>
+
+      <div className="mt-4">
+        <WorkLinksClient appealId={appeal.id} />
+      </div>
 
       {/* Информация о назначении */}
       {(appeal.assigneeRole || appeal.assigneeUserId || appeal.assignedAt) && (
@@ -557,7 +562,7 @@ export default async function OfficeAppealDetailPage({ params, searchParams }: P
       </div>
 
     </div>
-    </>
+    </div>
   );
 }
 

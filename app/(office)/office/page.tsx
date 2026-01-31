@@ -115,6 +115,19 @@ export default async function OfficeDashboardPage() {
         </p>
       </div>
 
+      <form action="/office/search" method="get" className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <label className="block text-sm font-medium text-zinc-700">
+          Быстрый поиск
+          <input
+            type="search"
+            name="q"
+            placeholder="ФИО, участок, обращение"
+            className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#5E704F]"
+            data-testid="office-search"
+          />
+        </label>
+      </form>
+
       {/* Sprint 3.4: KPI счетчики */}
       {(isChairman || isSecretary) && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -160,7 +173,7 @@ export default async function OfficeDashboardPage() {
           <Card title="Реестр участков" value="—" href="/office/registry" testId="office-card-registry" />
         )}
         {isAccountant && (
-          <Card title="Финансы: долги" value="—" href="/office/finance" testId="office-card-finance" />
+          <Card title="Финансы: долги" value="—" href="/office/billing" testId="office-card-finance" />
         )}
       </div>
 
@@ -186,7 +199,7 @@ export default async function OfficeDashboardPage() {
           {isAccountant && (
             <>
               <QuickAction label="Импорт платежей" href="/admin/billing/payments-import" />
-              <QuickAction label="Экспорт должников" href="/office/finance" />
+              <QuickAction label="Экспорт должников" href="/office/billing" />
             </>
           )}
         </div>

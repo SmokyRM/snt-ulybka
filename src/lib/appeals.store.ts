@@ -171,6 +171,11 @@ export function listAppeals(params: ListAppealsParams = {}): Appeal[] {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
+export function listAppealsForResident(authorId: string): Appeal[] {
+  if (!authorId) return [];
+  return listAppeals().filter((appeal) => appeal.authorId === authorId);
+}
+
 export function getAppeal(id: string): Appeal | null {
   const found = seedAppeals.find((appeal) => appeal.id === id);
   if (!found) return null;
@@ -265,6 +270,22 @@ export const sendAppealReplyToResident = (
 export const listOutbox = (status?: OutboxItem["status"]): OutboxItem[] => {
   const items = status ? outbox.filter((item) => item.status === status) : outbox.slice();
   return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+};
+
+export const retryFailedOutbox = (
+  params: { limit?: number; maxAttempts?: number } = {},
+): { retried: number } => {
+  const limit = params.limit ?? 20;
+  const maxAttempts = params.maxAttempts ?? 3;
+  let retried = 0;
+  outbox
+    .filter((item) => item.status === "failed" && item.attempts < maxAttempts)
+    .slice(0, limit)
+    .forEach((item) => {
+      const updated = markOutboxRetry(item.id);
+      if (updated) retried += 1;
+    });
+  return { retried };
 };
 
 export const markOutboxRetry = (id: string): OutboxItem | null => {
@@ -394,10 +415,22 @@ export const markNotificationRead = (id: string): ResidentNotification | null =>
 export function setAppealStatus(id: string, status: AppealStatus): Appeal | null {
   const idx = seedAppeals.findIndex((appeal) => appeal.id === id);
   if (idx === -1) return null;
+  const now = new Date().toISOString();
+  const oldStatus = seedAppeals[idx].status;
+
+  // Sprint 34: Set closedAt when status becomes closed, clear when reopened
+  let closedAt = seedAppeals[idx].closedAt;
+  if (status === "closed" && oldStatus !== "closed") {
+    closedAt = now;
+  } else if (status !== "closed" && oldStatus === "closed") {
+    closedAt = null;
+  }
+
   const updated: Appeal = {
     ...seedAppeals[idx],
     status,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
+    closedAt,
   };
   seedAppeals[idx] = updated;
   return updated;
@@ -545,9 +578,10 @@ export async function createAppeal(input: {
     newAppeal.dueAtSource = "auto"; // Автоматически установлен по SLA
     
     // Sprint 7.3: Логируем sla.set когда dueAt назначается системой
-    // Получаем количество часов из SLA_RULES для логирования
-    const { SLA_RULES, DEFAULT_SLA_HOURS } = await import("@/config/slaRules");
+    // Sprint 34: Также устанавливаем slaDays для отображения
+    const { SLA_RULES, DEFAULT_SLA_HOURS, getSlaDays } = await import("@/config/slaRules");
     const slaHours = SLA_RULES[triage.category] ?? DEFAULT_SLA_HOURS;
+    newAppeal.slaDays = getSlaDays(triage.category);
     
     logActivity({
       actorUserId: null,
@@ -860,9 +894,12 @@ export async function updateAppealType(id: string, type: AppealCategory): Promis
     updatedAt: new Date().toISOString(),
   };
   
-  // Пересчитываем dueAt только если он был установлен автоматически
+  // Пересчитываем dueAt и slaDays только если он был установлен автоматически
   if (appeal.dueAtSource === "auto" && appeal.status !== "closed") {
     updated.dueAt = calculateDueAtByType(type);
+    // Sprint 34: Пересчитываем slaDays
+    const { getSlaDays } = await import("@/config/slaRules");
+    updated.slaDays = getSlaDays(type);
     // dueAtSource остается "auto"
     
     // Sprint 5.2: Триггер 3 - Проверка просрочки после изменения типа (и пересчета dueAt)

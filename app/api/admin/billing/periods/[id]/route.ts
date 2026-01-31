@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session.server";
 import { checkAdminOrOfficeAccess } from "@/lib/rbac/accessCheck";
-import { findUnifiedBillingPeriodById, listPeriodAccruals, listPlots, listPayments } from "@/lib/mockDb";
-import { categoryForAccrualType } from "@/lib/paymentCategory";
+import { findUnifiedBillingPeriodById, listPeriodAccruals, listPlots } from "@/lib/mockDb";
+import { buildPeriodReconciliation } from "@/lib/billing/unifiedReconciliation.server";
 import { ok, unauthorized, forbidden, fail, serverError } from "@/lib/api/respond";
 
 export async function GET(
@@ -23,90 +22,46 @@ export async function GET(
       return fail(request, "not_found", "period not found", 404);
     }
 
-  const accruals = listPeriodAccruals(period.id);
-  const plots = listPlots();
-  const payments = listPayments({ includeVoided: false });
+    const reconciliation = buildPeriodReconciliation(period);
+    const plots = listPlots();
+    const plotMap = new Map(plots.map((plot) => [plot.id, plot]));
+    const accruals = listPeriodAccruals(period.id);
+    const accrualMap = new Map(accruals.map((a) => [`${a.plotId}:${a.type}`, a]));
 
-  // Calculate paid amounts by plot and type
-  const paidByPlotAndType: Record<string, Record<"membership" | "target" | "electric", number>> = {};
-  payments.forEach((p) => {
-    if (!p.periodId || p.periodId !== period.id) return;
-    const category = p.category;
-    let type: "membership" | "target" | "electric" | null = null;
-    if (category === "membership_fee") type = "membership";
-    else if (category === "target_fee") type = "target";
-    else if (category === "electricity") type = "electric";
-    if (!type) return;
+    const enriched = reconciliation.rows.flatMap((row) => {
+      return (["membership", "target", "electric"] as const).flatMap((type) => {
+        const key = `${row.plotId}:${type}`;
+        const accrual = accrualMap.get(key) ?? null;
+        const byType = row.byType[type];
+        if (!accrual && byType.accrued === 0 && byType.paid === 0) return [];
 
-    if (!paidByPlotAndType[p.plotId]) {
-      paidByPlotAndType[p.plotId] = { membership: 0, target: 0, electric: 0 };
-    }
-    paidByPlotAndType[p.plotId][type] = (paidByPlotAndType[p.plotId][type] ?? 0) + p.amount;
-  });
-
-  // Enrich accruals with plot info and paid amounts
-  const enriched = accruals.map((accrual) => {
-    const plot = plots.find((p) => p.id === accrual.plotId);
-    const paid = paidByPlotAndType[accrual.plotId]?.[accrual.type] ?? 0;
-    return {
-      ...accrual,
-      plot: plot
-        ? {
-            id: plot.id,
-            plotNumber: plot.plotNumber,
-            street: plot.street,
-            ownerFullName: plot.ownerFullName,
-          }
-        : null,
-      amountPaid: paid,
-      debt: accrual.amountAccrued - paid,
-    };
-  });
-
-  // Calculate totals
-  const totals = enriched.reduce(
-    (acc, item) => {
-      acc.accrued += item.amountAccrued;
-      acc.paid += item.amountPaid;
-      acc.debt += item.debt;
-      return acc;
-    },
-    { accrued: 0, paid: 0, debt: 0 }
-  );
-
-  // Group by type
-  const byType = {
-    membership: enriched.filter((a) => a.type === "membership"),
-    target: enriched.filter((a) => a.type === "target"),
-    electric: enriched.filter((a) => a.type === "electric"),
-  };
-
-  const totalsByType = {
-    membership: byType.membership.reduce((acc, item) => {
-      acc.accrued += item.amountAccrued;
-      acc.paid += item.amountPaid;
-      acc.debt += item.debt;
-      return acc;
-    }, { accrued: 0, paid: 0, debt: 0 }),
-    target: byType.target.reduce((acc, item) => {
-      acc.accrued += item.amountAccrued;
-      acc.paid += item.amountPaid;
-      acc.debt += item.debt;
-      return acc;
-    }, { accrued: 0, paid: 0, debt: 0 }),
-    electric: byType.electric.reduce((acc, item) => {
-      acc.accrued += item.amountAccrued;
-      acc.paid += item.amountPaid;
-      acc.debt += item.debt;
-      return acc;
-    }, { accrued: 0, paid: 0, debt: 0 }),
-  };
+        const plot = plotMap.get(row.plotId);
+        return [
+          {
+            id: accrual?.id ?? `virtual-${row.plotId}-${type}`,
+            plotId: row.plotId,
+            type,
+            amountAccrued: accrual?.amountAccrued ?? 0,
+            amountPaid: byType.paid,
+            debt: (accrual?.amountAccrued ?? 0) - byType.paid,
+            plot: plot
+              ? {
+                  id: plot.id,
+                  plotNumber: plot.plotNumber,
+                  street: plot.street,
+                  ownerFullName: plot.ownerFullName,
+                }
+              : null,
+          },
+        ];
+      });
+    });
 
     return ok(request, {
       period,
       accruals: enriched,
-      totals,
-      totalsByType,
+      totals: reconciliation.totals,
+      totalsByType: reconciliation.totalsByType,
     });
   } catch (error) {
     return serverError(request, "Internal error", error);

@@ -85,6 +85,8 @@ export type Permission =
   | "office.view"
   | "appeals.view"
   | "appeals.manage"
+  | "appeals.bulk_update"
+  | "appeals.run_reminders"
   | "announcements.view"
   | "announcements.manage"
   | "registry.view"
@@ -97,6 +99,8 @@ const permissionMatrix: Record<Role, Permission[]> = {
     "office.view",
     "appeals.view",
     "appeals.manage",
+    "appeals.bulk_update",
+    "appeals.run_reminders",
     "announcements.view",
     "announcements.manage",
     "registry.view",
@@ -108,6 +112,8 @@ const permissionMatrix: Record<Role, Permission[]> = {
     "office.view",
     "appeals.view",
     "appeals.manage",
+    "appeals.bulk_update",
+    "appeals.run_reminders",
     "announcements.view",
     "announcements.manage",
     "registry.view",
@@ -117,6 +123,7 @@ const permissionMatrix: Record<Role, Permission[]> = {
     "office.view",
     "appeals.view",
     "appeals.manage",
+    "appeals.bulk_update",
     "announcements.view",
     "announcements.manage",
     "registry.view",

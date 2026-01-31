@@ -28,6 +28,10 @@ export function createPerson(data: {
     email: data.email?.trim()?.toLowerCase() || null,
     plots: data.plots || [],
     verificationStatus: data.verificationStatus || "not_verified",
+    status: "active",
+    mergedIntoId: null,
+    contactVerifiedAt: null,
+    contactVerifiedBy: null,
     userId: null,
     createdAt: now,
     updatedAt: now,
@@ -43,8 +47,13 @@ export function getPerson(id: string): RegistryPerson | null {
 export function listPersons(params?: {
   q?: string;
   verificationStatus?: "not_verified" | "pending" | "verified" | "rejected";
+  includeMerged?: boolean;
 }): RegistryPerson[] {
   let result = [...getDb()];
+
+  if (!params?.includeMerged) {
+    result = result.filter((p) => p.status !== "merged");
+  }
 
   if (params?.q) {
     const query = params.q.toLowerCase().trim();
@@ -71,6 +80,10 @@ export function updatePerson(
     email: string | null;
     plots: string[];
     verificationStatus: "not_verified" | "pending" | "verified" | "rejected";
+    status: "active" | "merged";
+    mergedIntoId: string | null;
+    contactVerifiedAt: string | null;
+    contactVerifiedBy: string | null;
     userId: string | null;
   }>
 ): RegistryPerson | null {

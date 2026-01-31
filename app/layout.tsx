@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/react";
 import { RouteLoaderProvider } from "@/components/RouteLoaderProvider";
 import { ensureMockDbFromFile } from "@/lib/mockDbFile";
 import { getSiteUrl } from "@/lib/siteUrl";
@@ -46,6 +48,7 @@ export default async function RootLayout({
 }>) {
   await ensureMockDbFromFile();
   const enableUx = process.env.NEXT_PUBLIC_ENABLE_UX === "1" || process.env.NODE_ENV !== "production";
+  const isProduction = process.env.VERCEL_ENV === "production";
   return (
     <html lang="ru" className={inter.variable} suppressHydrationWarning>
       <body className="antialiased bg-[#F8F1E9] text-zinc-900 font-sans">
@@ -55,6 +58,12 @@ export default async function RootLayout({
           </RouteLoaderProvider>
         ) : (
           <>{children}</>
+        )}
+        {isProduction && (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
         )}
       </body>
     </html>

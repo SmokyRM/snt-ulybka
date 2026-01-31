@@ -2,12 +2,10 @@ import { checkAdminOrOfficeAccess } from "@/lib/rbac/accessCheck";
 import {
   getDb,
   listUnifiedBillingPeriods,
-  listPeriodAccruals,
   listPlots,
-  listPayments,
   findDebtRepaymentPlanByPlotPeriod,
 } from "@/lib/mockDb";
-import type { PeriodAccrual } from "@/types/snt";
+import { buildPeriodReconciliation } from "@/lib/billing/unifiedReconciliation.server";
 import { ok, unauthorized, forbidden, serverError } from "@/lib/api/respond";
 
 export type PlotDebtRow = {
@@ -110,71 +108,25 @@ export async function GET(request: Request) {
     return a;
   }
 
-  const allPayments = listPayments({}) ?? [];
-
   for (const p of periods) {
-    const accruals = listPeriodAccruals(p.id) ?? [];
-
-    const accrualsByPlot: Record<
-      string,
-      { membership: PeriodAccrual[]; target: PeriodAccrual[]; electric: PeriodAccrual[] }
-    > = {};
-    accruals.forEach((acc) => {
-      if (!acc?.plotId) return;
-      if (!accrualsByPlot[acc.plotId])
-        accrualsByPlot[acc.plotId] = { membership: [], target: [], electric: [] };
-      if (acc.type === "membership") accrualsByPlot[acc.plotId].membership.push(acc);
-      else if (acc.type === "target") accrualsByPlot[acc.plotId].target.push(acc);
-      else if (acc.type === "electric") accrualsByPlot[acc.plotId].electric.push(acc);
-    });
-
-    const paymentsByPlot: Record<string, { membership: number; target: number; electric: number }> = {};
-    accruals.forEach((acc) => {
-      if (!acc?.plotId) return;
-      if (!paymentsByPlot[acc.plotId]) paymentsByPlot[acc.plotId] = { membership: 0, target: 0, electric: 0 };
-      if (acc.type === "membership") paymentsByPlot[acc.plotId].membership += acc.amountPaid ?? 0;
-      else if (acc.type === "target") paymentsByPlot[acc.plotId].target += acc.amountPaid ?? 0;
-      else if (acc.type === "electric") paymentsByPlot[acc.plotId].electric += acc.amountPaid ?? 0;
-    });
-
-    allPayments
-      .filter((pay) => pay.plotId && pay.periodId === p.id)
-      .forEach((pay) => {
-        const pid = pay.plotId as string;
-        if (!paymentsByPlot[pid]) paymentsByPlot[pid] = { membership: 0, target: 0, electric: 0 };
-        if (pay.category === "membership" || pay.category === "membership_fee")
-          paymentsByPlot[pid].membership += pay.amount;
-        else if (pay.category === "target" || pay.category === "target_fee")
-          paymentsByPlot[pid].target += pay.amount;
-        else if (pay.category === "electricity" || pay.category === "electric")
-          paymentsByPlot[pid].electric += pay.amount;
-      });
-
+    const reconciliation = buildPeriodReconciliation(p);
     const periodTo = p.to ?? "";
 
-    for (const plot of plots) {
-      const pac = accrualsByPlot[plot.id] || { membership: [], target: [], electric: [] };
-      const pp = paymentsByPlot[plot.id] || { membership: 0, target: 0, electric: 0 };
-
-      const accM = (pac.membership || []).reduce((s, a) => s + (a.amountAccrued ?? 0), 0);
-      const accT = (pac.target || []).reduce((s, a) => s + (a.amountAccrued ?? 0), 0);
-      const accE = (pac.electric || []).reduce((s, a) => s + (a.amountAccrued ?? 0), 0);
-      const paidM = pp.membership ?? 0;
-      const paidT = pp.target ?? 0;
-      const paidE = pp.electric ?? 0;
-
-      const agg = getPlotAgg(plot.id);
-      agg.accruedM += accM;
-      agg.accruedT += accT;
-      agg.accruedE += accE;
-      agg.paidM += paidM;
-      agg.paidT += paidT;
-      agg.paidE += paidE;
-      const debtThis = Math.max(0, accM - paidM) + Math.max(0, accT - paidT) + Math.max(0, accE - paidE);
+    reconciliation.rows.forEach((row) => {
+      const agg = getPlotAgg(row.plotId);
+      agg.accruedM += row.byType.membership.accrued;
+      agg.accruedT += row.byType.target.accrued;
+      agg.accruedE += row.byType.electric.accrued;
+      agg.paidM += row.byType.membership.paid;
+      agg.paidT += row.byType.target.paid;
+      agg.paidE += row.byType.electric.paid;
+      const debtThis = Math.max(0, row.byType.membership.debt)
+        + Math.max(0, row.byType.target.debt)
+        + Math.max(0, row.byType.electric.debt);
       if (debtThis > 0 && periodTo && (!agg.minPeriodTo || periodTo < agg.minPeriodTo)) {
         agg.minPeriodTo = periodTo;
       }
-    }
+    });
   }
 
   if (mode === "people") {

@@ -83,7 +83,7 @@ export default defineConfig({
     },
     {
       name: "smoke-office-admin",
-      testMatch: /smoke-office\.spec\.ts$/,
+      testMatch: [/smoke-office\.spec\.ts$/, /resident-office-appeal\.workflow\.spec\.ts$/],
       retries: Number.isFinite(smokeRetries) ? smokeRetries : 1,
       use: { baseURL, storageState: "test-results/.auth/smoke-admin.json" },
       dependencies: ["smoke-billing-setup"],

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { upsertUserById } from "@/lib/mockDb";
+import { getRequestId } from "@/lib/api/requestId";
+import { logLoginAudit } from "@/lib/loginAudit.store";
 
 const SESSION_COOKIE = "snt_session";
 
@@ -35,11 +37,20 @@ const mapLogin = (
 const isPathAllowedForRole = (role: string, path: string | null | undefined) => {
   if (!path) return false;
   if (role === "admin") return path.startsWith("/admin");
-  if (role === "chairman" || role === "accountant" || role === "secretary") return path.startsWith("/office");
+  if (role === "chairman" || role === "accountant" || role === "secretary") {
+    return (
+      path.startsWith("/office") ||
+      path.startsWith("/admin/billing") ||
+      path.startsWith("/admin/registry")
+    );
+  }
   return false;
 };
 
 export async function POST(request: Request) {
+  const requestId = getRequestId(request);
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip");
+  const userAgent = request.headers.get("user-agent");
   const body = await request.json().catch(() => ({}));
   const loginRaw = (body.login as string | undefined) ?? null;
   const password = (body.password as string | undefined) ?? "";
@@ -47,6 +58,15 @@ export async function POST(request: Request) {
   const sanitizedNext = sanitizeNextUrl(nextRaw);
   const mapped = mapLogin(loginRaw);
   if (!mapped || !password.trim()) {
+    logLoginAudit({
+      userId: null,
+      role: mapped?.role ?? null,
+      success: false,
+      method: "password",
+      ip,
+      userAgent,
+      requestId,
+    });
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
   const envPass = (process.env[mapped.env] ?? "").trim();
@@ -57,6 +77,15 @@ export async function POST(request: Request) {
     );
   }
   if (!safeEquals(envPass, password)) {
+    logLoginAudit({
+      userId: null,
+      role: mapped.role,
+      success: false,
+      method: "password",
+      ip,
+      userAgent,
+      requestId,
+    });
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
 
@@ -109,5 +138,14 @@ export async function POST(request: Request) {
       secure: isProduction,
     });
   }
+  logLoginAudit({
+    userId,
+    role,
+    success: true,
+    method: "password",
+    ip,
+    userAgent,
+    requestId,
+  });
   return response;
 }

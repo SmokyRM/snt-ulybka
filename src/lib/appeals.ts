@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { addUserEvent } from "@/lib/userEvents";
 import { isServerlessReadonlyFs, warnReadonlyFs } from "@/lib/fsGuard";
+import { rateLimit } from "@/lib/security/rateLimit";
 
 export type AppealStatus = "draft" | "new" | "in_progress" | "answered" | "closed";
 export type AppealTopic = string;
@@ -106,21 +107,12 @@ async function writeAppeals(items: Appeal[]) {
 
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-const rateLimit = new Map<string, number[]>();
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
-export function checkAppealRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const existing = rateLimit.get(userId) ?? [];
-  const filtered = existing.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
-  if (filtered.length >= RATE_LIMIT_MAX) {
-    rateLimit.set(userId, filtered);
-    return false;
-  }
-  filtered.push(now);
-  rateLimit.set(userId, filtered);
-  return true;
+export async function checkAppealRateLimit(userId: string) {
+  const result = await rateLimit(`appeal:${userId}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  return result;
 }
 
 export async function createAppeal(userId: string, message: string, topic: AppealTopic = "Общее") {

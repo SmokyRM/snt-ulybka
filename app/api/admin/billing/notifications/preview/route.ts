@@ -1,14 +1,15 @@
-import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
+import { requirePermission } from "@/lib/permissionsGuard";
 import { listPlots } from "@/lib/mockDb";
 import { getPlotBalance } from "@/lib/billing/services";
-import { ok, unauthorized, badRequest, serverError } from "@/lib/api/respond";
+import { ok, badRequest, serverError } from "@/lib/api/respond";
 
 export async function POST(request: Request) {
   try {
-    const user = await getSessionUser();
-    if (!hasFinanceAccess(user)) {
-      return unauthorized(request);
-    }
+    const guard = await requirePermission(request, "notifications.send", {
+      route: "/api/admin/billing/notifications/preview",
+      deniedReason: "notifications.send",
+    });
+    if (guard instanceof Response) return guard;
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {

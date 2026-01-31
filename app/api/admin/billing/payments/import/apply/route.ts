@@ -1,6 +1,4 @@
-import { NextResponse } from "next/server";
-import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
-import { isOfficeRole, isAdminRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/permissionsGuard";
 import {
   createPaymentImport,
   createPaymentImportRow,
@@ -12,7 +10,7 @@ import {
 } from "@/lib/mockDb";
 import { logAdminAction } from "@/lib/audit";
 import crypto from "crypto";
-import { ok, unauthorized, forbidden, badRequest, serverError } from "@/lib/api/respond";
+import { ok, badRequest, fail, serverError } from "@/lib/api/respond";
 
 function fingerprint(date: string, amount: number, plotId: string, phone: string, comment: string): string {
   const s = [date, String(amount), plotId || "", (phone || "").trim(), (comment || "").trim()].join("|");
@@ -38,11 +36,13 @@ type InRow = {
 /** Apply: создаёт PaymentImport, PaymentImportRows, Payments. Дедуп по fingerprint. Admin + office. */
 export async function POST(request: Request) {
   try {
-    const user = await getSessionUser();
-    if (!user) return unauthorized(request);
-    if (!hasFinanceAccess(user) && !isOfficeRole(user.role) && !isAdminRole(user.role)) {
-      return forbidden(request);
-    }
+    const guard = await requirePermission(request, "billing.import", {
+      route: "/api/admin/billing/payments/import/apply",
+      deniedReason: "billing.import",
+    });
+    if (guard instanceof Response) return guard;
+    const { session } = guard;
+    if (!session) return fail(request, "unauthorized", "Unauthorized", 401);
 
     const body = await request.json().catch(() => ({}));
     const rows = body.rows as InRow[] | undefined;
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     const import_ = createPaymentImport({
       fileName,
       totalRows: rows.length,
-      createdByUserId: user.id ?? null,
+      createdByUserId: session.id ?? null,
     });
 
     const existingPayments = listPayments({});
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           method: "import",
           reference: null,
           comment: comment || null,
-          createdByUserId: user.id ?? null,
+          createdByUserId: session.id ?? null,
           importBatchId: import_.id,
           fingerprint: fp,
         });
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
       errorRows,
       appliedRows,
       appliedAt: new Date().toISOString(),
-      appliedByUserId: user.id ?? null,
+      appliedByUserId: session.id ?? null,
     });
 
     await logAdminAction({

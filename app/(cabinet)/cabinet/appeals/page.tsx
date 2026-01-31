@@ -1,17 +1,48 @@
+import { redirect } from "next/navigation";
 import { readQaCabinetMockEnabled } from "@/lib/qaCabinetStage.server";
-import type { QaCabinetMockData } from "../../../cabinet/_dev/qaMockData";
 import { getQaCabinetMockData } from "../../../cabinet/_dev/qaMockData";
 import { CabinetCard } from "../../../cabinet/_components/CabinetCard";
 import { EmptyState } from "../../../cabinet/_components/EmptyState";
 import { getCabinetHeaderInfo } from "../../../cabinet/_components/headerInfo";
 import { CabinetHeader } from "../../../cabinet/_components/CabinetHeader";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import { listAppealsForResident } from "@/lib/appeals.store";
 
 export const dynamic = "force-dynamic";
 
 export default async function CabinetAppealsPage() {
+  const session = await getEffectiveSessionUser();
+  if (!session) {
+    redirect("/login?next=/cabinet/appeals");
+  }
+  if (session.role !== "resident") {
+    redirect("/forbidden");
+  }
+  type AppealItem = {
+    id: string;
+    createdAt: string;
+    status: string;
+    title?: string;
+    message?: string;
+    plotNumber?: string;
+  };
   const mockEnabled = await readQaCabinetMockEnabled();
   const mock = mockEnabled ? getQaCabinetMockData() : null;
-  const appeals: QaCabinetMockData["appeals"] = mock?.appeals ?? [];
+  const residentAppeals = listAppealsForResident(session.id);
+  const appeals: AppealItem[] = residentAppeals.length
+    ? residentAppeals.map((appeal) => ({
+        id: appeal.id,
+        createdAt: appeal.createdAt,
+        status: appeal.status,
+        title: appeal.title,
+        plotNumber: appeal.plotNumber,
+      }))
+    : (mock?.appeals ?? []).map((appeal) => ({
+        id: appeal.id,
+        createdAt: appeal.createdAt,
+        status: appeal.status,
+        message: appeal.message,
+      }));
   const headerInfo = await getCabinetHeaderInfo("Обращения");
 
   return (
@@ -28,22 +59,30 @@ export default async function CabinetAppealsPage() {
           {appeals.length === 0 ? (
             <EmptyState
               title="Обращений пока нет"
-              description="Создайте обращение или включите QA mock."
-              actionHref="/cabinet"
-              actionLabel="Создать"
+              description="Создайте обращение, чтобы получить ответ от правления."
+              actionHref="/cabinet/appeals/new"
+              actionLabel="Создать обращение"
             />
           ) : (
-            <div className="space-y-2 text-sm text-zinc-800">
+            <div className="space-y-2 text-sm text-zinc-800" data-testid="cabinet-appeals-list">
               {appeals.map((a) => (
-                <div key={a.id} className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{a.status}</span>
-                    <span className="text-[11px] text-zinc-500">
-                      {new Date(a.createdAt).toLocaleDateString("ru-RU")}
+                <a
+                  key={a.id}
+                  href={`/cabinet/appeals/${a.id}`}
+                  data-testid={`cabinet-appeals-item-${a.id}`}
+                  className="block rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 transition hover:border-[#5E704F] hover:bg-amber-50"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-zinc-900">{a.title ?? a.message ?? "Без темы"}</span>
+                    <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">
+                      {a.status}
                     </span>
                   </div>
-                  <p className="text-sm text-zinc-700">{a.message}</p>
-                </div>
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                    <span>{a.plotNumber ?? "Участок не указан"}</span>
+                    <span>{new Date(a.createdAt).toLocaleDateString("ru-RU")}</span>
+                  </div>
+                </a>
               ))}
             </div>
           )}

@@ -7,6 +7,8 @@ export type RegistryItem = {
   phone?: string;
   email?: string;
   status?: "verified" | "pending" | "draft";
+  contactVerifiedAt?: string | null;
+  contactVerifiedBy?: string | null;
   updatedAt: string;
 };
 
@@ -194,6 +196,23 @@ export function listRegistry(params: ListParams = {}): RegistryItem[] {
 
 export function getRegistryItem(id: string): RegistryItem | null {
   return seedRegistry.find((item) => item.id === id) ?? null;
+}
+
+export function setRegistryContactVerified(
+  id: string,
+  params: { verified: boolean; actorId: string | null }
+): RegistryItem | null {
+  const item = seedRegistry.find((entry) => entry.id === id);
+  if (!item) return null;
+  if (params.verified) {
+    item.contactVerifiedAt = new Date().toISOString();
+    item.contactVerifiedBy = params.actorId;
+  } else {
+    item.contactVerifiedAt = null;
+    item.contactVerifiedBy = null;
+  }
+  item.updatedAt = new Date().toISOString();
+  return item;
 }
 
 export function findRegistryByPlotNumber(plotNumber: string): RegistryItem | null {

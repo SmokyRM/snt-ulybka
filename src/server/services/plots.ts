@@ -26,6 +26,8 @@ export type PlotDetail = {
   ownerName?: string | null;
   phone?: string | null;
   email?: string | null;
+  contactVerifiedAt?: string | null;
+  contactVerifiedBy?: string | null;
   cadastral?: string | null;
   notes?: string | null;
   status?: string;
@@ -117,6 +119,8 @@ export async function getPlot(plotId: string): Promise<PlotDetail | null> {
       phone: registryItem.phone,
       email: registryItem.email,
       status: registryItem.status,
+      contactVerifiedAt: registryItem.contactVerifiedAt ?? null,
+      contactVerifiedBy: registryItem.contactVerifiedBy ?? null,
       updatedAt: registryItem.updatedAt,
       createdAt: registryItem.updatedAt,
     };

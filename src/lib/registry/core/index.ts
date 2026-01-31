@@ -5,3 +5,4 @@ export * from "./inviteCodes.store";
 export * from "./types";
 export * from "./importSession.store";
 export * from "./issues.store";
+export * from "./duplicates.store";

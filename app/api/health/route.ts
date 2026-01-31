@@ -1,9 +1,18 @@
-import { ok, serverError } from "@/lib/api/respond";
+import { ok } from "@/lib/api/respond";
+import { getMetricsSnapshot } from "@/lib/metrics";
 
 export async function GET(request: Request) {
-  try {
-    return ok(request, {});
-  } catch (error) {
-    return serverError(request, "Ошибка при получении статуса", error);
-  }
+  const uptime = process.uptime();
+  const timestamp = new Date().toISOString();
+  const version = process.env.NEXT_PUBLIC_APP_VERSION ?? null;
+  const gitSha = process.env.GIT_SHA ?? null;
+
+  return ok(request, {
+    status: "ok",
+    timestamp,
+    uptimeSeconds: Math.round(uptime),
+    version,
+    gitSha,
+    metrics: getMetricsSnapshot(),
+  });
 }

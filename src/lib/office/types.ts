@@ -41,6 +41,8 @@ export type Appeal = {
   assignedAt: string | null; // Дата и время назначения
   dueAt?: string | null;
   dueAtSource?: "auto" | "manual"; // Источник установки срока: auto - автоматически по SLA, manual - вручную
+  slaDays?: number; // Sprint 34: SLA в днях для отображения
+  closedAt?: string | null; // Sprint 34: Дата закрытия обращения
   priority?: "low" | "medium" | "high";
   comments?: AppealComment[];
   history?: AppealHistory[];

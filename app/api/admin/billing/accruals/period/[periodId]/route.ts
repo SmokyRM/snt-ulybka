@@ -8,7 +8,9 @@ import {
   listPeriodAccruals,
   listPlots,
 } from "@/lib/mockDb";
+import { buildPeriodReconciliation } from "@/lib/billing/unifiedReconciliation.server";
 import { logAdminAction } from "@/lib/audit";
+import { assertPeriodEditable } from "@/lib/billing/unifiedPolicy";
 
 /** Данные периода начислений: итог, по типам, по участкам. Admin + office. */
 export async function GET(
@@ -29,33 +31,30 @@ export async function GET(
   const accruals = listPeriodAccruals(periodId);
   const plots = listPlots();
   const plotMap = new Map(plots.map((p) => [p.id, p]));
-
-  const totalAccrued = accruals.reduce((s, a) => s + a.amountAccrued, 0);
-  const totalPaid = accruals.reduce((s, a) => s + (a.amountPaid ?? 0), 0);
+  const reconciliation = buildPeriodReconciliation(period);
   const needsReviewCount = accruals.filter((a) => a.note === "needs_review").length;
 
   const byType = {
-    membership: { count: 0, accrued: 0, paid: 0 },
-    target: { count: 0, accrued: 0, paid: 0 },
+    membership: {
+      count: accruals.filter((a) => a.type === "membership").length,
+      accrued: reconciliation.totalsByType.membership.accrued,
+      paid: reconciliation.totalsByType.membership.paid,
+    },
+    target: {
+      count: accruals.filter((a) => a.type === "target").length,
+      accrued: reconciliation.totalsByType.target.accrued,
+      paid: reconciliation.totalsByType.target.paid,
+    },
   };
-  accruals.forEach((a) => {
-    if (a.type === "membership") {
-      byType.membership.count++;
-      byType.membership.accrued += a.amountAccrued;
-      byType.membership.paid += a.amountPaid ?? 0;
-    } else if (a.type === "target") {
-      byType.target.count++;
-      byType.target.accrued += a.amountAccrued;
-      byType.target.paid += a.amountPaid ?? 0;
-    }
-  });
 
-  const plotRowsMap = new Map<string, { plotId: string; plotNumber: string; ownerName: string; membership: number; target: number }>();
+  const plotRowsMap = new Map<
+    string,
+    { plotId: string; plotNumber: string; ownerName: string; membership: number; target: number }
+  >();
   accruals.forEach((a) => {
     const plot = plotMap.get(a.plotId);
-    const key = a.plotId;
-    if (!plotRowsMap.has(key)) {
-      plotRowsMap.set(key, {
+    if (!plotRowsMap.has(a.plotId)) {
+      plotRowsMap.set(a.plotId, {
         plotId: a.plotId,
         plotNumber: plot?.plotNumber ?? a.plotId,
         ownerName: plot?.ownerFullName ?? "—",
@@ -63,20 +62,31 @@ export async function GET(
         target: 0,
       });
     }
-    const row = plotRowsMap.get(key)!;
+    const row = plotRowsMap.get(a.plotId)!;
     if (a.type === "membership") row.membership = a.amountAccrued;
-    else if (a.type === "target") row.target = a.amountAccrued;
+    if (a.type === "target") row.target = a.amountAccrued;
   });
   const plotRows = Array.from(plotRowsMap.values());
 
+  const paidByPlotType = new Map<string, { membership: number; target: number; electric: number }>();
+  reconciliation.rows.forEach((row) => {
+    paidByPlotType.set(row.plotId, {
+      membership: row.byType.membership.paid,
+      target: row.byType.target.paid,
+      electric: row.byType.electric.paid,
+    });
+  });
+
   const plotData = accruals.map((a) => {
     const plot = plotMap.get(a.plotId);
+    const paid = paidByPlotType.get(a.plotId)?.[a.type] ?? 0;
     return {
       plotId: a.plotId,
       street: plot?.street ?? "—",
       plotNumber: plot?.plotNumber ?? a.plotId,
       ownerName: plot?.ownerFullName ?? "—",
       amountAccrued: a.amountAccrued,
+      amountPaid: paid,
       needsReview: a.note === "needs_review",
     };
   });
@@ -85,8 +95,8 @@ export async function GET(
       period,
       summary: {
         plotCount: accruals.length,
-        totalAccrued,
-        totalPaid,
+        totalAccrued: reconciliation.totals.accrued,
+        totalPaid: reconciliation.totals.paid,
         needsReviewCount,
       },
       byType,
@@ -113,6 +123,11 @@ export async function PATCH(
     const { periodId } = await params;
     const period = findUnifiedBillingPeriodById(periodId);
     if (!period) return fail(request, "not_found", "Период не найден", 404);
+    try {
+      assertPeriodEditable(period);
+    } catch {
+      return badRequest(request, "Период закрыт. Изменения запрещены.");
+    }
 
     const body = await request.json().catch(() => ({}));
     const action = body.action === "lock" ? "lock" : body.action === "unlock" ? "unlock" : null;

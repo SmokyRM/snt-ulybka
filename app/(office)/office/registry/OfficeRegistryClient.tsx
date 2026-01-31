@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RegistryPerson } from "@/types/snt";
-import { apiPost, readOk } from "@/lib/api/client";
+import { apiPost, apiGet } from "@/lib/api/client";
 
 function OfficeVerifyButton({ personId }: { personId: string }) {
   const router = useRouter();
@@ -55,32 +55,73 @@ interface EnrichedPerson extends RegistryPerson {
 interface OfficeRegistryClientProps {
   initialPersons: EnrichedPerson[];
   initialQuery?: string;
+  initialStatus: "all" | "verified" | "pending" | "rejected" | "not_verified";
+  initialPage: number;
+  initialTotal: number;
+  limit: number;
 }
 
-export default function OfficeRegistryClient({ initialPersons, initialQuery = "" }: OfficeRegistryClientProps) {
+export default function OfficeRegistryClient({
+  initialPersons,
+  initialQuery = "",
+  initialStatus,
+  initialPage,
+  initialTotal,
+  limit,
+}: OfficeRegistryClientProps) {
+  const router = useRouter();
   const [persons, setPersons] = useState<EnrichedPerson[]>(initialPersons);
   const [query, setQuery] = useState(initialQuery);
+  const [statusFilter, setStatusFilter] = useState<"all" | "verified" | "pending" | "rejected" | "not_verified">(
+    initialStatus,
+  );
+  const [page, setPage] = useState(initialPage);
+  const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const updateUrl = (nextPage: number) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (statusFilter && statusFilter !== "all") params.set("verificationStatus", statusFilter);
+    params.set("page", String(nextPage));
+    params.set("limit", String(limit));
+    router.replace(`/office/registry?${params.toString()}`);
+  };
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      loadPersons();
-    }, 0);
+      setPage(1);
+      loadPersons(1);
+    }, 400);
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, statusFilter]);
 
-  const loadPersons = async () => {
+  useEffect(() => {
+    if (page === initialPage) return;
+    loadPersons(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const loadPersons = async (nextPage: number) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
+      if (statusFilter && statusFilter !== "all") params.set("verificationStatus", statusFilter);
+      params.set("page", String(nextPage));
+      params.set("limit", String(limit));
 
-      const res = await fetch(`/api/admin/registry?${params.toString()}`);
-      const data = await readOk<{ persons?: EnrichedPerson[] }>(res);
+      const data = await apiGet<{ persons?: EnrichedPerson[]; total?: number; page?: number }>(
+        `/api/admin/registry?${params.toString()}`,
+      );
       setPersons(data?.persons || []);
+      setTotal(data?.total ?? 0);
+      const pageValue = data?.page ?? nextPage;
+      setPage(pageValue);
+      updateUrl(pageValue);
     } catch (e) {
       setError((e as Error).message || "Ошибка загрузки данных");
     } finally {
@@ -88,8 +129,11 @@ export default function OfficeRegistryClient({ initialPersons, initialQuery = ""
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const currentPage = Math.min(page, totalPages);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="office-registry-root">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Реестр СНТ</h1>
@@ -98,25 +142,60 @@ export default function OfficeRegistryClient({ initialPersons, initialQuery = ""
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
-          {error}
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3" role="alert" data-testid="office-error-state">
+          <p className="text-sm text-red-900">{error}</p>
+          <button
+            type="button"
+            onClick={() => loadPersons(page)}
+            className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+            data-testid="office-retry-button"
+          >
+            Повторить
+          </button>
         </div>
       )}
 
       {/* Filters */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск: ФИО, телефон, email"
-          className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск: ФИО, телефон, email"
+            className="w-full max-w-md rounded border border-zinc-300 px-3 py-2 text-sm"
+            data-testid="office-registry-search"
+          />
+          <div className="flex flex-wrap gap-2 text-xs">
+            {[
+              { key: "all", label: "Все" },
+              { key: "not_verified", label: "Не проверены" },
+              { key: "verified", label: "Подтверждены" },
+              { key: "pending", label: "На проверке" },
+              { key: "rejected", label: "Отклонены" },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setStatusFilter(item.key as typeof statusFilter)}
+                className={`rounded-full border px-3 py-1 font-semibold ${
+                  statusFilter === item.key ? "border-[#5E704F] bg-[#5E704F]/10 text-[#5E704F]" : "border-zinc-200 text-zinc-600"
+                }`}
+                data-testid={`office-registry-filter-${item.key}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Table */}
       {loading ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-zinc-600">Загрузка...</div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-zinc-600" data-testid="office-loading-state">
+          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-[#5E704F]" />
+          Загрузка...
+        </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-zinc-200 text-sm">
@@ -133,13 +212,23 @@ export default function OfficeRegistryClient({ initialPersons, initialQuery = ""
             <tbody className="divide-y divide-zinc-100 bg-white">
               {persons.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
-                    Реестр пуст
+                  <td colSpan={6} className="px-4 py-8 text-center text-zinc-500" data-testid="office-empty-state">
+                    <p>Реестр пуст</p>
+                    {(query || statusFilter !== "all") && (
+                      <button
+                        type="button"
+                        onClick={() => { setQuery(""); setStatusFilter("all"); }}
+                        className="mt-2 rounded-lg border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-[#5E704F]"
+                        data-testid="office-reset-filters"
+                      >
+                        Сбросить фильтры
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
                 persons.map((person) => (
-                  <tr key={person.id} className="hover:bg-zinc-50">
+                  <tr key={person.id} className="hover:bg-zinc-50" data-testid="office-registry-row">
                     <td className="px-4 py-3 font-medium text-zinc-900">{person.fullName}</td>
                     <td className="px-4 py-3 text-zinc-700">{person.phone || "—"}</td>
                     <td className="px-4 py-3 text-zinc-700">{person.email || "—"}</td>
@@ -184,6 +273,31 @@ export default function OfficeRegistryClient({ initialPersons, initialQuery = ""
               )}
             </tbody>
           </table>
+          {totalPages > 1 ? (
+            <div className="flex items-center justify-between border-t border-zinc-100 px-4 py-3 text-xs text-zinc-600" data-testid="office-registry-pagination">
+              <span>
+                Страница {currentPage} из {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-50"
+                >
+                  Назад
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="rounded border border-zinc-200 px-2 py-1 disabled:opacity-50"
+                >
+                  Вперед
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

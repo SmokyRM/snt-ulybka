@@ -1,4 +1,5 @@
 import type { RegistryPerson } from "@/types/snt";
+import { normalizePhone } from "@/lib/utils/phone";
 import { listPersons } from "./persons.store";
 import { listPlots } from "./plots.store";
 
@@ -26,14 +27,6 @@ export interface IssueSummary {
   bySeverity: { low: number; medium: number; high: number };
 }
 
-function normalizePhone(phone: string | null | undefined): string | null {
-  if (!phone) return null;
-  // Remove all non-digit characters except +
-  const cleaned = phone.replace(/[^\d+]/g, "");
-  // Remove leading + if present
-  return cleaned.replace(/^\+/, "") || null;
-}
-
 export function detectIssues(): {
   issues: DataIssue[];
   summary: IssueSummary;
@@ -51,16 +44,12 @@ export function detectIssues(): {
   // Build phone -> persons mapping for duplicate detection
   const phoneToPersons = new Map<string, RegistryPerson[]>();
   persons.forEach((person) => {
-    if (person.phone) {
-      const normalized = normalizePhone(person.phone);
-      if (normalized) {
-        const key = normalized;
-        if (!phoneToPersons.has(key)) {
-          phoneToPersons.set(key, []);
-        }
-        phoneToPersons.get(key)!.push(person);
-      }
+    const normalized = normalizePhone(person.phone);
+    if (!normalized) return;
+    if (!phoneToPersons.has(normalized)) {
+      phoneToPersons.set(normalized, []);
     }
+    phoneToPersons.get(normalized)!.push(person);
   });
 
   // Detect issues for each person
@@ -103,7 +92,7 @@ export function detectIssues(): {
     }
 
     // 4. Duplicate phone (detected once per group)
-    if (person.phone) {
+    {
       const normalized = normalizePhone(person.phone);
       if (normalized) {
         const personsWithSamePhone = phoneToPersons.get(normalized) || [];
@@ -133,7 +122,7 @@ export function detectIssues(): {
     }
 
     // 5. Name conflict (same phone, different names)
-    if (person.phone) {
+    {
       const normalized = normalizePhone(person.phone);
       if (normalized) {
         const personsWithSamePhone = phoneToPersons.get(normalized) || [];

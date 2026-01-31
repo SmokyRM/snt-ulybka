@@ -6,6 +6,8 @@ import {
   updateUnifiedBillingPeriod,
   findUnifiedBillingPeriodById,
 } from "@/lib/mockDb";
+import { buildPeriodReconciliation } from "@/lib/billing/unifiedReconciliation.server";
+import { assertPeriodEditable } from "@/lib/billing/unifiedPolicy";
 import { logAdminAction } from "@/lib/audit";
 import { ok, unauthorized, forbidden, badRequest, fail, serverError } from "@/lib/api/respond";
 
@@ -100,6 +102,14 @@ export async function PUT(request: Request) {
       return fail(request, "not_found", "period not found", 404);
     }
 
+    try {
+      assertPeriodEditable(existing);
+    } catch {
+      return fail(request, "period_closed", "Период закрыт. Изменения запрещены.", 409);
+    }
+
+    const isClosing = status === "closed" && existing.status !== "closed";
+
     const before = { ...existing };
     const updated = updateUnifiedBillingPeriod(id, {
       from,
@@ -111,6 +121,21 @@ export async function PUT(request: Request) {
 
     if (!updated) {
       return serverError(request, "failed to update");
+    }
+
+    if (isClosing) {
+      const reconciliation = buildPeriodReconciliation(updated, { updateAccrualPaid: true, includeZero: true });
+      await logAdminAction({
+        action: "billing_period_closed",
+        entity: "billing_period",
+        entityId: id,
+        before,
+        after: {
+          status: "closed",
+          totals: reconciliation.totals,
+        },
+        headers: request.headers,
+      });
     }
 
     await logAdminAction({

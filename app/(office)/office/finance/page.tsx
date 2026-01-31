@@ -4,6 +4,7 @@ import { listDebtRows } from "@/lib/office/finance.server";
 import type { DebtRow } from "@/lib/office/types";
 import { assertCan, hasPermission, isOfficeRole, isStaffOrAdmin } from "@/lib/rbac";
 import type { Role } from "@/lib/permissions";
+import { hasPermission as hasActionPermission } from "@/lib/permissions";
 import { getDebtsSummary } from "@/server/services/finance";
 import AppLink from "@/components/AppLink";
 import ExportButton from "./ExportButton";
@@ -75,7 +76,7 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
               Импорт платежей
             </AppLink>
           )}
-          {hasPermission(role, "finance.export") && (
+          {hasPermission(role, "finance.export") && hasActionPermission(role, "billing.export") && (
             <AppLink
               href="/office/finance/exports"
               className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
@@ -109,10 +110,10 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900">Финансы</h1>
+          <h2 className="text-lg font-semibold text-zinc-900">Долги по участкам</h2>
           <p className="text-sm text-zinc-600">Долги и оплаты по участкам.</p>
         </div>
-        {hasPermission(role, "finance.export") ? <ExportButton rows={rows} /> : null}
+        {hasPermission(role, "finance.export") && hasActionPermission(role, "billing.export") ? <ExportButton rows={rows} /> : null}
       </div>
 
       <form className="mt-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-3">
@@ -124,7 +125,7 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
             defaultValue={q}
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none"
             placeholder="Например: Березовая"
-            data-testid="office-finance-search"
+            data-testid="office-search"
           />
         </label>
         <label>
@@ -167,13 +168,22 @@ export default async function OfficeFinancePage({ searchParams }: Props) {
           <tbody className="divide-y divide-zinc-200">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-4 text-sm text-zinc-600">
+                <td colSpan={6} className="px-3 py-4 text-center text-sm text-zinc-600" data-testid="office-empty-state">
                   Данных по выбранным фильтрам нет.
+                  {(q || period !== "all") && (
+                    <a
+                      href="/office/finance"
+                      className="ml-2 text-[#5E704F] underline hover:no-underline"
+                      data-testid="office-reset-filters"
+                    >
+                      Сбросить
+                    </a>
+                  )}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={`${row.plotNumber}-${row.period}`} data-testid={`office-finance-row-${row.plotNumber.replace(/\s+/g, "-")}`}>
+                <tr key={`${row.plotNumber}-${row.period}`} data-testid={`office-billing-row-${row.plotNumber.replace(/\s+/g, "-")}`}>
                   <td className="px-3 py-2 text-sm font-semibold text-zinc-900">{row.plotNumber}</td>
                   <td className="px-3 py-2 text-sm text-zinc-700">{row.ownerName ?? "—"}</td>
                   <td className="px-3 py-2 text-sm text-zinc-700">{row.period}</td>

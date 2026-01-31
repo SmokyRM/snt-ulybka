@@ -1,7 +1,5 @@
-import { NextResponse } from "next/server";
-import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
-import { isOfficeRole, isAdminRole } from "@/lib/rbac";
-import { ok, unauthorized, forbidden, badRequest, fail, serverError } from "@/lib/api/respond";
+import { requirePermission } from "@/lib/permissionsGuard";
+import { ok, badRequest, fail, serverError } from "@/lib/api/respond";
 import {
   findPaymentImportRowById,
   updatePaymentImportRow,
@@ -15,11 +13,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getSessionUser();
-  if (!user) return unauthorized(request);
-  if (!hasFinanceAccess(user) && !isOfficeRole(user.role) && !isAdminRole(user.role)) {
-    return forbidden(request);
-  }
+  const guard = await requirePermission(request, "billing.import", {
+    route: "/api/admin/billing/payments-import/[id]/match",
+    deniedReason: "billing.import",
+  });
+  if (guard instanceof Response) return guard;
 
   const { id } = await params;
   const body = await request.json().catch(() => ({}));

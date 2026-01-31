@@ -1,5 +1,5 @@
-import { getSessionUser, hasFinanceAccess } from "@/lib/session.server";
-import { ok, unauthorized, badRequest, fail, serverError } from "@/lib/api/respond";
+import { requirePermission } from "@/lib/permissionsGuard";
+import { ok, badRequest, fail, serverError } from "@/lib/api/respond";
 import {
   getMessageTemplate,
   createNotificationSendLog,
@@ -46,10 +46,12 @@ function buildVariables(plotId: string, plot: { street: string; plotNumber: stri
 
 export async function POST(request: Request) {
   try {
-    const user = await getSessionUser();
-    if (!hasFinanceAccess(user)) {
-      return unauthorized(request);
-    }
+    const guard = await requirePermission(request, "notifications.send", {
+      route: "/api/admin/billing/notifications/send",
+      deniedReason: "notifications.send",
+    });
+    if (guard instanceof Response) return guard;
+    const user = guard.session;
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {

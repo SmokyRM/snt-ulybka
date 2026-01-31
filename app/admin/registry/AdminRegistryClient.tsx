@@ -58,6 +58,8 @@ export default function AdminRegistryClient({
       const params = new URLSearchParams();
       if (query) params.set("q", query);
       if (verificationStatus) params.set("verificationStatus", verificationStatus);
+      params.set("page", "1");
+      params.set("limit", "1000");
 
       const res = await fetch(`/api/admin/registry?${params.toString()}`);
       const data = await readOk<{ persons?: EnrichedPerson[] }>(res);

@@ -21,7 +21,56 @@ export type ListAppealsParams = {
   assignedTo?: string;
 };
 
+const mapAppeal = (item: ReturnType<typeof listBaseAppeals>[number]): Appeal => ({
+  id: item.id,
+  createdAt: item.createdAt,
+  updatedAt: item.updatedAt,
+  title: item.title,
+  body: item.body,
+  status: item.status,
+  plotNumber: item.plotNumber,
+  authorId: item.authorId,
+  authorName: item.authorName,
+  authorPhone: item.authorPhone,
+  comments: item.comments,
+  assigneeRole: item.assigneeRole,
+  assigneeUserId: item.assigneeUserId,
+  assignedToUserId: item.assignedToUserId ?? item.assigneeUserId ?? null, // Sprint 2.1
+  assignedAt: item.assignedAt ?? null,
+  dueAt: item.dueAt,
+  dueAtSource: item.dueAtSource,
+  slaDays: item.slaDays, // Sprint 34
+  closedAt: item.closedAt, // Sprint 34
+  priority: item.priority,
+  history: item.history,
+  replyDraft: item.replyDraft,
+});
+
+async function guardOfficeAccess() {
+  const user = await getEffectiveSessionUser();
+  if (!user) {
+    throw new Error("UNAUTHORIZED");
+  }
+  const role = (user.role as Role | undefined) ?? "resident";
+  if (!isStaffOrAdmin(role)) {
+    throw new Error("FORBIDDEN");
+  }
+  assertCan(role, "appeal.read", "appeal");
+  return { user, role };
+}
+
 export async function listAppeals(params: ListAppealsParams = {}): Promise<Appeal[]> {
+  await guardOfficeAccess();
+  let appeals = listBaseAppeals({ status: params.status, q: params.q });
+  if (params.assignedTo) {
+    appeals = appeals.filter(
+      (appeal) => appeal.assigneeUserId === params.assignedTo || appeal.assigneeRole === params.assignedTo
+    );
+  }
+  return appeals.map(mapAppeal);
+}
+
+export async function listAppealsPaged(params: ListAppealsParams & { page?: number; limit?: number }) {
   const user = await getEffectiveSessionUser();
   if (!user) {
     throw new Error("UNAUTHORIZED");
@@ -33,34 +82,19 @@ export async function listAppeals(params: ListAppealsParams = {}): Promise<Appea
   assertCan(role, "appeal.read", "appeal");
 
   let appeals = listBaseAppeals({ status: params.status, q: params.q });
-  
-  // Фильтр по assignedTo
   if (params.assignedTo) {
     appeals = appeals.filter(
       (appeal) => appeal.assigneeUserId === params.assignedTo || appeal.assigneeRole === params.assignedTo
     );
   }
 
-  return appeals.map((item) => ({
-    id: item.id,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    title: item.title,
-    body: item.body,
-    status: item.status,
-    plotNumber: item.plotNumber,
-    authorId: item.authorId,
-    authorName: item.authorName,
-    authorPhone: item.authorPhone,
-    comments: item.comments,
-    assigneeRole: item.assigneeRole,
-    assigneeUserId: item.assigneeUserId,
-    assignedToUserId: item.assignedToUserId ?? item.assigneeUserId ?? null, // Sprint 2.1
-    assignedAt: item.assignedAt ?? null,
-    dueAt: item.dueAt,
-    priority: item.priority,
-    history: item.history,
-  }));
+  const total = appeals.length;
+  const page = Math.max(1, params.page ?? 1);
+  const limit = Math.min(50, Math.max(5, params.limit ?? 10));
+  const start = (page - 1) * limit;
+  const items = appeals.slice(start, start + limit).map(mapAppeal);
+
+  return { items, total, page, limit };
 }
 
 export async function getAppeal(id: string): Promise<Appeal | null> {

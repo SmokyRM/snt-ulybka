@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AppealStatus } from "@/lib/office/types";
 import { apiPost } from "@/lib/api/client";
+import OfficeErrorState from "../../_components/OfficeErrorState";
+import OfficeLoadingState from "../../_components/OfficeLoadingState";
 
 type Props = {
   appealId: string;
@@ -14,31 +16,45 @@ type Props = {
 export default function AppealActionsClient({ appealId, currentStatus, onUpdate }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<AppealStatus>(currentStatus);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleStatusUpdate = async (status: AppealStatus, comment?: string) => {
     setLoading(status);
+    setError(null);
+    setSuccess(null);
     try {
       await apiPost<{ appeal: { id: string } }>(`/api/office/appeals/${appealId}/status`, {
         status,
         comment,
       });
+      setSuccess("Статус обновлён");
       onUpdate();
       router.refresh();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Ошибка обновления статуса");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка обновления статуса");
     } finally {
       setLoading(null);
     }
   };
 
+  const handleStatusSave = async () => {
+    if (selectedStatus === currentStatus) return;
+    await handleStatusUpdate(selectedStatus);
+  };
+
   const handleComment = async (text: string) => {
     setLoading("comment");
+    setError(null);
+    setSuccess(null);
     try {
-      await apiPost<{ appeal: { id: string } }>(`/api/office/appeals/${appealId}/comment`, { text });
+      await apiPost<{ appeal: { id: string } }>(`/api/office/appeals/${appealId}/comments`, { text });
+      setSuccess("Комментарий добавлен");
       onUpdate();
       router.refresh();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Ошибка добавления комментария");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка добавления комментария");
     } finally {
       setLoading(null);
     }
@@ -46,21 +62,64 @@ export default function AppealActionsClient({ appealId, currentStatus, onUpdate 
 
   const handleRequestInfoWithTemplate = async () => {
     setLoading("request_info");
+    setError(null);
+    setSuccess(null);
     try {
       await apiPost<{ appeal: { id: string } }>(`/api/office/appeals/${appealId}/request-info`);
+      setSuccess("Запрос отправлен");
       onUpdate();
       router.refresh();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Ошибка запроса уточнения");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка запроса уточнения");
     } finally {
       setLoading(null);
     }
   };
 
   return (
-    <div className="mt-6 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4" data-testid="office-appeal-details">
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-semibold text-zinc-800">Текущий статус:</label>
+    <div className="mt-6 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4" data-testid="office-appeal-page">
+      {/* Error state */}
+      {error ? (
+        <OfficeErrorState
+          message={error}
+          onRetry={() => setError(null)}
+          testId="office-error-state"
+        />
+      ) : null}
+
+      {loading ? <OfficeLoadingState message="Сохраняем изменения..." testId="office-loading-state" /> : null}
+
+      {/* Success state */}
+      {success && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700" data-testid="office-success-state">
+          {success}
+        </div>
+      )}
+
+      {/* Status select control */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm font-semibold text-zinc-800">Статус:</label>
+        <select
+          value={selectedStatus}
+          onChange={(e) => setSelectedStatus(e.target.value as AppealStatus)}
+          disabled={loading !== null}
+          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-[#5E704F] focus:outline-none disabled:opacity-50"
+          data-testid="office-appeals-status-select"
+        >
+          <option value="new">Новое</option>
+          <option value="in_progress">В работе</option>
+          <option value="needs_info">Требует уточнения</option>
+          <option value="closed">Готово</option>
+        </select>
+        <button
+          type="button"
+          onClick={handleStatusSave}
+          disabled={loading !== null || selectedStatus === currentStatus}
+          className="inline-flex items-center justify-center rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4d5d41] disabled:opacity-50"
+          data-testid="office-appeals-status-save"
+        >
+          {loading === selectedStatus ? "Сохранение..." : "Сохранить"}
+        </button>
         <span
           className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${
             currentStatus === "new"

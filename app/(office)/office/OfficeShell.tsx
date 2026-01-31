@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import AppLink from "@/components/AppLink";
 import type { Role } from "@/lib/permissions";
 import GlobalLogoutButton from "../../_components/GlobalLogoutButton";
@@ -16,6 +17,15 @@ type Props = {
 };
 
 export default function OfficeShell({ role, roleLabel, navItems, children, hasQa = false }: Props) {
+  const pathname = usePathname();
+
+  const isActive = (href: string) => {
+    if (href === "/office") {
+      return pathname === "/office" || pathname === "/office/dashboard";
+    }
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F1E9] text-zinc-900" data-testid="office-shell">
       <div data-testid="office-root">
@@ -47,16 +57,24 @@ export default function OfficeShell({ role, roleLabel, navItems, children, hasQa
         <main className="mx-auto flex w-full max-w-6xl gap-6 px-4 pb-10 pt-8 sm:px-6">
           <aside className="w-64 shrink-0 space-y-2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <nav className="space-y-1 text-sm" data-testid="office-nav">
-              {navItems.map((item) => (
-                <AppLink
-                  key={item.href}
-                  href={item.href}
-                  data-testid={item.testId}
-                  className="block rounded-lg px-3 py-2 text-zinc-700 transition hover:bg-zinc-50"
-                >
-                  {item.label}
-                </AppLink>
-              ))}
+              {navItems.map((item) => {
+                const active = isActive(item.href);
+                return (
+                  <AppLink
+                    key={item.href}
+                    href={item.href}
+                    data-testid={item.testId}
+                    aria-current={active ? "page" : undefined}
+                    className={`block rounded-lg px-3 py-2 transition ${
+                      active
+                        ? "bg-[#5E704F]/10 font-semibold text-[#5E704F]"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {item.label}
+                  </AppLink>
+                );
+              })}
               {!navItems.length ? (
                 <div className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Нет доступных разделов</div>
               ) : null}
