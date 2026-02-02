@@ -1,16 +1,19 @@
 import "server-only";
 
 import { Buffer } from "buffer";
+import { createHash } from "crypto";
 import { parseXlsx } from "@/lib/excel";
 import { listCharges, listDebts, listPlotEntries, listPayments, addPayment } from "@/lib/billing.store";
-import { analyzeImportRows, parseCsv } from "@/lib/billing/import-helpers";
+import { parseCsv } from "@/lib/billing/import-helpers";
 import { matchPaymentToPlot, normalizeStatementRows, parseStatementFile, type StatementTotals } from "@/lib/billing/statementImport";
+import { hasPgConnection, insertPayments } from "@/lib/billing/payments.pg";
 import { logAdminAction } from "@/lib/audit";
 import { logErrorEvent } from "@/lib/errorEvents.store";
 import { getOfficeJob, updateOfficeJob } from "./jobs.store";
 import type { OfficeJobType } from "./jobs.store";
 import { getCampaign, updateCampaign } from "./communications.store";
 import { sendCampaign } from "./campaigns.server";
+import { sendDraft } from "./notifications.pg";
 
 const JOB_TIMEOUT_MS = 10000;
 
@@ -142,13 +145,143 @@ const buildReceiptsBatchPdf = async (payload: ReceiptsPayload) => {
   };
 };
 
+type ParsedPaymentRow = {
+  rowIndex: number;
+  paidAt: string;
+  amount: number;
+  plotNumber: string;
+  payer: string;
+};
+
+const normalizeImportValue = (value: string | null | undefined) => (value ?? "").trim();
+
+const parseImportDate = (raw: string) => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return new Date(match[0]);
+  const matchRu = trimmed.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (matchRu) return new Date(`${matchRu[3]}-${matchRu[2]}-${matchRu[1]}`);
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const parseImportRows = (rows: string[][]) => {
+  if (rows.length < 2) {
+    return {
+      totals: { total: 0, valid: 0, invalid: 0 },
+      errors: [{ rowIndex: 0, message: "CSV должен содержать заголовок и строки данных" }],
+      validRows: [] as ParsedPaymentRow[],
+    };
+  }
+
+  const headerRow = rows[0].map((h) => h.toLowerCase().trim());
+  const findHeaderIndex = (keys: string[]) =>
+    headerRow.findIndex((value) => keys.some((key) => value.includes(key)));
+  const idxDate = findHeaderIndex(["date", "дата"]);
+  const idxAmount = findHeaderIndex(["amount", "сумма"]);
+  const idxPlot = findHeaderIndex(["plot", "участок"]);
+  const idxPayer = findHeaderIndex(["payer", "платель", "фио", "owner", "name"]);
+
+  if (idxDate === -1 || idxAmount === -1 || idxPlot === -1 || idxPayer === -1) {
+    return {
+      totals: { total: rows.length - 1, valid: 0, invalid: rows.length - 1 },
+      errors: [{ rowIndex: 0, message: "Нужны колонки: date, amount, plot, payer" }],
+      validRows: [] as ParsedPaymentRow[],
+    };
+  }
+
+  const errors: Array<{ rowIndex: number; message: string }> = [];
+  const validRows: ParsedPaymentRow[] = [];
+  let valid = 0;
+  let invalid = 0;
+
+  rows.slice(1).forEach((row, index) => {
+    const rowIndex = index + 2;
+    const dateRaw = normalizeImportValue(row[idxDate]);
+    const amountRaw = normalizeImportValue(row[idxAmount]);
+    const plotRaw = normalizeImportValue(row[idxPlot]);
+    const payerRaw = normalizeImportValue(row[idxPayer]);
+
+    const rowErrors: string[] = [];
+    const parsedDate = parseImportDate(dateRaw);
+    if (!parsedDate) rowErrors.push("Неверная дата");
+    const amount = Number(amountRaw.replace(/\s+/g, "").replace(",", "."));
+    if (!Number.isFinite(amount)) rowErrors.push("Неверная сумма");
+    if (!plotRaw) rowErrors.push("Участок обязателен");
+    if (!payerRaw) rowErrors.push("Плательщик обязателен");
+
+    if (rowErrors.length || !parsedDate) {
+      invalid += 1;
+      errors.push({ rowIndex, message: rowErrors.join("; ") || "Неверные данные" });
+    } else {
+      valid += 1;
+      validRows.push({
+        rowIndex,
+        paidAt: parsedDate.toISOString().slice(0, 10),
+        amount,
+        plotNumber: plotRaw,
+        payer: payerRaw,
+      });
+    }
+  });
+
+  return {
+    totals: { total: rows.length - 1, valid, invalid },
+    errors,
+    validRows,
+  };
+};
+
+const handleImportRows = async (rows: string[][], mode: string | null, source: string) => {
+  const parsed = parseImportRows(rows);
+  if (mode !== "apply") {
+    return { totals: parsed.totals, errors: parsed.errors };
+  }
+
+  if (parsed.validRows.length) {
+    const now = new Date();
+    if (hasPgConnection()) {
+      await insertPayments(
+        parsed.validRows.map((row) => ({
+          plotNumber: row.plotNumber,
+          paidAt: row.paidAt,
+          amount: row.amount,
+          payer: row.payer,
+          source,
+          rawRowHash: createHash("sha256")
+            .update(`${row.paidAt}|${row.amount}|${row.plotNumber}|${row.payer}`)
+            .digest("hex"),
+          purpose: `Импорт ${now.toISOString().slice(0, 10)}`,
+        })),
+      );
+    } else {
+      parsed.validRows.forEach((row) => {
+        addPayment({
+          plotId: row.plotNumber,
+          residentId: "unknown",
+          amount: row.amount,
+          method: "bank",
+          date: row.paidAt,
+          payer: row.payer,
+          status: "matched",
+          matchStatus: "matched",
+          matchedPlotId: row.plotNumber,
+        });
+      });
+    }
+  }
+
+  return { totals: parsed.totals, errors: parsed.errors };
+};
+
 const buildCsvImport = async (payload: CsvPayload) => {
   const csvContent = (payload.csvContent ?? "").replace(/^\uFEFF/, "").trim();
   if (!csvContent) {
     throw new Error("CSV файл пуст");
   }
   const rows = parseCsv(csvContent);
-  return analyzeImportRows(rows);
+  return handleImportRows(rows, payload.mode ?? null, "payments.import.csv");
 };
 
 const buildXlsxImport = async (payload: XlsxPayload) => {
@@ -157,7 +290,7 @@ const buildXlsxImport = async (payload: XlsxPayload) => {
   }
   const buffer = Buffer.from(payload.base64, "base64");
   const rows = await parseXlsx(new Uint8Array(buffer));
-  return analyzeImportRows(rows);
+  return handleImportRows(rows, payload.mode ?? null, "payments.import.xlsx");
 };
 
 const buildStatementImport = async (payload: StatementPayload) => {
@@ -262,12 +395,48 @@ const buildMonthlyReportBatch = async (payload: MonthlyBatchPayload) => {
   };
 };
 
+const summarizeJobResult = (type: OfficeJobType, data: Record<string, unknown> | null) => {
+  if (!data) return null;
+  if (type === "payments.import.csv" || type === "payments.import.xlsx") {
+    const totals = (data as { totals?: unknown }).totals ?? null;
+    const errors = Array.isArray((data as { errors?: unknown }).errors)
+      ? (data as { errors: unknown[] }).errors.slice(0, 20)
+      : [];
+    return { totals, errors };
+  }
+  if (type === "billing.importStatement") {
+    const totals = (data as { totals?: unknown }).totals ?? null;
+    const errors = Array.isArray((data as { errors?: unknown }).errors)
+      ? (data as { errors: unknown[] }).errors.slice(0, 20)
+      : [];
+    return { totals, errors };
+  }
+  if (type === "receipts.batch" || type === "receipts.batchPdf") {
+    const count = (data as { count?: unknown }).count ?? null;
+    const failures = Array.isArray((data as { failures?: unknown }).failures)
+      ? (data as { failures: unknown[] }).failures.slice(0, 20)
+      : [];
+    const links = Array.isArray((data as { links?: unknown }).links)
+      ? (data as { links: unknown[] }).links.slice(0, 10)
+      : [];
+    return { count, failures, links };
+  }
+  if (type === "reports.monthlyPdfBatch") {
+    const count = (data as { count?: unknown }).count ?? null;
+    const links = Array.isArray((data as { links?: unknown }).links)
+      ? (data as { links: unknown[] }).links.slice(0, 10)
+      : [];
+    return { count, links };
+  }
+  return data;
+};
+
 export async function processOfficeJob(jobId: string) {
-  const job = getOfficeJob(jobId);
+  const job = await getOfficeJob(jobId);
   if (!job) return;
   if (job.status === "running" || job.status === "done") return;
 
-  updateOfficeJob(jobId, { status: "running", progress: 5 });
+  await updateOfficeJob(jobId, { status: "running", progress: 5 });
 
   try {
     let resultData: Record<string, unknown> | null = null;
@@ -308,9 +477,25 @@ export async function processOfficeJob(jobId: string) {
         success: true,
         meta: resultData ?? {},
       });
+    } else if (job.type === "notifications.send") {
+      const payload = job.payload as { draftId?: string };
+      const draftId = payload.draftId;
+      if (!draftId) {
+        throw new Error("Draft not found");
+      }
+      resultData = await runWithTimeout(sendDraft(draftId, job.requestId ?? null), JOB_TIMEOUT_MS);
+      await logAdminAction({
+        action: "notifications.send.finish",
+        entity: "notification_draft",
+        entityId: draftId,
+        route: "/api/office/jobs",
+        success: true,
+        meta: resultData ?? {},
+      });
     }
 
-    updateOfficeJob(jobId, { status: "done", progress: 100, resultData, error: null });
+    const resultSummary = summarizeJobResult(job.type, resultData);
+    await updateOfficeJob(jobId, { status: "done", progress: 100, resultData: resultSummary, error: null });
 
     await logAdminAction({
       action: "job.finish",
@@ -325,12 +510,12 @@ export async function processOfficeJob(jobId: string) {
     const message = error instanceof Error ? error.message : "Ошибка выполнения задания";
 
     if (attempts < job.maxAttempts) {
-      updateOfficeJob(jobId, { status: "queued", progress: 0, error: message, attempts });
+      await updateOfficeJob(jobId, { status: "queued", progress: 0, error: message, attempts });
       setTimeout(() => void processOfficeJob(jobId), 500);
       return;
     }
 
-    updateOfficeJob(jobId, { status: "failed", progress: 100, error: message, attempts });
+    await updateOfficeJob(jobId, { status: "failed", progress: 100, error: message, attempts });
     logErrorEvent({
       source: "job",
       key: job.type,
@@ -360,6 +545,7 @@ export const getJobPermissionAction = (type: OfficeJobType) => {
   if (type === "receipts.batch" || type === "receipts.batchPdf") return "billing.receipts";
   if (type === "reports.monthlyPdfBatch") return "billing.export";
   if (type === "notifications.campaignSend") return "notifications.send";
+  if (type === "notifications.send") return "notifications.send";
   if (type === "payments.import.xlsx") return "billing.import.excel";
   if (type === "billing.importStatement") return "billing.import_statement";
   return "billing.import";

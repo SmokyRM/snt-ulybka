@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 /**
  * Penalty Unfreeze API
  * Sprint 23: Unfreeze a penalty accrual
@@ -5,10 +7,16 @@
 import { ok, fail, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
 import {
+  hasPgConnection,
+  unfreezePenalty as unfreezePenaltyPg,
+  listPenaltyAccruals as listPenaltyAccrualsPg,
+} from "@/lib/billing/penalty.pg";
+import {
   getPenaltyAccrual,
   unfreezePenaltyAccrual,
 } from "@/lib/penaltyAccruals.store";
 import { logAuditEvent, generateRequestId } from "@/lib/auditLog.store";
+import type { PenaltyAccrual } from "@/lib/penaltyAccruals.store";
 
 export async function POST(request: Request) {
   const guard = await requirePermission(request, "billing.penalty.freeze", {
@@ -27,7 +35,15 @@ export async function POST(request: Request) {
       return fail(request, "id_required", "id is required", 400);
     }
 
-    const existing = getPenaltyAccrual(id);
+    // Get existing penalty for validation and audit
+    let existing;
+    if (hasPgConnection()) {
+      const accruals = await listPenaltyAccrualsPg({ plotId: null, period: null, status: null });
+      existing = accruals.find((a: PenaltyAccrual) => a.id === id);
+    } else {
+      existing = getPenaltyAccrual(id);
+    }
+
     if (!existing) {
       return fail(request, "not_found", "Penalty accrual not found", 404);
     }
@@ -35,7 +51,15 @@ export async function POST(request: Request) {
     const requestId = generateRequestId();
 
     try {
-      const updated = unfreezePenaltyAccrual(id, session.id);
+      let updated;
+      if (hasPgConnection()) {
+        updated = await unfreezePenaltyPg(id, session.id);
+        if (!updated) {
+          return fail(request, "not_found", "Penalty accrual not found or not frozen", 404);
+        }
+      } else {
+        updated = unfreezePenaltyAccrual(id, session.id);
+      }
 
       // Log audit event
       logAuditEvent({

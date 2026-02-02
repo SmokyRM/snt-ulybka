@@ -18,6 +18,7 @@ const allowedTypes: OfficeJobType[] = [
   "billing.importStatement",
   "reports.monthlyPdfBatch",
   "notifications.campaignSend",
+  "notifications.send",
 ];
 
 const canAccessJobType = (role: Role | null | undefined, type: OfficeJobType) => {
@@ -25,7 +26,7 @@ const canAccessJobType = (role: Role | null | undefined, type: OfficeJobType) =>
   return hasPermission(role, getJobPermissionAction(type));
 };
 
-const sanitizeJob = (job: ReturnType<typeof listOfficeJobs>[number]) => {
+const sanitizeJob = (job: Awaited<ReturnType<typeof listOfficeJobs>>[number]) => {
   const { payload, ...rest } = job;
   return rest;
 };
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
     return forbidden(request);
   }
 
-  const items = listOfficeJobs()
+  const items = (await listOfficeJobs())
     .filter((job) => allowed.includes(job.type))
     .map(sanitizeJob);
   return ok(request, { items });
@@ -164,7 +165,7 @@ export async function POST(request: Request) {
       return forbidden(request);
     }
 
-    const job = createOfficeJob({
+    const job = await createOfficeJob({
       type,
       payload: payload ?? {},
       createdBy: session.id ?? null,

@@ -2,32 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api/client";
+import type { OfficeDocumentRecord } from "@/lib/office/documentsRegistry.store";
 import OfficeLoadingState from "../_components/OfficeLoadingState";
 import OfficeErrorState from "../_components/OfficeErrorState";
 import OfficeEmptyState from "../_components/OfficeEmptyState";
 
-type OfficeDocument = {
-  id: string;
-  title: string;
-  type: "protocol" | "smeta" | "act" | "charter" | "other";
-  period: string | null;
-  tags: string[];
-  isPublic: boolean;
-  fileName: string;
-  fileUrl: string;
-  uploadedAt: string;
-  uploadedBy: string | null;
-};
+type OfficeDocument = OfficeDocumentRecord;
 
 const typeLabels: Record<OfficeDocument["type"], string> = {
   protocol: "Протокол",
   smeta: "Смета",
   act: "Акт",
   charter: "Устав",
+  monthly_report: "Ежемесячный отчёт",
   other: "Другое",
 };
 
-export default function DocsClient({ initialItems }: { initialItems: OfficeDocument[] }) {
+export default function DocsClient({ initialItems }: { initialItems: OfficeDocumentRecord[] }) {
   const [items, setItems] = useState<OfficeDocument[]>(initialItems);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   const requisites = getSetting("payment_details");
   const social = getSetting("official_channels");
 
-  const jobs = listOfficeJobsAll();
+  const jobs = await listOfficeJobsAll();
   const runningJobs = jobs.filter((job) => job.status === "running").length;
   const failedJobs24h = jobs.filter(
     (job) => job.status === "failed" && Date.parse(job.updatedAt) >= Date.parse(since24h),

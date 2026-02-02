@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { ok, forbidden, unauthorized, serverError } from "@/lib/api/respond";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
@@ -9,6 +11,7 @@ import { createOfficeJob } from "@/lib/office/jobs.store";
 import { enqueueOfficeJob } from "@/lib/office/jobs.server";
 import { getRequestId } from "@/lib/api/requestId";
 import { logAdminAction } from "@/lib/audit";
+import { hasPgConnection, listDrafts, sendNow, type NotificationDraft } from "@/lib/office/notifications.pg";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -38,22 +41,35 @@ export async function POST(request: Request) {
 
   try {
     const now = Date.now();
-    const due = listCampaigns().filter(
-      (c) => c.status === "scheduled" && c.scheduleAt && Date.parse(c.scheduleAt) <= now,
-    );
     const requestId = getRequestId(request);
+    const jobs = [];
 
-    const jobs = due.map((campaign) => {
-      updateCampaign(campaign.id, { status: "sending" });
-      const job = createOfficeJob({
-        type: "notifications.campaignSend",
-        payload: { campaignId: campaign.id },
-        createdBy: session.id ?? null,
-        requestId,
-      });
-      enqueueOfficeJob(job.id);
-      return job.id;
-    });
+    if (hasPgConnection()) {
+      const drafts = await listDrafts({ type: "campaign", status: "scheduled" });
+      const due = drafts.filter((draft: NotificationDraft) => draft.sendAt && Date.parse(draft.sendAt) <= now);
+      for (const draft of due) {
+        const result = await sendNow({ draftId: draft.id, createdBy: session.id ?? null, requestId });
+        if (result.job) {
+          enqueueOfficeJob(result.job.id);
+          jobs.push(result.job.id);
+        }
+      }
+    } else {
+      const due = listCampaigns().filter(
+        (c) => c.status === "scheduled" && c.scheduleAt && Date.parse(c.scheduleAt) <= now,
+      );
+      for (const campaign of due) {
+        updateCampaign(campaign.id, { status: "sending" });
+        const job = await createOfficeJob({
+          type: "notifications.campaignSend",
+          payload: { campaignId: campaign.id },
+          createdBy: session.id ?? null,
+          requestId,
+        });
+        enqueueOfficeJob(job.id);
+        jobs.push(job.id);
+      }
+    }
 
     if (jobs.length > 0) {
       await logAdminAction({

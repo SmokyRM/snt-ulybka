@@ -28,6 +28,12 @@ export default function AllocateClient() {
   const [items, setItems] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [period, setPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<TabKey>("remaining");
   const [reason, setReason] = useState("");
@@ -41,12 +47,40 @@ export default function AllocateClient() {
 
   const selectedIds = useMemo(() => Object.keys(selected).filter((id) => selected[id]), [selected]);
 
-  const loadPayments = async () => {
+  const totalPages = Math.max(1, Math.ceil(total / 10));
+
+  const buildPeriodRange = (value: string) => {
+    const [year, month] = value.split("-");
+    if (!year || !month) return null;
+    const start = `${year}-${month}-01`;
+    const startDate = new Date(`${start}T00:00:00Z`);
+    const endDate = new Date(startDate);
+    endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+    endDate.setUTCDate(0);
+    return {
+      from: start,
+      to: endDate.toISOString().slice(0, 10),
+    };
+  };
+
+  const loadPayments = async (nextPage = page, nextPeriod = period) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet<{ items: PaymentRow[] }>("/api/office/billing/payments");
+      const params = new URLSearchParams();
+      const range = buildPeriodRange(nextPeriod);
+      if (range) {
+        params.set("from", range.from);
+        params.set("to", range.to);
+      }
+      params.set("page", String(nextPage));
+      params.set("limit", "10");
+      const data = await apiGet<{ items: PaymentRow[]; total?: number; page?: number }>(
+        `/api/office/billing/payments?${params.toString()}`,
+      );
       setItems(data.items ?? []);
+      setTotal(data.total ?? 0);
+      setPage(data.page ?? nextPage);
       setSelected({});
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Ошибка загрузки платежей";
@@ -57,8 +91,9 @@ export default function AllocateClient() {
   };
 
   useEffect(() => {
-    void loadPayments();
-  }, []);
+    void loadPayments(1, period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   const runAuto = async (ids?: string[]) => {
     setLoading(true);
@@ -67,9 +102,10 @@ export default function AllocateClient() {
     try {
       await apiPost("/api/office/billing/allocate/auto", {
         paymentIds: ids,
+        period,
         reason: showReason && reason.trim() ? reason.trim() : undefined,
       });
-      await loadPayments();
+      await loadPayments(page, period);
     } catch (err) {
       if (err instanceof ApiError && (err.code === "period_closed" || err.status === 409)) {
         setShowReason(true);
@@ -98,7 +134,7 @@ export default function AllocateClient() {
         amount,
         reason: showReason && reason.trim() ? reason.trim() : undefined,
       });
-      await loadPayments();
+      await loadPayments(page, period);
     } catch (err) {
       if (err instanceof ApiError && (err.code === "period_closed" || err.status === 409)) {
         setShowReason(true);
@@ -124,7 +160,7 @@ export default function AllocateClient() {
           }),
         ),
       );
-      await loadPayments();
+      await loadPayments(page, period);
     } catch (err) {
       if (err instanceof ApiError && (err.code === "period_closed" || err.status === 409)) {
         setShowReason(true);
@@ -150,7 +186,7 @@ export default function AllocateClient() {
         amount,
         reason: reason.trim(),
       })
-        .then(loadPayments)
+        .then(() => loadPayments(page, period))
         .catch((err) => {
           const message = err instanceof ApiError ? err.message : "Ошибка ручного распределения";
           setError(message);
@@ -162,7 +198,7 @@ export default function AllocateClient() {
           apiPost("/api/office/billing/allocate/unapply", { paymentId, reason: reason.trim() }),
         ),
       )
-        .then(loadPayments)
+        .then(() => loadPayments(page, period))
         .catch((err) => {
           const message = err instanceof ApiError ? err.message : "Ошибка снятия распределений";
           setError(message);
@@ -177,7 +213,7 @@ export default function AllocateClient() {
     setError(null);
     try {
       await apiPost("/api/office/billing/credits/apply", { paymentIds: selectedIds });
-      await loadPayments();
+      await loadPayments(page, period);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Ошибка применения кредита";
       setError(message);
@@ -191,7 +227,7 @@ export default function AllocateClient() {
     setError(null);
     try {
       await apiPost("/api/office/billing/payments/auto-allocate", { paymentId, disabled });
-      await loadPayments();
+      await loadPayments(page, period);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Ошибка обновления авто-распределения";
       setError(message);
@@ -221,6 +257,18 @@ export default function AllocateClient() {
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900">Распределение платежей</h1>
         <p className="text-sm text-zinc-600">Платежи с остатком для закрытия начислений.</p>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <label className="text-sm font-semibold text-zinc-700">
+          Период оплат
+          <input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="mt-2 w-full max-w-xs rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+          />
+        </label>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -392,6 +440,32 @@ export default function AllocateClient() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : null}
+
+      {!loading && totalPages > 1 ? (
+        <div className="flex items-center justify-between text-sm text-zinc-600">
+          <span>
+            Стр. {page} из {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded border border-zinc-200 px-3 py-1 text-xs font-semibold"
+              onClick={() => void loadPayments(Math.max(1, page - 1), period)}
+              disabled={page <= 1}
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              className="rounded border border-zinc-200 px-3 py-1 text-xs font-semibold"
+              onClick={() => void loadPayments(Math.min(totalPages, page + 1), period)}
+              disabled={page >= totalPages}
+            >
+              Вперёд
+            </button>
           </div>
         </div>
       ) : null}

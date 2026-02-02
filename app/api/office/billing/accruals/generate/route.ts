@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { ok, fail, unauthorized, forbidden, serverError } from "@/lib/api/respond";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { generateAccruals } from "@/lib/billing.store";
+import { hasPgConnection, generateAccruals as generateAccrualsPg } from "@/lib/billing/accruals.pg";
 import { assertPeriodOpenOrReason } from "@/lib/office/periodClose.store";
 import { logAdminAction } from "@/lib/audit";
 
@@ -65,7 +68,9 @@ export async function POST(request: Request) {
       return fail(request, "period_closed", e instanceof Error ? e.message : "Период закрыт", 409);
     }
 
-    const result = generateAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
+    const result = hasPgConnection()
+      ? await generateAccrualsPg({ period, category, tariff, fixedAmount, plotIds, plotQuery })
+      : generateAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
 
     await logAdminAction({
       action: "accruals.generate",

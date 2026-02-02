@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return fail(request, "validation_error", "Файл выписки не загружен", 400);
     }
 
-    const job = createOfficeJob({
+    const job = await createOfficeJob({
       type: "billing.importStatement",
       payload: { base64, fileName },
       createdBy: session?.id ?? null,

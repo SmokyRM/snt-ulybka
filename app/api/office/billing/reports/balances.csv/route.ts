@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { listPlotBalances } from "@/lib/billing.store";
+import { hasPgConnection, listBalances as listBalancesPg } from "@/lib/billing/reconcile.pg";
 
 const escapeCsv = (value: string | number) => {
   const raw = String(value ?? "");
@@ -34,10 +37,31 @@ export async function GET(request: Request) {
     );
   }
 
-  const rows = listPlotBalances();
+  const { searchParams } = new URL(request.url);
+  const period = searchParams.get("period") ?? "";
+  const q = searchParams.get("q") ?? "";
+  const limit = Math.min(1000, Math.max(1, Number(searchParams.get("limit") ?? "500") || 500));
+  const offset = Math.max(0, Number(searchParams.get("offset") ?? "0") || 0);
+
+  let rows: Array<{ plotLabel: string; debt: number; credit: number; balance: number }> = [];
+
+  if (hasPgConnection()) {
+    const data = await listBalancesPg({ period: period || null, q: q || null, limit, offset });
+    rows = data.items.map((row: { plotLabel: string; debt: number; credit: number; balance: number }) => ({
+      plotLabel: row.plotLabel,
+      debt: row.debt,
+      credit: row.credit,
+      balance: row.balance,
+    }));
+  } else {
+    const all = listPlotBalances().filter((row) =>
+      q ? row.plotLabel.toLowerCase().includes(q.toLowerCase()) : true,
+    );
+    rows = all.slice(offset, offset + limit);
+  }
   const header = ["plot", "debt", "credit", "balance"].join(",");
   const body = rows
-    .map((row) =>
+    .map((row: { plotLabel: string; debt: number; credit: number; balance: number }) =>
       [
         escapeCsv(row.plotLabel),
         escapeCsv(row.debt),

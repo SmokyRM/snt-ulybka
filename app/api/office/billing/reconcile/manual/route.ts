@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+
 import { ok, fail, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
 import { updatePayment } from "@/lib/billing.store";
+import { hasPgConnection, manualMatch } from "@/lib/billing/reconcile.pg";
 
 export async function POST(request: Request) {
   const guard = await requirePermission(request, "billing.reconcile", {
@@ -15,6 +18,14 @@ export async function POST(request: Request) {
     const plotId = typeof body.plotId === "string" ? body.plotId : null;
     if (!paymentId || !plotId) {
       return fail(request, "validation_error", "paymentId и plotId обязательны", 400);
+    }
+
+    if (hasPgConnection()) {
+      const result = await manualMatch({ paymentId, plotId });
+      if (!result.updated) {
+        return fail(request, "not_found", "Платёж не найден", 404);
+      }
+      return ok(request, { paymentId });
     }
 
     const updated = updatePayment(paymentId, {

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   const since24h = Date.now() - 24 * 60 * 60 * 1000;
-  const items = listOfficeJobsAll()
+  const items = (await listOfficeJobsAll())
     .filter((job) => job.status === "failed" && job.error)
     .filter((job) => Date.parse(job.updatedAt) >= since24h)
     .map((job) => ({

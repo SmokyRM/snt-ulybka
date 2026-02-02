@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { redirect } from "next/navigation";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { hasPermission } from "@/lib/permissions";
 import { listCommunicationLogs } from "@/lib/office/communications.store";
+import { hasPgConnection, listJournal, type NotificationJournalRow } from "@/lib/office/notifications.pg";
 import JournalClient from "./JournalClient";
 
 export default async function OfficeNotificationsJournalPage() {
@@ -19,7 +22,21 @@ export default async function OfficeNotificationsJournalPage() {
     redirect("/forbidden?reason=office.only&next=/office");
   }
 
-  const initialItems = listCommunicationLogs();
+  const initialItems = hasPgConnection()
+    ? (await listJournal()).map((item: NotificationJournalRow) => ({
+        id: item.id,
+        userId: item.userId,
+        plotId: item.plotId,
+        campaignId: item.draftId,
+        channel: item.channel,
+        templateKey: item.templateKey ?? "—",
+        renderedText: item.renderedText ?? "",
+        status: item.status,
+        sentAt: item.sentAt,
+        providerMessageId: null,
+        error: item.error,
+      }))
+    : listCommunicationLogs();
 
   return (
     <div className="space-y-6">

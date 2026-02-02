@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 /**
  * Penalty Accruals List API
  * Sprint 23: List penalty accruals with metadata and status
@@ -9,8 +11,14 @@ import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { getPlotLabel } from "@/lib/billing.store";
 import {
+  hasPgConnection,
+  listPenaltyAccruals as listPenaltyAccrualsPg,
+  getPenaltyAccrualsSummary as getPenaltyAccrualsSummaryPg,
+} from "@/lib/billing/penalty.pg";
+import {
   listPenaltyAccruals,
   getPenaltyAccrualsSummary,
+  type PenaltyAccrual,
   type PenaltyAccrualStatus,
 } from "@/lib/penaltyAccruals.store";
 
@@ -51,19 +59,30 @@ export async function GET(request: Request) {
     const period = searchParams.get("period");
     const plotId = searchParams.get("plotId");
 
-    const accruals = listPenaltyAccruals({
-      status: status || undefined,
-      period: period || undefined,
-      plotId: plotId || undefined,
-    });
+    let accruals, summary;
+    if (hasPgConnection()) {
+      // Use PG layer
+      accruals = await listPenaltyAccrualsPg({
+        status: status || null,
+        period: period || null,
+        plotId: plotId || null,
+      });
+      summary = await getPenaltyAccrualsSummaryPg({ period: period || undefined });
+    } else {
+      // Fallback to in-memory store
+      accruals = listPenaltyAccruals({
+        status: status || undefined,
+        period: period || undefined,
+        plotId: plotId || undefined,
+      });
+      summary = getPenaltyAccrualsSummary({ period: period || undefined });
+    }
 
     // Enrich with plot labels
-    const enriched = accruals.map((a) => ({
+    const enriched = accruals.map((a: PenaltyAccrual) => ({
       ...a,
       plotLabel: getPlotLabel(a.plotId),
     }));
-
-    const summary = getPenaltyAccrualsSummary({ period: period || undefined });
 
     return ok(request, { accruals: enriched, summary });
   } catch (error) {

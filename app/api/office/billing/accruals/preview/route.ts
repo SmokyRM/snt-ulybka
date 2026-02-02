@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { ok, fail, unauthorized, forbidden, serverError } from "@/lib/api/respond";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { previewAccruals } from "@/lib/billing.store";
+import { hasPgConnection, previewAccruals as previewAccrualsPg } from "@/lib/billing/accruals.pg";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -55,8 +58,10 @@ export async function POST(request: Request) {
       return fail(request, "validation_error", "Неверная категория", 400);
     }
 
-    const rows = previewAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
-    const totalAmount = rows.reduce((sum, row) => sum + row.amount, 0);
+    const rows: Array<{ plotId: string; plotLabel: string; amount: number; discount: number }> = hasPgConnection()
+      ? await previewAccrualsPg({ period, category, tariff, fixedAmount, plotIds, plotQuery })
+      : previewAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
+    const totalAmount = rows.reduce((sum: number, row) => sum + row.amount, 0);
     return ok(request, {
       totals: { count: rows.length, totalAmount },
       rows: rows.slice(0, 5),

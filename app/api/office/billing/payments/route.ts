@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { ok, unauthorized, forbidden, serverError } from "@/lib/api/respond";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { listPaymentsWithStatus, getPlotLabel } from "@/lib/billing.store";
+import { hasPgConnection, listPayments as listPaymentsPg } from "@/lib/billing/payments.pg";
 import type { PaymentStatus, PaymentMatchStatus } from "@/lib/billing.store";
 
 export async function GET(request: Request) {
@@ -46,6 +49,32 @@ export async function GET(request: Request) {
     const matchStatus = searchParams.get("matchStatus") as PaymentMatchStatus | null;
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const limit = Math.min(50, Math.max(5, Number(searchParams.get("limit") ?? "10") || 10));
+
+    if (hasPgConnection()) {
+      const data = await listPaymentsPg({ q, status, matchStatus, from, to, page, pageSize: limit });
+      const items = data.items.map((payment) => ({
+        id: payment.id,
+        date: payment.paidAt ?? "",
+        amount: payment.amount,
+        payer: payment.payer ?? "—",
+        plot: payment.plotLabel ?? payment.plotRef ?? "—",
+        method: "bank",
+        status: payment.status ?? "unmatched",
+        matchStatus: payment.matchStatus ?? (payment.plotId ? "matched" : "unmatched"),
+        matchCandidates: [],
+        matchReason: "",
+        matchedPlotId: payment.plotId ?? null,
+        purpose: payment.purpose ?? "",
+        bankRef: "",
+        allocatedAmount: 0,
+        remainingAmount: payment.amount,
+        remaining: payment.amount,
+        allocationStatus: "unallocated",
+        autoAllocateDisabled: false,
+      }));
+
+      return ok(request, { items, total: data.total, page: data.page, limit: data.pageSize });
+    }
 
     const all = listPaymentsWithStatus({ status, matchStatus, q, from, to });
     const total = all.length;

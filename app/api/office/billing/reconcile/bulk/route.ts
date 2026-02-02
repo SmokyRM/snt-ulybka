@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+
 import { ok, fail, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
 import { updatePayment, type PaymentStatus } from "@/lib/billing.store";
+import { hasPgConnection, bulkUpdateMatch } from "@/lib/billing/reconcile.pg";
 
 const applyAction = (action: string): Partial<{ status: PaymentStatus; matchReason: string; matchConfidence: number | null; matchedPlotId: string | null }> | null => {
   if (action === "confirm") {
@@ -34,6 +37,11 @@ export async function POST(request: Request) {
     const updates = applyAction(action);
     if (!updates) {
       return fail(request, "validation_error", "Неизвестное действие", 400);
+    }
+
+    if (hasPgConnection()) {
+      const result = await bulkUpdateMatch({ ids, action: action as "confirm" | "review" | "unmatch" });
+      return ok(request, result);
     }
 
     let updatedCount = 0;

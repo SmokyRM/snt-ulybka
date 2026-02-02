@@ -200,6 +200,14 @@ export default async function OfficeBillingPage() {
           )}
           {canExport && (
             <AppLink
+              href="/api/office/billing/reports/balances.csv"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 hover:border-[#5E704F]"
+            >
+              Балансы
+            </AppLink>
+          )}
+          {canExport && (
+            <AppLink
               href="/api/office/billing/reports/overpayments.csv"
               className="rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 hover:border-[#5E704F]"
             >
