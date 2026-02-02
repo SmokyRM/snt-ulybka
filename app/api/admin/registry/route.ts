@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+
 import { getSessionUser } from "@/lib/session.server";
 import { isAdminRole, isOfficeRole } from "@/lib/rbac";
-import { listPersons, listPlots, getInviteCodeByPersonId, listInviteCodes, getInviteCodeStatus } from "@/lib/registry/core";
+import { listPersons as listPersonsMemory, listPlots as listPlotsMemory, getInviteCodeByPersonId, listInviteCodes, getInviteCodeStatus } from "@/lib/registry/core";
+import { listPersons as listPersonsPg, listPlots as listPlotsPg, hasPgConnection } from "@/lib/registry/pg";
 import type { RegistryPerson } from "@/types/snt";
 import { forbidden, ok, unauthorized, serverError } from "@/lib/api/respond";
 
@@ -25,11 +28,21 @@ export async function GET(request: Request) {
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const limit = Math.min(50, Math.max(5, Number(searchParams.get("limit") ?? "10") || 10));
 
-    const persons = listPersons({ q, verificationStatus: verificationStatus || undefined });
-    const total = persons.length;
-    const start = (page - 1) * limit;
-    const pageItems = persons.slice(start, start + limit);
-    const plots = listPlots();
+    const usePg = hasPgConnection();
+    const personsResult = usePg
+      ? await listPersonsPg({ q, verificationStatus: verificationStatus || undefined, page, pageSize: limit })
+      : (() => {
+          const persons = listPersonsMemory({ q, verificationStatus: verificationStatus || undefined });
+          const total = persons.length;
+          const start = (page - 1) * limit;
+          return { items: persons.slice(start, start + limit), total, page, pageSize: limit };
+        })();
+    const plotsResult = usePg
+      ? await listPlotsPg({})
+      : (() => ({ items: listPlotsMemory(), total: 0, page: 1, pageSize: 1000 }))();
+    const pageItems = personsResult.items;
+    const plots = plotsResult.items;
+    const total = personsResult.total;
 
     // Enrich persons with plot details and invite codes
     const enriched: Array<

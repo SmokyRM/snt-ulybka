@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { ok, forbidden, unauthorized, serverError } from "@/lib/api/respond";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
@@ -5,6 +7,7 @@ import { isStaffOrAdmin } from "@/lib/rbac";
 import { hasPermission } from "@/lib/permissions";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { listCommunicationLogs } from "@/lib/office/communications.store";
+import { hasPgConnection, listJournal, type NotificationJournalRow } from "@/lib/office/notifications.pg";
 
 export async function GET(request: Request) {
   const startedAt = Date.now();
@@ -39,6 +42,31 @@ export async function GET(request: Request) {
     const campaignId = searchParams.get("campaignId") ?? undefined;
     const from = searchParams.get("from") ?? undefined;
     const to = searchParams.get("to") ?? undefined;
+
+    if (hasPgConnection()) {
+      const items = await listJournal({
+        status: status as never,
+        channel: channel as never,
+        draftId: campaignId || null,
+        from,
+        to,
+      });
+      return ok(request, {
+        items: items.map((item: NotificationJournalRow) => ({
+          id: item.id,
+          userId: item.userId,
+          plotId: item.plotId,
+          campaignId: item.draftId,
+          channel: item.channel,
+          templateKey: item.templateKey ?? "—",
+          renderedText: item.renderedText ?? "",
+          status: item.status,
+          sentAt: item.sentAt,
+          providerMessageId: null,
+          error: item.error,
+        })),
+      });
+    }
 
     const items = listCommunicationLogs({
       status: status as never,

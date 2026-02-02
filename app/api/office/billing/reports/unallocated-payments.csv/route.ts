@@ -1,17 +1,13 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { listPaymentsWithStatus, getPlotLabel } from "@/lib/billing.store";
-
-const escapeCsv = (value: string | number) => {
-  const raw = String(value ?? "");
-  if (raw.includes(",") || raw.includes("\n") || raw.includes("\"")) {
-    return `"${raw.replace(/"/g, '""')}"`;
-  }
-  return raw;
-};
+import { buildUnallocatedPaymentsCsv, type UnallocatedPaymentsCsvRow } from "@/lib/billing/reports.csv";
+import { hasPgConnection, exportUnallocatedPaymentsCsv } from "@/lib/billing/reports.pg";
 
 export async function GET(request: Request) {
   const startedAt = Date.now();
@@ -34,22 +30,35 @@ export async function GET(request: Request) {
     );
   }
 
-  const rows = listPaymentsWithStatus().filter((p) => (p.allocationStatus ?? "unallocated") === "unallocated");
-  const header = ["date", "amount", "payer", "plot", "status", "remaining"].join(",");
-  const body = rows
-    .map((row) =>
-      [
-        escapeCsv(row.date),
-        escapeCsv(row.amount),
-        escapeCsv(row.payer ?? ""),
-        escapeCsv(getPlotLabel(row.plotId)),
-        escapeCsv(row.status ?? "unmatched"),
-        escapeCsv(row.remaining ?? 0),
-      ].join(","),
-    )
-    .join("\n");
+  const { searchParams } = new URL(request.url);
+  const period = searchParams.get("period") ?? null;
+  const limit = Math.min(1000, Math.max(1, Number(searchParams.get("limit") ?? "500") || 500));
+  const offset = Math.max(0, Number(searchParams.get("offset") ?? "0") || 0);
 
-  const csv = `${header}\n${body}`;
+  if (hasPgConnection()) {
+    const csv = await exportUnallocatedPaymentsCsv({ period, limit, offset });
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": "attachment; filename=unallocated-payments.csv",
+      },
+    });
+  }
+
+  const rows: UnallocatedPaymentsCsvRow[] = listPaymentsWithStatus()
+    .filter((p) => (p.allocationStatus ?? "unallocated") === "unallocated")
+    .slice(offset, offset + limit)
+    .map((row) => ({
+      date: row.date,
+      amount: row.amount,
+      payer: row.payer ?? "",
+      plot: getPlotLabel(row.plotId),
+      status: row.status ?? "unmatched",
+      remaining: row.remaining ?? 0,
+    }));
+
+  const csv = buildUnallocatedPaymentsCsv(rows);
   return new NextResponse(csv, {
     status: 200,
     headers: {

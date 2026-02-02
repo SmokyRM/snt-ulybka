@@ -39,7 +39,7 @@ export async function GET(request: Request, context: { params: { id: string } })
   }
 
   try {
-    const job = getOfficeJob(context.params.id);
+    const job = await getOfficeJob(context.params.id);
     if (!job) {
       return fail(request, "not_found", "Задание не найдено", 404);
     }

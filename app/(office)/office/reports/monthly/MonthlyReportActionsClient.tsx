@@ -22,6 +22,10 @@ export default function MonthlyReportActionsClient({ period }: { period: string 
   const [links, setLinks] = useState<Array<{ period: string; url: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [singleLoading, setSingleLoading] = useState(false);
+  const [singleError, setSingleError] = useState<string | null>(null);
+  const [docUrl, setDocUrl] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -92,6 +96,31 @@ export default function MonthlyReportActionsClient({ period }: { period: string 
     }
   };
 
+  const handleGeneratePdf = async () => {
+    setSingleLoading(true);
+    setSingleError(null);
+    setDocUrl(null);
+    setDocId(null);
+    try {
+      // raw endpoint (pdf download)
+      const res = await fetch(`/api/office/reports/monthly.pdf?period=${period}`);
+      if (!res.ok) {
+        setSingleError("Не удалось сформировать PDF");
+        setSingleLoading(false);
+        return;
+      }
+      const headerDocUrl = res.headers.get("x-office-doc-url");
+      const headerDocId = res.headers.get("x-office-doc-id");
+      setDocUrl(headerDocUrl);
+      setDocId(headerDocId);
+      await res.blob();
+      setSingleLoading(false);
+    } catch (err) {
+      setSingleError(err instanceof Error ? err.message : "Ошибка генерации PDF");
+      setSingleLoading(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-end gap-4">
@@ -102,16 +131,17 @@ export default function MonthlyReportActionsClient({ period }: { period: string 
             value={period}
             readOnly
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800"
-            data-testid="office-monthly-report-pdf"
           />
         </div>
-        <a
-          href={`/api/office/reports/monthly.pdf?period=${period}`}
-          className="rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41]"
+        <button
+          type="button"
+          onClick={handleGeneratePdf}
+          disabled={singleLoading}
+          className="rounded-lg bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d5d41] disabled:opacity-50"
           data-testid="office-monthly-report-pdf"
         >
-          Скачать PDF
-        </a>
+          Сгенерировать PDF
+        </button>
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <label className="mb-1 block text-xs text-zinc-600">С</label>
@@ -144,6 +174,29 @@ export default function MonthlyReportActionsClient({ period }: { period: string 
 
       {loading && <OfficeLoadingState message="Генерируем PDF..." testId="office-monthly-report-loading" />}
       {error && <OfficeErrorState message={error} onRetry={handleBatch} testId="office-monthly-report-error" />}
+      {singleLoading && (
+        <OfficeLoadingState message="Формируем PDF отчёт..." testId="office-monthly-report-single-loading" />
+      )}
+      {singleError && (
+        <OfficeErrorState message={singleError} onRetry={handleGeneratePdf} testId="office-monthly-report-single-error" />
+      )}
+
+      {docUrl && (
+        <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-sm text-emerald-900">
+          <div className="font-semibold">PDF сохранён в реестре документов.</div>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+            <a href={docUrl} className="font-semibold text-emerald-700" target="_blank" rel="noreferrer">
+              Открыть файл
+            </a>
+            <a
+              href={docId ? `/office/docs?docId=${docId}` : "/office/docs"}
+              className="font-semibold text-emerald-700"
+            >
+              Перейти в документы
+            </a>
+          </div>
+        </div>
+      )}
 
       {links.length > 0 && (
         <div className="mt-4 space-y-2 text-sm text-zinc-700">

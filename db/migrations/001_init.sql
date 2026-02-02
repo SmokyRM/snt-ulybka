@@ -3,7 +3,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS plots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   plot_number text,
-  street text,
+  snt_street_number text,
+  city_address text,
   status text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -14,6 +15,12 @@ CREATE TABLE IF NOT EXISTS persons (
   full_name text NOT NULL,
   phone text,
   email text,
+  verification_status text DEFAULT 'not_verified',
+  status text DEFAULT 'active',
+  merged_into_id uuid,
+  contact_verified_at timestamptz,
+  contact_verified_by text,
+  user_id text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -23,7 +30,8 @@ CREATE TABLE IF NOT EXISTS plot_persons (
   plot_id uuid NOT NULL REFERENCES plots(id) ON DELETE CASCADE,
   person_id uuid NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
   role text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (plot_id, person_id)
 );
 
 CREATE TABLE IF NOT EXISTS billing_payments (

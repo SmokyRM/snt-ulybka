@@ -13,8 +13,13 @@ type PreviewResult = {
   rows: PreviewRow[];
 };
 
+const getDefaultPeriod = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+};
+
 export default function AccrualsGenerateClient() {
-  const [period, setPeriod] = useState("2024-03");
+  const [period, setPeriod] = useState(getDefaultPeriod);
   const [category, setCategory] = useState("membership");
   const [tariff, setTariff] = useState("");
   const [fixedAmount, setFixedAmount] = useState("");

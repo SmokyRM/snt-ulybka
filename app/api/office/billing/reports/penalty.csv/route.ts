@@ -1,9 +1,20 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
-import { listAccrualsWithStatus, getPlotLabel } from "@/lib/billing.store";
+import { getPlotLabel } from "@/lib/billing.store";
+import {
+  hasPgConnection,
+  listPenaltyAccruals as listPenaltyAccrualsPg,
+} from "@/lib/billing/penalty.pg";
+import {
+  listPenaltyAccruals,
+  type PenaltyAccrualStatus,
+  type PenaltyAccrual,
+} from "@/lib/penaltyAccruals.store";
 
 const escapeCsv = (value: string | number) => {
   const raw = String(value ?? "");
@@ -32,36 +43,40 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const asOf = searchParams.get("asOf") ?? new Date().toISOString().slice(0, 10);
-  const rate = Number(searchParams.get("rate") ?? "0.1");
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const asOfDate = new Date(asOf);
+  const status = searchParams.get("status") as PenaltyAccrualStatus | null;
+  const period = searchParams.get("period");
+  const plotId = searchParams.get("plotId");
 
-  let rows = listAccrualsWithStatus().filter((row) => (row.remaining ?? 0) > 0);
-  if (from) {
-    const fromTs = new Date(from).getTime();
-    rows = rows.filter((row) => new Date(row.date).getTime() >= fromTs);
-  }
-  if (to) {
-    const toTs = new Date(to).getTime();
-    rows = rows.filter((row) => new Date(row.date).getTime() <= toTs);
+  let penalties: PenaltyAccrual[];
+  if (hasPgConnection()) {
+    // Use PG layer
+    penalties = await listPenaltyAccrualsPg({
+      status: status || null,
+      period: period || null,
+      plotId: plotId || null,
+    });
+  } else {
+    // Fallback to in-memory store
+    penalties = listPenaltyAccruals({
+      status: status || undefined,
+      period: period || undefined,
+      plotId: plotId || undefined,
+    });
   }
 
-  const header = ["plot", "period", "amount", "remaining", "days_overdue", "penalty"].join(",");
-  const body = rows
-    .map((row) => {
-      const daysOverdue = Math.max(0, Math.floor((asOfDate.getTime() - new Date(row.date).getTime()) / 86400000));
-      const penalty = Math.round((row.remaining ?? 0) * rate * (daysOverdue / 365));
-      return [
-        escapeCsv(getPlotLabel(row.plotId)),
-        escapeCsv(row.period ?? ""),
-        escapeCsv(row.amount),
-        escapeCsv(row.remaining ?? 0),
-        escapeCsv(daysOverdue),
-        escapeCsv(penalty),
-      ].join(",");
-    })
+  const header = ["period", "plot_id", "plot_label", "amount", "status", "created_at", "metadata_asOf", "metadata_days_overdue", "metadata_rate_per_day"].join(",");
+  const body = penalties
+    .map((p: PenaltyAccrual) => [
+      escapeCsv(p.period),
+      escapeCsv(p.plotId),
+      escapeCsv(getPlotLabel(p.plotId)),
+      escapeCsv(p.amount),
+      escapeCsv(p.status),
+      escapeCsv(p.createdAt),
+      escapeCsv(p.metadata.asOf),
+      escapeCsv(p.metadata.daysOverdue),
+      escapeCsv(p.metadata.ratePerDay),
+    ].join(","))
     .join("\n");
 
   const csv = `${header}\n${body}`;

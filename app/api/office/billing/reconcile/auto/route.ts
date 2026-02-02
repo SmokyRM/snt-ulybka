@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+
 import { ok, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
 import { runAutoMatch } from "../helpers";
+import { hasPgConnection, runAutoMatch as runAutoMatchPg } from "@/lib/billing/reconcile.pg";
 
 export async function POST(request: Request) {
   const guard = await requirePermission(request, "billing.reconcile", {
@@ -12,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const limit = typeof body.limit === "number" ? body.limit : undefined;
-    const result = runAutoMatch(limit);
+    const result = hasPgConnection() ? await runAutoMatchPg(limit) : runAutoMatch(limit);
     return ok(request, result);
   } catch (error) {
     return serverError(request, "Ошибка автосопоставления", error);

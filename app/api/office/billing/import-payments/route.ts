@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       return fail(request, "period_closed", e instanceof Error ? e.message : "Период закрыт", 409);
     }
 
-    const job = createOfficeJob({
+    const job = await createOfficeJob({
       type: "payments.import.csv",
       payload: { csvContent, mode },
       createdBy: session?.id ?? null,

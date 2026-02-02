@@ -76,6 +76,14 @@ export default function DebtorsClient({ canGenerateCampaign }: Props) {
     return params.toString();
   }, [segment, minDebt, street, query, hasPhone, hasTelegram]);
 
+  const exportParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    params.set("limit", "1000");
+    params.set("offset", "0");
+    return params.toString();
+  }, [query]);
+
   const loadDebtors = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -252,7 +260,7 @@ export default function DebtorsClient({ canGenerateCampaign }: Props) {
             Применить
           </button>
           <a
-            href="/api/office/billing/reports/debtors.csv"
+            href={`/api/office/billing/reports/debtors.csv?${exportParams}`}
             className="rounded-md border border-zinc-200 px-3 py-2 text-sm"
             data-testid="office-debtors-export"
           >

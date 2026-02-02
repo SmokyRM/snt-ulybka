@@ -16,6 +16,7 @@ const retryableTypes = new Set([
   "billing.importStatement",
   "reports.monthlyPdfBatch",
   "notifications.campaignSend",
+  "notifications.send",
 ]);
 
 export async function POST(request: Request, context: { params: { id: string } }) {
@@ -50,7 +51,7 @@ export async function POST(request: Request, context: { params: { id: string } }
   }
 
   try {
-    const job = getOfficeJob(context.params.id);
+    const job = await getOfficeJob(context.params.id);
     if (!job) {
       return fail(request, "not_found", "Задание не найдено", 404);
     }
@@ -72,7 +73,7 @@ export async function POST(request: Request, context: { params: { id: string } }
       return fail(request, "max_attempts", "Достигнут лимит попыток", 409);
     }
 
-    const updated = updateOfficeJob(job.id, { status: "queued", progress: 0, error: null });
+    const updated = await updateOfficeJob(job.id, { status: "queued", progress: 0, error: null });
     if (!updated) {
       return serverError(request, "Не удалось перезапустить задание");
     }

@@ -1,17 +1,13 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { listAccrualsWithStatus, getPlotLabel } from "@/lib/billing.store";
-
-const escapeCsv = (value: string | number) => {
-  const raw = String(value ?? "");
-  if (raw.includes(",") || raw.includes("\n") || raw.includes("\"")) {
-    return `"${raw.replace(/"/g, '""')}"`;
-  }
-  return raw;
-};
+import { buildAccrualsCsv, type AccrualsCsvRow } from "@/lib/billing/reports.csv";
+import { hasPgConnection, exportAccrualsCsv } from "@/lib/billing/reports.pg";
 
 export async function GET(request: Request) {
   const startedAt = Date.now();
@@ -32,35 +28,56 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const period = searchParams.get("period") ?? "";
+  const q = searchParams.get("q") ?? "";
+  const limit = Math.min(1000, Math.max(1, Number(searchParams.get("limit") ?? "500") || 500));
+  const offset = Math.max(0, Number(searchParams.get("offset") ?? "0") || 0);
   const from = searchParams.get("from") ?? null;
   const to = searchParams.get("to") ?? null;
 
-  let rows = listAccrualsWithStatus();
+  if (hasPgConnection()) {
+    const csv = await exportAccrualsCsv({
+      period: period || null,
+      q: q || null,
+      limit,
+      offset,
+    });
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": "attachment; filename=accruals.csv",
+      },
+    });
+  }
+
+  let all = listAccrualsWithStatus();
+  if (period) {
+    all = all.filter((row) => row.period === period);
+  }
+  if (q) {
+    const needle = q.toLowerCase();
+    all = all.filter((row) => `${row.plotId} ${row.title}`.toLowerCase().includes(needle));
+  }
   if (from) {
     const fromTs = new Date(from).getTime();
-    rows = rows.filter((row) => new Date(row.date).getTime() >= fromTs);
+    all = all.filter((row) => new Date(row.date).getTime() >= fromTs);
   }
   if (to) {
     const toTs = new Date(to).getTime();
-    rows = rows.filter((row) => new Date(row.date).getTime() <= toTs);
+    all = all.filter((row) => new Date(row.date).getTime() <= toTs);
   }
+  const rows: AccrualsCsvRow[] = all.slice(offset, offset + limit).map((row) => ({
+    date: row.date,
+    plot: getPlotLabel(row.plotId),
+    title: row.title,
+    amount: row.amount,
+    paid: row.paidAmount ?? 0,
+    remaining: row.remaining ?? 0,
+    status: row.status ?? "open",
+  }));
 
-  const header = ["date", "plot", "title", "amount", "paid", "remaining", "status"].join(",");
-  const body = rows
-    .map((row) =>
-      [
-        escapeCsv(row.date),
-        escapeCsv(getPlotLabel(row.plotId)),
-        escapeCsv(row.title),
-        escapeCsv(row.amount),
-        escapeCsv(row.paidAmount ?? 0),
-        escapeCsv(row.remaining ?? 0),
-        escapeCsv(row.status ?? "open"),
-      ].join(","),
-    )
-    .join("\n");
-
-  const csv = `${header}\n${body}`;
+  const csv = buildAccrualsCsv(rows);
   return new NextResponse(csv, {
     status: 200,
     headers: {

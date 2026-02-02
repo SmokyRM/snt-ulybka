@@ -1,6 +1,9 @@
+export const runtime = "nodejs";
+
 import { ok, fail, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
 import { createAllocation, getAccrualPaymentSummary, getPaymentAllocationSummary, getChargeById } from "@/lib/billing.store";
+import { hasPgConnection, applyManualAllocation, getAccrualPeriod } from "@/lib/billing/allocations.pg";
 import { assertPeriodOpenOrReason } from "@/lib/office/periodClose.store";
 import { logAdminAction } from "@/lib/audit";
 
@@ -20,6 +23,42 @@ export async function POST(request: Request) {
 
     if (!paymentId || !accrualId || !Number.isFinite(amount)) {
       return fail(request, "validation_error", "paymentId, accrualId, amount обязательны", 400);
+    }
+
+    if (hasPgConnection()) {
+      const period = await getAccrualPeriod(accrualId);
+      if (!period) {
+        return fail(request, "not_found", "Начисление не найдено", 404);
+      }
+      let closeCheck: { closed: false } | { closed: true; reason: string };
+      try {
+        closeCheck = assertPeriodOpenOrReason(period, reason);
+      } catch (e) {
+        return fail(request, "period_closed", e instanceof Error ? e.message : "Период закрыт", 409);
+      }
+
+      try {
+        const allocation = await applyManualAllocation(paymentId, accrualId, amount);
+        await logAdminAction({
+          action: "allocation.manual",
+          entity: "billing.allocation",
+          entityId: allocation.allocationId,
+          route: "/api/office/billing/allocate/manual",
+          success: true,
+          meta: closeCheck.closed ? { period, postCloseChange: true, reason: closeCheck.reason } : { period },
+          headers: request.headers,
+        });
+        return ok(request, { allocation });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Ошибка распределения";
+        if (message.includes("не найден")) {
+          return fail(request, "not_found", message, 404);
+        }
+        if (message.includes("Сумма превышает остаток")) {
+          return fail(request, "validation_error", message, 400);
+        }
+        return serverError(request, "Ошибка ручного распределения", e);
+      }
     }
 
     const paymentSummary = getPaymentAllocationSummary(paymentId);

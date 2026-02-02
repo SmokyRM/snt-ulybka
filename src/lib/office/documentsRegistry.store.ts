@@ -1,6 +1,6 @@
 import { createId } from "@/lib/mockDb";
 
-export type OfficeDocumentType = "protocol" | "smeta" | "act" | "charter" | "other";
+export type OfficeDocumentType = "protocol" | "smeta" | "act" | "charter" | "monthly_report" | "other";
 
 export type OfficeDocumentRecord = {
   id: string;

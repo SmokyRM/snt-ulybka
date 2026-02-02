@@ -1,17 +1,29 @@
-# Database (Postgres / Vercel)
+# Database (Postgres)
 
-This project connects to Postgres via `@vercel/postgres`.
+This project connects to Postgres via `postgres` (postgres-js).
+
+## Quick setup
+
+After pulling changes, run:
+
+```
+npm install
+```
+
+This ensures the `postgres` package and its dependencies are installed correctly.
 
 ## Environment variables
 
 Set the following (runtime only):
 
+- `POSTGRES_URL_NON_POOLING` (preferred)
 - `POSTGRES_URL`
+- `DATABASE_URL` (fallback)
 
 Example (do not commit secrets):
 
 ```
-POSTGRES_URL=postgres://user:password@host:5432/dbname
+POSTGRES_URL_NON_POOLING=postgres://user:password@host:5432/dbname
 ```
 
 ## Vercel env pull

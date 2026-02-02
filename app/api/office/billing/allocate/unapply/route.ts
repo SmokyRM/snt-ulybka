@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { ok, fail, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
 import {
@@ -7,6 +9,13 @@ import {
   getAllocationById,
   getChargeById,
 } from "@/lib/billing.store";
+import {
+  hasPgConnection,
+  getPeriodsByPayment,
+  getPeriodByAllocation,
+  unapplyAllocation,
+  unapplyAllocationsByPayment,
+} from "@/lib/billing/allocations.pg";
 import { assertPeriodsOpenOrReason } from "@/lib/office/periodClose.store";
 import { logAdminAction } from "@/lib/audit";
 
@@ -26,6 +35,30 @@ export async function POST(request: Request) {
       return fail(request, "validation_error", "allocationId или paymentId обязателен", 400);
     }
     if (paymentId) {
+      if (hasPgConnection()) {
+        const periods = await getPeriodsByPayment(paymentId);
+        let closeCheck;
+        try {
+          closeCheck = assertPeriodsOpenOrReason(periods, reason);
+        } catch (e) {
+          return fail(request, "period_closed", e instanceof Error ? e.message : "Период закрыт", 409);
+        }
+        const removed = await unapplyAllocationsByPayment({ paymentId });
+        if (removed.removedCount === 0) {
+          return fail(request, "not_found", "Распределения не найдены", 404);
+        }
+        await logAdminAction({
+          action: "allocation.unapply",
+          entity: "billing.allocation",
+          entityId: paymentId,
+          route: "/api/office/billing/allocate/unapply",
+          success: true,
+          meta: closeCheck.closed ? { postCloseChange: true, reason: closeCheck.reason, periods: closeCheck.periods } : { periods },
+          headers: request.headers,
+        });
+        return ok(request, { removed: true, removedCount: removed.removedCount });
+      }
+
       const allocations = listAllocationsByPayment(paymentId);
       const periods = allocations
         .map((a) => getChargeById(a.accrualId))
@@ -52,6 +85,32 @@ export async function POST(request: Request) {
       });
       return ok(request, { removed: true, removedCount });
     }
+    if (hasPgConnection()) {
+      const period = await getPeriodByAllocation(allocationId as string);
+      let closeCheck;
+      try {
+        closeCheck = period ? assertPeriodsOpenOrReason([period], reason) : { closed: false, periods: [] };
+      } catch (e) {
+        return fail(request, "period_closed", e instanceof Error ? e.message : "Период закрыт", 409);
+      }
+      const removed = await unapplyAllocation({ allocationId: allocationId as string });
+      if (!removed.removed) {
+        return fail(request, "not_found", "Распределение не найдено", 404);
+      }
+      await logAdminAction({
+        action: "allocation.unapply",
+        entity: "billing.allocation",
+        entityId: allocationId as string,
+        route: "/api/office/billing/allocate/unapply",
+        success: true,
+        meta: closeCheck.closed
+          ? { postCloseChange: true, reason: closeCheck.reason, periods: [period] }
+          : { periods: [period] },
+        headers: request.headers,
+      });
+      return ok(request, { removed: true });
+    }
+
     const allocation = getAllocationById(allocationId as string);
     if (!allocation) {
       return fail(request, "not_found", "Распределение не найдено", 404);

@@ -1,9 +1,12 @@
+export const runtime = "nodejs";
+
 import { ok, fail, unauthorized, forbidden, serverError } from "@/lib/api/respond";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { listAccrualsWithStatus, getPlotLabel } from "@/lib/billing.store";
+import { hasPgConnection, previewPenalty } from "@/lib/billing/penalty.pg";
 
 export type PenaltyPreviewRow = {
   plotId: string;
@@ -15,6 +18,8 @@ export type PenaltyPreviewRow = {
   penaltyAmount: number;
   date: string;
 };
+
+type AccrualWithStatus = ReturnType<typeof listAccrualsWithStatus>[number];
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -55,36 +60,57 @@ export async function POST(request: Request) {
     const to = typeof body.to === "string" ? body.to : null;
     const minPenalty = typeof body.minPenalty === "number" ? body.minPenalty : 0;
 
-    const asOfDate = new Date(asOf);
+    let previewRows: PenaltyPreviewRow[] = [];
+    let totalPenalty = 0;
 
-    let rows = listAccrualsWithStatus().filter((row) => (row.remaining ?? 0) > 0);
-    if (from) {
-      const fromTs = new Date(from).getTime();
-      rows = rows.filter((row) => new Date(row.date).getTime() >= fromTs);
+    if (hasPgConnection()) {
+      const preview = await previewPenalty({ asOf, rate, from, to, minPenalty });
+      previewRows = preview.rows.map((row) => ({
+        plotId: row.plotId,
+        plotLabel: row.plotLabel ?? "—",
+        period: row.period ?? "",
+        originalAmount: row.originalAmount ?? 0,
+        remaining: row.remaining ?? 0,
+        daysOverdue: row.daysOverdue,
+        penaltyAmount: row.penaltyAmount,
+        date: row.date,
+      }));
+      totalPenalty = preview.totalPenalty;
+    } else {
+      const asOfDate = new Date(asOf);
+      let rows: AccrualWithStatus[] = listAccrualsWithStatus().filter((row: AccrualWithStatus) => (row.remaining ?? 0) > 0);
+      if (from) {
+        const fromTs = new Date(from).getTime();
+        rows = rows.filter((row: AccrualWithStatus) => new Date(row.date).getTime() >= fromTs);
+      }
+      if (to) {
+        const toTs = new Date(to).getTime();
+        rows = rows.filter((row: AccrualWithStatus) => new Date(row.date).getTime() <= toTs);
+      }
+
+      previewRows = rows
+        .map((row: AccrualWithStatus) => {
+          const daysOverdue = Math.max(
+            0,
+            Math.floor((asOfDate.getTime() - new Date(row.date).getTime()) / 86400000)
+          );
+          const penaltyAmount = Math.round((row.remaining ?? 0) * rate * (daysOverdue / 365));
+          return {
+            plotId: row.plotId,
+            plotLabel: getPlotLabel(row.plotId),
+            period: row.period ?? "",
+            originalAmount: row.amount,
+            remaining: row.remaining ?? 0,
+            daysOverdue,
+            penaltyAmount,
+            date: row.date,
+          };
+        })
+        .filter((row) => row.penaltyAmount >= minPenalty);
+
+      totalPenalty = previewRows.reduce((sum, row) => sum + row.penaltyAmount, 0);
     }
-    if (to) {
-      const toTs = new Date(to).getTime();
-      rows = rows.filter((row) => new Date(row.date).getTime() <= toTs);
-    }
 
-    const previewRows: PenaltyPreviewRow[] = rows
-      .map((row) => {
-        const daysOverdue = Math.max(0, Math.floor((asOfDate.getTime() - new Date(row.date).getTime()) / 86400000));
-        const penaltyAmount = Math.round((row.remaining ?? 0) * rate * (daysOverdue / 365));
-        return {
-          plotId: row.plotId,
-          plotLabel: getPlotLabel(row.plotId),
-          period: row.period ?? "",
-          originalAmount: row.amount,
-          remaining: row.remaining ?? 0,
-          daysOverdue,
-          penaltyAmount,
-          date: row.date,
-        };
-      })
-      .filter((row) => row.penaltyAmount >= minPenalty);
-
-    const totalPenalty = previewRows.reduce((sum, row) => sum + row.penaltyAmount, 0);
     const affectedPlots = new Set(previewRows.map((row) => row.plotId)).size;
 
     return ok(request, {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api/client";
 import OfficeLoadingState from "../../_components/OfficeLoadingState";
@@ -69,6 +69,13 @@ export default function PaymentsClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualMatch, setManualMatch] = useState<Record<string, string>>({});
+  const exportUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    params.set("limit", String(limit));
+    params.set("offset", String((page - 1) * limit));
+    return `/api/office/billing/reports/payments.csv?${params.toString()}`;
+  }, [query, page, limit]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -167,6 +174,12 @@ export default function PaymentsClient({
             </select>
           </label>
           <span className="text-xs text-zinc-500">Всего: {total}</span>
+          <a
+            href={exportUrl}
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700"
+          >
+            Скачать CSV
+          </a>
         </div>
       </div>
 
