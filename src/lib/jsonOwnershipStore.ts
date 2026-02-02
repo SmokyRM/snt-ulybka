@@ -27,7 +27,7 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
     return JSON.parse(raw) as T;
   } catch {
     if (isReadonlyFs) {
-      warnReadonlyFs("ownership-store:read-fallback");
+      // Silent fallback in readonly environment - don't spam logs
       return fallback;
     }
     const dir = path.dirname(file);
@@ -65,8 +65,8 @@ export function createJsonOwnershipStore(): OwnershipVerificationStore {
     },
     async create(input) {
       if (isReadonlyFs) {
-        warnReadonlyFs("ownership-store:create");
-        throw new Error("READONLY_FS");
+        console.error("[ownership-store:json] Cannot create in readonly filesystem");
+        throw new Error("READONLY_FS: Cannot write ownership verification in production environment");
       }
       const items = await getAll();
       const now = new Date().toISOString();
@@ -86,8 +86,8 @@ export function createJsonOwnershipStore(): OwnershipVerificationStore {
     },
     async update(id, patch) {
       if (isReadonlyFs) {
-        warnReadonlyFs("ownership-store:update");
-        throw new Error("READONLY_FS");
+        console.error("[ownership-store:json] Cannot update in readonly filesystem");
+        throw new Error("READONLY_FS: Cannot write ownership verification in production environment");
       }
       const items = await getAll();
       const idx = items.findIndex((item) => item.id === id);
