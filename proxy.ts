@@ -59,44 +59,10 @@ export function edgeRequestId(): string {
 const readSessionRole = (request: NextRequest): { role: SessionRole | null; hasSession: boolean } => {
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
   if (!raw) return { role: null, hasSession: false };
-  try {
-    const parsed = JSON.parse(raw) as { role?: string; userId?: string };
-    if (!parsed || !parsed.userId) return { role: null, hasSession: false };
-    
-    // КРИТИЧНО: Проверяем что роль есть в payload
-    if (!parsed.role || typeof parsed.role !== "string") {
-      // Роль отсутствует в cookie - это ошибка, но не падаем, возвращаем null
-      return { role: null, hasSession: true };
-    }
-    
-    // КРИТИЧНО: Используем normalizeRole для нормализации роли из cookie
-    // normalizeRole возвращает правильные office роли (chairman/secretary/accountant) и не превращает их в resident
-    const normalized = normalizeRole(parsed.role);
-    
-    // Маппим результат normalizeRole в SessionRole (может быть "guest" -> null)
-    if (normalized === "guest") {
-      // Неизвестная роль -> null (не авторизован)
-      return { role: null, hasSession: true };
-    }
-    
-    // Маппим нормализованную роль в SessionRole
-    // ВАЖНО: normalizeRole уже вернул правильную роль, просто маппим в SessionRole тип
-    const role: SessionRole | null =
-      normalized === "admin" ? "admin" :
-      normalized === "resident" ? "resident" :
-      normalized === "chairman" ? "chairman" :
-      normalized === "secretary" ? "secretary" :
-      normalized === "accountant" ? "accountant" :
-      null; // Это не должно случиться если normalizeRole работает правильно
-    
-    return { role, hasSession: true };
-  } catch (error) {
-    // Логируем ошибку в dev режиме для отладки
-    if (process.env.NODE_ENV !== "production") {
-      console.error("[middleware] Ошибка чтения сессии:", error);
-    }
-    return { role: null, hasSession: false };
-  }
+  // Cookie is now signed (base64url payload + HMAC signature).
+  // HMAC verification requires the secret and is not safe to do in edge runtime here.
+  // We only signal presence; server-side parseSignedSessionCookieValue() does the real auth.
+  return { role: null, hasSession: true };
 };
 
 export function proxy(request: NextRequest) {
@@ -148,6 +114,12 @@ export function proxy(request: NextRequest) {
     // Эта функция гарантирует, что staff роли из cookie НЕ перезаписываются QA override для resident
     const effectiveRole = computeEffectiveRole(role, qaCookie, isDev);
     const hasAuth = hasSession || qaCookie !== null;
+    // Signed session cookie present but role not extractable in edge runtime.
+    // Pass the request through — requirePermission / getEffectiveSessionUser
+    // on the server side will decode the cookie and enforce RBAC.
+    // When a QA cookie IS set (dev only) effectiveRole is non-null and we keep
+    // the existing role-based guards so the QA access-matrix tests still work.
+    const deferToServer = hasSession && !effectiveRole;
     const sanitizedCurrent = sanitizeNextUrl(`${pathname}${search}`);
     const attachNextParam = (url: URL) => {
       if (!isAuthRoute(pathname) && sanitizedCurrent) {
@@ -206,15 +178,7 @@ export function proxy(request: NextRequest) {
     
     // DEBUG: server-side log в dev режиме для диагностики
     if (isDev && (isAdminPath || isOfficePath || isCabinetPath)) {
-      const rawCookie = request.cookies.get(SESSION_COOKIE)?.value;
-      let rawRole: string | null = null;
-      try {
-        const parsed = rawCookie ? JSON.parse(rawCookie) : null;
-        rawRole = parsed?.role ?? null;
-      } catch {
-        rawRole = null;
-      }
-      const effectiveRoleSource = role ? "cookie" : qaCookie ? "qa" : "none";
+      const effectiveRoleSource = role ? "cookie" : qaCookie ? "qa" : hasSession ? "signed-cookie" : "none";
       const isQaOverride = Boolean(qaCookie && effectiveRole && role && effectiveRole !== role);
       // qaIgnored: true если qaCookie есть, но мы его игнорируем из-за staff роли
       const qaIgnored = Boolean(
@@ -228,7 +192,7 @@ export function proxy(request: NextRequest) {
       const isAdminRoleResult = isAdminRole(normalizedRole);
       console.log("[middleware-auth]", {
         path: pathname,
-        rawRole: rawRole ?? "null",
+        cookieFormat: hasSession ? "signed" : "none",
         role: role ?? "null",
         realRole: role ?? "null",
         effectiveRole: effectiveRole ?? "null",
@@ -255,6 +219,7 @@ export function proxy(request: NextRequest) {
         if (isDev && pathname === "/admin/qa/cabinet-lab") r.headers.set("x-redirect-reason", "login.required");
         return r;
       }
+      if (deferToServer) return response;
 
       const isBillingOrRegistry =
         pathname.startsWith("/admin/billing") ||
@@ -322,6 +287,7 @@ export function proxy(request: NextRequest) {
         }
         return redirectToStaffLogin();
       }
+      if (deferToServer) return response;
       // Проверяем office role (chairman, secretary, accountant) или admin через helper функции
       const isOfficeAccess = isOfficeRole(normalizedRole) || isAdminRole(normalizedRole);
       if (!isOfficeAccess) {
@@ -379,6 +345,7 @@ export function proxy(request: NextRequest) {
         if (isDev) r.headers.set("x-redirect-reason", "login.required");
         return r;
       }
+      if (deferToServer) return response;
       // КРИТИЧНО: admin и office роли имеют доступ к /cabinet
       if (isAdminRole(normalizedRole)) {
         // admin bypass - пропускаем
