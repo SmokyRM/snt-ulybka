@@ -4,6 +4,7 @@ import { isOfficeRole, isAdminRole, normalizeRole } from "@/lib/rbac";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { computeEffectiveRole, type SessionRole } from "@/lib/middleware-effective-role";
 import { logAuthEvent } from "@/lib/structuredLogger/edge";
+import { verifySessionCookie } from "@/lib/security/sessionCookieCodec";
 
 const SESSION_COOKIE = "snt_session";
 const QA_COOKIE = "qaScenario";
@@ -56,23 +57,27 @@ export function edgeRequestId(): string {
 
 // SessionRole экспортирован из @/lib/middleware-effective-role
 
-const readSessionRole = (request: NextRequest): { role: SessionRole | null; hasSession: boolean } => {
+/**
+ * Verify the signed session cookie using WebCrypto (edge-safe).
+ * Returns hasSession:true only when the HMAC signature is valid.
+ * Role extraction is intentionally skipped here — the server-side
+ * parseSignedSessionCookieValue() handles that in node runtime.
+ */
+const readSessionPresence = async (request: NextRequest): Promise<{ hasSession: boolean }> => {
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!raw) return { role: null, hasSession: false };
-  // Cookie is now signed (base64url payload + HMAC signature).
-  // HMAC verification requires the secret and is not safe to do in edge runtime here.
-  // We only signal presence; server-side parseSignedSessionCookieValue() does the real auth.
-  return { role: null, hasSession: true };
+  const secret = process.env.SESSION_SECRET?.trim();
+  return { hasSession: await verifySessionCookie(raw, secret ?? "") };
 };
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   try {
     const { pathname, search } = request.nextUrl;
     const isAdminPath = pathname.startsWith("/admin");
     const isCabinetPath = pathname.startsWith("/cabinet");
     const isOfficePath = pathname.startsWith("/office");
     const isApiAdmin = pathname.startsWith("/api/admin");
-    const { role, hasSession } = readSessionRole(request);
+    const { hasSession } = await readSessionPresence(request);
+    const role: SessionRole | null = null; // role extraction deferred to server
     const isDev = process.env.NODE_ENV !== "production";
     const qaParam = isDev ? request.nextUrl.searchParams.get("qa") : null;
     const allowedQa =
@@ -385,11 +390,9 @@ export function proxy(request: NextRequest) {
     return response;
   } catch (error) {
     const requestId = request.headers.get(REQUEST_ID_HEADER) || edgeRequestId();
-    const { role } = readSessionRole(request);
     console.error("[proxy-error]", {
       requestId,
       route: request.nextUrl.pathname,
-      role: role ?? "none",
       error: error instanceof Error ? error.message : String(error),
     });
     const errorResponse = NextResponse.next();

@@ -1,3 +1,7 @@
+-- pgcrypto is created in 001_init.sql; repeated here so the migration is safe
+-- to replay in isolation (e.g. during local schema restore).
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS ownership_verifications (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
   -- pgOwnershipStore path (cadastral-based)
