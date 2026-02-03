@@ -4,6 +4,7 @@ import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { upsertUserById } from "@/lib/mockDb";
 import { getRequestId } from "@/lib/api/requestId";
 import { logLoginAudit } from "@/lib/loginAudit.store";
+import { createSignedSessionCookieValue } from "@/lib/security/sessionCookie";
 
 const SESSION_COOKIE = "snt_session";
 
@@ -93,17 +94,17 @@ export async function POST(request: Request) {
   const userId = ROLE_USER_IDS[role];
   upsertUserById({ id: userId, role });
   
-  // КРИТИЧНО: payload должен содержать роль "admin" для admin входа
-  const payload = JSON.stringify({ role, userId });
-  
-  // Debug: проверяем что роль правильно сохраняется
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[staff-login] Устанавливаем cookie:", {
-      role,
-      userId,
-      payload,
-      roleType: typeof role,
-    });
+  let payload: string;
+  try {
+    payload = createSignedSessionCookieValue({ role, userId });
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("SESSION_SECRET")) {
+      return NextResponse.json(
+        { error: "server_misconfigured", message: "SESSION_SECRET is not set. Configure it in your environment." },
+        { status: 503 },
+      );
+    }
+    throw e;
   }
   const redirectUrl =
     sanitizedNext && isPathAllowedForRole(role, sanitizedNext)
@@ -128,16 +129,6 @@ export async function POST(request: Request) {
     maxAge: 60 * 60 * 24 * 7,
   });
   
-  // Debug: в dev режиме логируем установку cookie
-  const isProduction = process.env.NODE_ENV === "production";
-  if (!isProduction) {
-    console.log("[staff-login] Cookie установлена:", {
-      name: SESSION_COOKIE,
-      payload,
-      path: "/",
-      secure: isProduction,
-    });
-  }
   logLoginAudit({
     userId,
     role,
