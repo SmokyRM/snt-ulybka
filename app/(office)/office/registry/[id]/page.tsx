@@ -12,6 +12,7 @@ import { listAuditLogs } from "@/lib/mockDb";
 import type { AppealStatus } from "@/lib/office/types";
 import { overdue, dueSoon } from "@/lib/sla";
 import AppLink from "@/components/AppLink";
+import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import PlotContactsClient from "./PlotContactsClient";
 import PlotNotesClient from "./PlotNotesClient";
 
@@ -66,6 +67,7 @@ export default async function PlotDetailPage({ params }: Props) {
   }
 
   const canManageRegistry = can(role, "office.registry.manage");
+  const canVerifyOwner = role === "admin" || role === "chairman";
 
   // Получаем связанные обращения
   let appeals: Awaited<ReturnType<typeof listByPlotId>> = [];
@@ -113,6 +115,14 @@ export default async function PlotDetailPage({ params }: Props) {
 
   return (
     <div className="space-y-6" data-testid="registry-root">
+      <Breadcrumbs
+        items={[
+          { title: "Офис", href: "/office" },
+          { title: "Реестр", href: "/office/registry" },
+          { title: `Участок №${plot.plotNumber}` },
+        ]}
+        className="mb-2"
+      />
       {/* Sprint 4.1: Заголовок с участком №/ID, статусом, адресом */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -162,6 +172,7 @@ export default async function PlotDetailPage({ params }: Props) {
               contactVerifiedAt={plot.contactVerifiedAt}
               contactVerifiedBy={plot.contactVerifiedBy}
               canManage={canManageRegistry}
+              canVerifyOwner={canVerifyOwner}
             />
           </section>
 
