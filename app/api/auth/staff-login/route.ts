@@ -5,6 +5,7 @@ import { upsertUserById } from "@/lib/mockDb";
 import { getRequestId } from "@/lib/api/requestId";
 import { logLoginAudit } from "@/lib/loginAudit.store";
 import { createSignedSessionCookieValue } from "@/lib/security/sessionCookie";
+import { measure } from "@/lib/perf/measure";
 
 const SESSION_COOKIE = "snt_session";
 
@@ -49,94 +50,100 @@ const isPathAllowedForRole = (role: string, path: string | null | undefined) => 
 };
 
 export async function POST(request: Request) {
-  const requestId = getRequestId(request);
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip");
-  const userAgent = request.headers.get("user-agent");
-  const body = await request.json().catch(() => ({}));
-  const loginRaw = (body.login as string | undefined) ?? null;
-  const password = (body.password as string | undefined) ?? "";
-  const nextRaw = (body.next as string | undefined) ?? "";
-  const sanitizedNext = sanitizeNextUrl(nextRaw);
-  const mapped = mapLogin(loginRaw);
-  if (!mapped || !password.trim()) {
-    logLoginAudit({
-      userId: null,
-      role: mapped?.role ?? null,
-      success: false,
-      method: "password",
-      ip,
-      userAgent,
-      requestId,
-    });
-    return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
-  }
-  const envPass = (process.env[mapped.env] ?? "").trim();
-  if (!envPass) {
-    return NextResponse.json(
-      { error: "auth_not_configured", envVar: mapped.env, message: "Код доступа для роли " + mapped.role + " не настроен (env). Задайте " + mapped.env + " в .env.local." },
-      { status: 503 },
-    );
-  }
-  if (!safeEquals(envPass, password)) {
-    logLoginAudit({
-      userId: null,
-      role: mapped.role,
-      success: false,
-      method: "password",
-      ip,
-      userAgent,
-      requestId,
-    });
-    return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
-  }
+  return measure(
+    "auth.staff-login",
+    async () => {
+      const requestId = getRequestId(request);
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip");
+      const userAgent = request.headers.get("user-agent");
+      const body = await request.json().catch(() => ({}));
+      const loginRaw = (body.login as string | undefined) ?? null;
+      const password = (body.password as string | undefined) ?? "";
+      const nextRaw = (body.next as string | undefined) ?? "";
+      const sanitizedNext = sanitizeNextUrl(nextRaw);
+      const mapped = mapLogin(loginRaw);
+      if (!mapped || !password.trim()) {
+        logLoginAudit({
+          userId: null,
+          role: mapped?.role ?? null,
+          success: false,
+          method: "password",
+          ip,
+          userAgent,
+          requestId,
+        });
+        return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+      }
+      const envPass = (process.env[mapped.env] ?? "").trim();
+      if (!envPass) {
+        return NextResponse.json(
+          { error: "auth_not_configured", envVar: mapped.env, message: "Код доступа для роли " + mapped.role + " не настроен (env). Задайте " + mapped.env + " в .env.local." },
+          { status: 503 },
+        );
+      }
+      if (!safeEquals(envPass, password)) {
+        logLoginAudit({
+          userId: null,
+          role: mapped.role,
+          success: false,
+          method: "password",
+          ip,
+          userAgent,
+          requestId,
+        });
+        return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+      }
 
-  const role = mapped.role;
-  const userId = ROLE_USER_IDS[role];
-  upsertUserById({ id: userId, role });
-  
-  let payload: string;
-  try {
-    payload = createSignedSessionCookieValue({ role, userId });
-  } catch (e) {
-    if (e instanceof Error && e.message.includes("SESSION_SECRET")) {
-      return NextResponse.json(
-        { error: "server_misconfigured", message: "SESSION_SECRET is not set. Configure it in your environment." },
-        { status: 503 },
-      );
-    }
-    throw e;
-  }
-  const redirectUrl =
-    sanitizedNext && isPathAllowedForRole(role, sanitizedNext)
-      ? sanitizedNext
-      : role === "admin"
-        ? "/admin"
-        : "/office";
-  const response = NextResponse.json({
-    ok: true,
-    role,
-    redirectTo: redirectUrl,
-    redirectUrl, // для совместимости с клиентом
-  });
-  // КРИТИЧНО: Устанавливаем cookie с правильными параметрами
-  // secure: только в production (не ломает localhost)
-  // path: "/" чтобы cookie была доступна на всех путях
-  response.cookies.set(SESSION_COOKIE, payload, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  
-  logLoginAudit({
-    userId,
-    role,
-    success: true,
-    method: "password",
-    ip,
-    userAgent,
-    requestId,
-  });
-  return response;
+      const role = mapped.role;
+      const userId = ROLE_USER_IDS[role];
+      upsertUserById({ id: userId, role });
+
+      let payload: string;
+      try {
+        payload = createSignedSessionCookieValue({ role, userId });
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("SESSION_SECRET")) {
+          return NextResponse.json(
+            { error: "server_misconfigured", message: "SESSION_SECRET is not set. Configure it in your environment." },
+            { status: 503 },
+          );
+        }
+        throw e;
+      }
+      const redirectUrl =
+        sanitizedNext && isPathAllowedForRole(role, sanitizedNext)
+          ? sanitizedNext
+          : role === "admin"
+            ? "/admin"
+            : "/office";
+      const response = NextResponse.json({
+        ok: true,
+        role,
+        redirectTo: redirectUrl,
+        redirectUrl, // для совместимости с клиентом
+      });
+      // КРИТИЧНО: Устанавливаем cookie с правильными параметрами
+      // secure: только в production (не ломает localhost)
+      // path: "/" чтобы cookie была доступна на всех путях
+      response.cookies.set(SESSION_COOKIE, payload, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7,
+      });
+
+      logLoginAudit({
+        userId,
+        role,
+        success: true,
+        method: "password",
+        ip,
+        userAgent,
+        requestId,
+      });
+      return response;
+    },
+    { route: "/api/auth/staff-login" },
+  );
 }

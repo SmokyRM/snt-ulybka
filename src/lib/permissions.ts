@@ -35,6 +35,10 @@ export const getOfficeCapabilities = (role: Role): Set<string> => capabilityMap[
 export const can = (role: Role, capability: string): boolean => capabilityMap[role]?.has(capability) ?? false;
 
 export type PermissionAction =
+  | "admin.access"
+  | "office.access"
+  | "cabinet.access"
+  | "diagnostics.view"
   | "admin.manage_users"
   | "billing.view_debtors"
   | "billing.import_statement"
@@ -64,6 +68,10 @@ export type PermissionAction =
   | "notifications.generate_campaign";
 
 const allActions: PermissionAction[] = [
+  "admin.access",
+  "office.access",
+  "cabinet.access",
+  "diagnostics.view",
   "admin.manage_users",
   "billing.view_debtors",
   "billing.import_statement",
@@ -96,6 +104,9 @@ const allActions: PermissionAction[] = [
 const actionPermissions: Record<Role, Set<PermissionAction>> = {
   admin: new Set(allActions),
   chairman: new Set([
+    "office.access",
+    "cabinet.access",
+    "diagnostics.view",
     "billing.view_debtors",
     "billing.import_statement",
     "billing.match_payments_manual",
@@ -124,6 +135,9 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "notifications.generate_campaign",
   ]),
   accountant: new Set([
+    "office.access",
+    "cabinet.access",
+    "diagnostics.view",
     "billing.view_debtors",
     "billing.import_statement",
     "billing.match_payments_manual",
@@ -139,6 +153,9 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "billing.penalty.freeze",
   ]),
   secretary: new Set([
+    "office.access",
+    "cabinet.access",
+    "diagnostics.view",
     "appeals.view",
     "appeals.manage",
     "appeals.assign",
@@ -147,7 +164,7 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "registry.view",
     "registry.edit",
   ]),
-  resident: new Set(),
+  resident: new Set(["cabinet.access"]),
 };
 
 export const hasPermission = (role: Role | null | undefined, action: PermissionAction): boolean => {
