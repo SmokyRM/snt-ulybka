@@ -5,6 +5,7 @@
  */
 
 import { optionalRequire } from "../optionalRequire";
+import { sanitizeForLog, sanitizeString } from "./sanitize";
 
 export type LogLevel = "info" | "warn" | "error" | "debug";
 
@@ -58,11 +59,12 @@ function formatLog(log: StructuredLog): string {
  * Структурированное логирование (Node.js)
  */
 export function logStructured(level: LogLevel, data: Omit<StructuredLog, "timestamp" | "level">) {
+  const sanitizedData = sanitizeForLog(data);
   const log: StructuredLog = {
     timestamp: new Date().toISOString(),
     level,
-    action: (data as StructuredLog).action || "unknown",
-    ...data,
+    action: (sanitizedData as StructuredLog).action || "unknown",
+    ...sanitizedData,
   };
 
   const formatted = formatLog(log);
@@ -140,9 +142,10 @@ export function logApiRequest(params: {
   });
   
   // Отправляем ошибки в Sentry (только если пакет установлен)
-  if (params.status >= 500 && SentryLogger && params.error) {
+  const safeError = params.error ? sanitizeString(params.error) : undefined;
+  if (params.status >= 500 && SentryLogger && safeError) {
     try {
-      SentryLogger.captureException(new Error(params.error), {
+      SentryLogger.captureException(new Error(safeError), {
         tags: {
           path: params.path,
           method: params.method,

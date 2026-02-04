@@ -48,6 +48,25 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    files: [
+      "proxy.ts",
+      "app/(office)/layout.tsx",
+      "app/(cabinet)/layout.tsx",
+      "app/api/auth/register/route.ts",
+      "app/api/office/inbox/route.ts",
+      "src/lib/session.server.ts",
+    ],
+    rules: {
+      "no-console": ["error", { allow: ["warn", "error"] }],
+    },
+  },
+  {
+    files: ["src/lib/structuredLogger/**/*.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

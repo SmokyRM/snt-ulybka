@@ -2,6 +2,7 @@ import { ok, unauthorized, forbidden, serverError } from "@/lib/api/respond";
 import { listInbox } from "@/server/services/appeals";
 import { checkAndNotifyOverdue } from "@/server/services/notificationsOverdue";
 import type { AppealStatus } from "@/lib/office/types";
+import { logStructured } from "@/lib/structuredLogger/node";
 
 export async function GET(request: Request) {
   try {
@@ -9,7 +10,10 @@ export async function GET(request: Request) {
     checkAndNotifyOverdue().catch((error) => {
       // Игнорируем ошибки проверки overdue (не критично)
       if (process.env.NODE_ENV !== "production") {
-        console.error("[inbox] Failed to check overdue:", error);
+        logStructured("warn", {
+          action: "office.inbox.overdue_check_failed",
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     });
 

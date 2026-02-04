@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { isOfficeRole, isAdminRole, normalizeRole } from "@/lib/rbac";
 import { sanitizeNextUrl } from "@/lib/sanitizeNextUrl";
 import { computeEffectiveRole, type SessionRole } from "@/lib/middleware-effective-role";
-import { logAuthEvent } from "@/lib/structuredLogger/edge";
-import { verifySessionCookie } from "@/lib/security/sessionCookieCodec";
+import { logAuthEvent, logStructured } from "@/lib/structuredLogger/edge";
+import { verifySignedSessionCookieEdge } from "@/lib/security/sessionCookieCodec";
 
 const SESSION_COOKIE = "snt_session";
 const QA_COOKIE = "qaScenario";
@@ -66,7 +66,7 @@ export function edgeRequestId(): string {
 const readSessionPresence = async (request: NextRequest): Promise<{ hasSession: boolean }> => {
   const raw = request.cookies.get(SESSION_COOKIE)?.value;
   const secret = process.env.SESSION_SECRET?.trim();
-  return { hasSession: await verifySessionCookie(raw, secret ?? "") };
+  return { hasSession: await verifySignedSessionCookieEdge(raw, secret) };
 };
 
 export async function proxy(request: NextRequest) {
@@ -159,8 +159,14 @@ export async function proxy(request: NextRequest) {
       const redirectUrl = pathname === STAFF_LOGIN_ALT_PATH 
         ? STAFF_LOGIN_PATH 
         : pathname.replace(STAFF_LOGIN_ALT_PATH, STAFF_LOGIN_PATH);
-      if (isDev) {
-        console.log("[guard-redirect]", { path: pathname, role: "n/a", reason: "staff-login.unify", redirectTo: redirectUrl });
+    if (isDev) {
+        logStructured("info", {
+          action: "guard-redirect",
+          path: pathname,
+          role: "n/a",
+          message: "staff-login.unify",
+          redirectTo: redirectUrl,
+        });
       }
       const url = new URL(redirectUrl, request.url);
       url.search = search; // Сохраняем query параметры
@@ -195,7 +201,8 @@ export async function proxy(request: NextRequest) {
       // Sprint 5.4: Добавляем isOfficeRoleResult и isAdminRoleResult для normalizedRole
       const isOfficeRoleResult = isOfficeRole(normalizedRole);
       const isAdminRoleResult = isAdminRole(normalizedRole);
-      console.log("[middleware-auth]", {
+      logStructured("info", {
+        action: "middleware-auth",
         path: pathname,
         cookieFormat: hasSession ? "signed" : "none",
         role: role ?? "null",
@@ -218,7 +225,13 @@ export async function proxy(request: NextRequest) {
     if (isAdminPath || isApiAdmin) {
       if (!hasAuth) {
         if (isDev) {
-          console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole ?? "null"), reason: "login.required", redirectTo: STAFF_LOGIN_PATH });
+          logStructured("info", {
+            action: "guard-redirect",
+            path: pathname,
+            role: String(normalizedRole ?? "null"),
+            message: "login.required",
+            redirectTo: STAFF_LOGIN_PATH,
+          });
         }
         const r = redirectToStaffLogin();
         if (isDev && pathname === "/admin/qa/cabinet-lab") r.headers.set("x-redirect-reason", "login.required");
@@ -258,13 +271,20 @@ export async function proxy(request: NextRequest) {
           message: `Admin/billing access denied for role: ${normalizedRole}`,
         });
         if (isDev) {
-          console.warn("[proxy] /admin доступ запрещен:", {
+          logStructured("warn", {
+            action: "rbac-deny",
             path: pathname,
-            normalizedRole,
+            role: String(normalizedRole),
             isBillingOrRegistry,
             isSystemSettings,
           });
-          console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole), reason: "admin.only", redirectTo: "/forbidden" });
+          logStructured("info", {
+            action: "guard-redirect",
+            path: pathname,
+            role: String(normalizedRole),
+            message: "admin.only",
+            redirectTo: "/forbidden",
+          });
         }
         if (isApiAdmin) {
           const apiResponse = NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -288,7 +308,13 @@ export async function proxy(request: NextRequest) {
     if (isOfficePath) {
       if (!hasAuth) {
         if (isDev) {
-          console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole ?? "null"), reason: "login.required", redirectTo: STAFF_LOGIN_PATH });
+          logStructured("info", {
+            action: "guard-redirect",
+            path: pathname,
+            role: String(normalizedRole ?? "null"),
+            message: "login.required",
+            redirectTo: STAFF_LOGIN_PATH,
+          });
         }
         return redirectToStaffLogin();
       }
@@ -323,8 +349,19 @@ export async function proxy(request: NextRequest) {
           message: `Office access denied for role: ${normalizedRole}`,
         });
         if (isDev) {
-          console.warn("[proxy] /office доступ запрещен:", redirectChainLog);
-          console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole), reason: "office.only", redirectTo: "/forbidden" });
+          const { path: _path, ...restRedirectLog } = redirectChainLog;
+          logStructured("warn", {
+            action: "rbac-deny",
+            path: pathname,
+            ...restRedirectLog,
+          });
+          logStructured("info", {
+            action: "guard-redirect",
+            path: pathname,
+            role: String(normalizedRole),
+            message: "office.only",
+            redirectTo: "/forbidden",
+          });
         }
         const url = new URL("/forbidden", request.url);
         url.searchParams.set("reason", "office.only");
@@ -344,7 +381,13 @@ export async function proxy(request: NextRequest) {
     if (isCabinetPath) {
       if (!hasAuth) {
         if (isDev) {
-          console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole ?? "null"), reason: "login.required", redirectTo: USER_LOGIN_PATH });
+          logStructured("info", {
+            action: "guard-redirect",
+            path: pathname,
+            role: String(normalizedRole ?? "null"),
+            message: "login.required",
+            redirectTo: USER_LOGIN_PATH,
+          });
         }
         const r = redirectToUserLogin();
         if (isDev) r.headers.set("x-redirect-reason", "login.required");
@@ -359,7 +402,13 @@ export async function proxy(request: NextRequest) {
         // пропускаем
       } else if (normalizedRole !== "resident") {
         if (isDev) {
-          console.log("[guard-redirect]", { path: pathname, role: String(normalizedRole), reason: "cabinet.only", redirectTo: "/forbidden" });
+          logStructured("info", {
+            action: "guard-redirect",
+            path: pathname,
+            role: String(normalizedRole),
+            message: "cabinet.only",
+            redirectTo: "/forbidden",
+          });
         }
         logAuthEvent({
           action: "rbac_deny",
@@ -390,9 +439,10 @@ export async function proxy(request: NextRequest) {
     return response;
   } catch (error) {
     const requestId = request.headers.get(REQUEST_ID_HEADER) || edgeRequestId();
-    console.error("[proxy-error]", {
+    logStructured("error", {
+      action: "proxy-error",
+      path: request.nextUrl.pathname,
       requestId,
-      route: request.nextUrl.pathname,
       error: error instanceof Error ? error.message : String(error),
     });
     const errorResponse = NextResponse.next();
