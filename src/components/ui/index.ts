@@ -11,3 +11,6 @@ export { SkeletonLine, SkeletonTable, SkeletonCard } from "./Skeleton";
 // Empty states
 export { default as EmptyState } from "./EmptyState";
 export type { EmptyStateProps, EmptyStateAction } from "./EmptyState";
+
+// Modals
+export { default as BulkConfirmModal } from "./BulkConfirmModal";
