@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { Buffer } from "buffer";
 import { ok, fail, serverError } from "@/lib/api/respond";
 import { requirePermission } from "@/lib/permissionsGuard";
@@ -6,11 +8,16 @@ import { enqueueOfficeJob } from "@/lib/office/jobs.server";
 import { logAdminAction } from "@/lib/audit";
 import { getRequestId } from "@/lib/api/requestId";
 import { measure } from "@/lib/perf/measure";
+import { isEnabled } from "@/lib/config/flags";
 
 export async function POST(request: Request) {
   return measure(
     "billing.import.statement",
     async () => {
+      if (!isEnabled("imports_v2")) {
+        return fail(request, "feature_disabled", "Импорт statement v2 отключен", 503);
+      }
+
       const guard = await requirePermission(request, "billing.import_statement", {
         route: "/api/office/billing/import/statement",
         deniedReason: "billing.import_statement",

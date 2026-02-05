@@ -8,6 +8,7 @@ import { withReconcileIdempotency, ReconcileRequestConflictError as ReconcileReq
 import { logAdminAction } from "@/lib/audit";
 import { randomUUID } from "crypto";
 import { measure } from "@/lib/perf/measure";
+import { isEnabled } from "@/lib/config/flags";
 
 const applyAction = (action: string): Partial<{ status: PaymentStatus; matchReason: string; matchConfidence: number | null; matchedPlotId: string | null }> | null => {
   if (action === "confirm") {
@@ -26,6 +27,10 @@ export async function POST(request: Request) {
   return measure(
     "billing.reconcile.bulk",
     async () => {
+      if (!isEnabled("bulk_operations")) {
+        return fail(request, "feature_disabled", "Массовые операции временно отключены", 503);
+      }
+
       const guard = await requirePermission(request, "billing.reconcile", {
         route: "/api/office/billing/reconcile/bulk",
         deniedReason: "billing.reconcile",

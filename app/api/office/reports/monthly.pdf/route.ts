@@ -11,8 +11,22 @@ import { buildMonthlyReport } from "@/lib/office/reporting";
 import { getMonthlyReport, hasPgConnection } from "@/lib/office/reporting.pg";
 import { uploadOfficeDocumentFile } from "@/lib/office/documentUpload.server";
 import { createOfficeDocument } from "@/lib/office/documentsRegistry.store";
+import { isEnabled } from "@/lib/config/flags";
 
 export async function GET(request: Request) {
+  if (!isEnabled("pdf_generation")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "feature_disabled",
+          message: "PDF генерация отключена флагом FEATURE_PDF_GENERATION",
+        },
+      },
+      { status: 503 },
+    );
+  }
+
   const startedAt = Date.now();
   const session = await getEffectiveSessionUser().catch(() => null);
   const role = (session?.role as Role | undefined) ?? "resident";
