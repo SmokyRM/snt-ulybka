@@ -10,6 +10,7 @@ import { listDebts } from "@/lib/billing.store";
 import { normalizePhone } from "@/lib/utils/phone";
 import { logStructured } from "@/lib/structuredLogger/node";
 import type { Plot } from "@/types/snt";
+import { hasPgConnection, globalSearch as pgGlobalSearch } from "@/lib/search.pg";
 
 export type SearchResult = {
   plots: SearchPlot[];
@@ -78,19 +79,96 @@ export async function searchAll(params: SearchAllParams): Promise<SearchResult> 
 
   const { q, limit = DEFAULT_LIMIT } = params;
   const trimmedQuery = q.trim();
-  
+
   // Защита от тяжелых запросов
   if (trimmedQuery.length < MIN_QUERY_LENGTH) {
     return { plots: [], appeals: [] };
   }
-  
+
   if (trimmedQuery.length > MAX_QUERY_LENGTH) {
     throw new Error("QUERY_TOO_LONG");
   }
-  
+
   // Ограничиваем лимит
   const safeLimit = Math.min(Math.max(1, limit || DEFAULT_LIMIT), MAX_LIMIT);
-  
+
+  // Sprint 63: Use PG search when available
+  if (hasPgConnection()) {
+    const pgResult = await pgGlobalSearch({ q: trimmedQuery, limit: safeLimit });
+
+    // Map PG results to existing format
+    const result: SearchResult = {
+      plots: pgResult.plots.map((p) => ({
+        id: p.id,
+        plotNumber: p.plotNumber,
+        street: p.sntStreetNumber ?? undefined,
+        ownerName: p.ownerName,
+        href: p.href,
+      })),
+      appeals: [], // Appeals are in mock db only for now
+      people: pgResult.persons.map((p) => ({
+        id: p.id,
+        name: p.fullName,
+        phone: p.phone ?? undefined,
+        email: p.email ?? undefined,
+        href: p.href,
+      })),
+    };
+
+    // Add payments as finance for accountant/admin
+    if (role === "accountant" || role === "admin") {
+      result.finance = pgResult.payments.map((p) => ({
+        id: p.id,
+        plotNumber: p.plotLabel ?? "—",
+        residentName: p.payer ?? "Неизвестен",
+        debt: p.amount,
+        href: p.href,
+      }));
+    }
+
+    // Add appeals from mock db (fallback)
+    const allAppeals = listAppeals({ q: undefined });
+    const query = trimmedQuery.toLowerCase();
+    const normalizedQuery = normalizePhone(trimmedQuery);
+    const appeals = allAppeals.filter((appeal) => {
+      const haystack = `${appeal.id} ${appeal.title} ${appeal.plotNumber ?? ""} ${appeal.authorName ?? ""}`.toLowerCase();
+      if (haystack.includes(query)) return true;
+      if (normalizedQuery && appeal.authorPhone) {
+        const normalizedPhone = normalizePhone(appeal.authorPhone);
+        if (normalizedPhone.includes(normalizedQuery)) return true;
+      }
+      return false;
+    }).slice(0, safeLimit);
+
+    result.appeals = appeals.map((appeal) => ({
+      id: appeal.id,
+      title: appeal.title,
+      plotNumber: appeal.plotNumber,
+      authorName: appeal.authorName,
+      status: appeal.status,
+      href: `/office/appeals/${appeal.id}`,
+    }));
+
+    const latencyMs = Date.now() - startTime;
+    logStructured("info", {
+      action: "office_search_pg",
+      path: "/office/search",
+      role,
+      userId: user.id ?? null,
+      latencyMs,
+      message: "PG search completed",
+      searchQueryLength: trimmedQuery.length,
+      resultCounts: {
+        plots: result.plots.length,
+        appeals: result.appeals.length,
+        people: result.people?.length ?? 0,
+        finance: result.finance?.length ?? 0,
+      },
+    });
+
+    return result;
+  }
+
   // Sprint 4.4: Нормализуем запрос для поиска по телефонам
   const query = trimmedQuery.toLowerCase();
   const normalizedQuery = normalizePhone(trimmedQuery); // Нормализованный запрос (только цифры) для поиска по телефонам
