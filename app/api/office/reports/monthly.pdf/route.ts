@@ -8,7 +8,7 @@ import { hasPermission } from "@/lib/permissions";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { createSimplePdf } from "@/lib/simplePdf";
 import { buildMonthlyReport } from "@/lib/office/reporting";
-import { buildMonthlyReportPg, hasPgConnection } from "@/lib/office/reporting.pg";
+import { getMonthlyReport, hasPgConnection } from "@/lib/office/reporting.pg";
 import { uploadOfficeDocumentFile } from "@/lib/office/documentUpload.server";
 import { createOfficeDocument } from "@/lib/office/documentsRegistry.store";
 
@@ -40,19 +40,46 @@ export async function GET(request: Request) {
     return new NextResponse("Bad Request", { status: 400 });
   }
 
-  const report = hasPgConnection() ? await buildMonthlyReportPg(period) : buildMonthlyReport(period);
+  const report = hasPgConnection() ? await getMonthlyReport(period) : buildMonthlyReport(period);
   const lines: string[] = [];
   lines.push(`Ежемесячный отчёт за ${report.period}`);
   lines.push("");
-  lines.push(`Начислено: ${report.totals.accrued}`);
-  lines.push(`Оплачено: ${report.totals.paid}`);
-  lines.push(`Долг: ${report.totals.debt}`);
-  lines.push(`Пени: ${report.totals.penalty}`);
-  if ("paymentsCount" in report) {
-    lines.push(`Платежей: ${report.paymentsCount}`);
-  }
-  lines.push("");
-  if ("categories" in report) {
+
+  if ("counts" in report) {
+    // New format from getMonthlyReport (PG)
+    lines.push("=== ИТОГИ ===");
+    lines.push(`Начислено: ${report.totals.accrued}`);
+    lines.push(`Оплачено: ${report.totals.paid}`);
+    lines.push(`Распределено: ${report.totals.allocated}`);
+    lines.push(`Всего долг: ${report.totals.debtTotal}`);
+    lines.push(`Всего переплата: ${report.totals.overpayTotal}`);
+    lines.push("");
+    lines.push("=== КОЛИЧЕСТВО ===");
+    lines.push(`Должников: ${report.counts.debtors}`);
+    lines.push(`Переплативших: ${report.counts.overpayers}`);
+    lines.push(`Платежей: ${report.counts.payments}`);
+    lines.push(`Участков с начислениями: ${report.counts.plots}`);
+    lines.push("");
+    lines.push("=== ТОП ДОЛЖНИКОВ ===");
+    if (report.topDebtors.length === 0) {
+      lines.push("- нет");
+    } else {
+      report.topDebtors.forEach((debtor: { plotId: string; label: string; debt: number }) => {
+        lines.push(`- ${debtor.label}: ${debtor.debt}`);
+      });
+    }
+    lines.push("");
+    lines.push("=== КАЧЕСТВО ДАННЫХ ===");
+    lines.push(`Нераспределенных платежей: ${report.dataQuality.unallocatedPayments}`);
+    lines.push(`Несопоставленных платежей: ${report.dataQuality.unmatchedPayments}`);
+    lines.push(`Неоднозначных платежей: ${report.dataQuality.ambiguousPayments}`);
+  } else if ("categories" in report) {
+    // Old in-memory format
+    lines.push(`Начислено: ${report.totals.accrued}`);
+    lines.push(`Оплачено: ${report.totals.paid}`);
+    lines.push(`Долг: ${report.totals.debt}`);
+    lines.push(`Пени: ${report.totals.penalty}`);
+    lines.push("");
     lines.push("Категории:");
     if (report.categories.length === 0) {
       lines.push("- нет");
@@ -67,15 +94,6 @@ export async function GET(request: Request) {
     lines.push(`Новые: ${report.appeals.new}`);
     lines.push(`В работе: ${report.appeals.inProgress}`);
     lines.push(`Закрытые: ${report.appeals.closed}`);
-  } else {
-    lines.push("Должники:");
-    if (report.debtors.length === 0) {
-      lines.push("- нет");
-    } else {
-      report.debtors.forEach((debtor: { plotLabel: string; debt: number }) => {
-        lines.push(`- ${debtor.plotLabel}: ${debtor.debt}`);
-      });
-    }
   }
 
   const pdf = createSimplePdf([lines]);
@@ -88,6 +106,8 @@ export async function GET(request: Request) {
     period: report.period,
     tags: ["monthly_report"],
     isPublic: false,
+    accessScope: "office",
+    versionKey: `monthly-report:${report.period}`,
     fileName: uploaded.fileName,
     fileUrl: uploaded.fileUrl,
     uploadedBy: session.id ?? null,
