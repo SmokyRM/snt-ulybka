@@ -9,10 +9,5 @@ export default async function OfficeDocumentsPage() {
   if (!can(role === "admin" ? "chairman" : role, "documents.manage")) {
     redirect("/forbidden");
   }
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <h1 className="text-xl font-semibold text-zinc-900">Документы</h1>
-      <p className="text-sm text-zinc-600">Раздел в разработке.</p>
-    </div>
-  );
+  redirect("/office/docs");
 }

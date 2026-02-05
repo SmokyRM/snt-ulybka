@@ -1,4 +1,7 @@
+export const runtime = "nodejs";
+
 import { ok, badRequest, forbidden, unauthorized, serverError } from "@/lib/api/respond";
+import { getNextCursor, parseOffsetPagination } from "@/lib/api/pagination";
 import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
@@ -49,15 +52,21 @@ export async function GET(request: Request) {
     const period = searchParams.get("period");
     const tag = searchParams.get("tag");
     const isPublic = parseBool(searchParams.get("public"));
+    const { limit, offset } = parseOffsetPagination(searchParams, { defaultLimit: 20, maxLimit: 100 });
 
-    const items = listOfficeDocuments({
+    const allItems = listOfficeDocuments({
       type: type || null,
       period: period || null,
       tag: tag || null,
       isPublic,
     });
+    const items = allItems.slice(offset, offset + limit).map((item) => ({
+      ...item,
+      downloadUrl: `/api/office/documents/${item.id}/download`,
+    }));
+    const nextCursor = getNextCursor(allItems.length, offset, limit);
 
-    return ok(request, { items });
+    return ok(request, { items, total: allItems.length, limit, nextCursor });
   } catch (error) {
     return serverError(request, "Ошибка загрузки документов", error);
   }

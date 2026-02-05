@@ -8,6 +8,7 @@ import OfficeErrorState from "../_components/OfficeErrorState";
 import OfficeEmptyState from "../_components/OfficeEmptyState";
 
 type OfficeDocument = OfficeDocumentRecord;
+type OfficeDocumentApi = OfficeDocumentRecord & { downloadUrl?: string };
 
 const typeLabels: Record<OfficeDocument["type"], string> = {
   protocol: "Протокол",
@@ -18,8 +19,21 @@ const typeLabels: Record<OfficeDocument["type"], string> = {
   other: "Другое",
 };
 
-export default function DocsClient({ initialItems }: { initialItems: OfficeDocumentRecord[] }) {
-  const [items, setItems] = useState<OfficeDocument[]>(initialItems);
+export default function DocsClient({
+  initialItems,
+  initialNextCursor,
+  initialLimit,
+  initialTotal,
+}: {
+  initialItems: OfficeDocumentRecord[];
+  initialNextCursor: string | null;
+  initialLimit: number;
+  initialTotal: number;
+}) {
+  const [items, setItems] = useState<OfficeDocumentApi[]>(initialItems);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
+  const [limit, setLimit] = useState<number>(initialLimit);
+  const [total, setTotal] = useState<number>(initialTotal);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +50,7 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
   const [filterPublic, setFilterPublic] = useState("");
   const [workId, setWorkId] = useState("");
 
-  const load = async () => {
+  const load = async (options?: { append?: boolean; cursor?: string | null }) => {
     setLoading(true);
     setError(null);
     try {
@@ -45,8 +59,21 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
       if (filterPeriod) params.set("period", filterPeriod);
       if (filterTag) params.set("tag", filterTag);
       if (filterPublic) params.set("public", filterPublic === "public" ? "true" : "false");
-      const data = await apiGet<{ items: OfficeDocument[] }>(`/api/office/docs?${params.toString()}`);
-      setItems(data.items ?? []);
+      params.set("limit", String(limit));
+      if (options?.cursor) params.set("cursor", options.cursor);
+      const data = await apiGet<{ items: OfficeDocumentApi[]; total?: number; nextCursor?: string | null; limit?: number }>(
+        `/api/office/docs?${params.toString()}`,
+      );
+      setItems((prev) => (options?.append ? [...prev, ...(data.items ?? [])] : (data.items ?? [])));
+      setNextCursor(data.nextCursor ?? null);
+      if (typeof data.total === "number") {
+        setTotal(data.total);
+      } else if (!options?.append) {
+        setTotal((data.items ?? []).length);
+      }
+      if (typeof data.limit === "number" && data.limit > 0) {
+        setLimit(data.limit);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка загрузки документов");
     } finally {
@@ -56,7 +83,10 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
 
   useEffect(() => {
     setItems(initialItems);
-  }, [initialItems]);
+    setNextCursor(initialNextCursor);
+    setLimit(initialLimit);
+    setTotal(initialTotal);
+  }, [initialItems, initialLimit, initialNextCursor, initialTotal]);
 
   const handleUpload = async () => {
     if (!file) {
@@ -233,7 +263,9 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
         <div className="mt-3">
           <button
             type="button"
-            onClick={load}
+            onClick={() => {
+              void load();
+            }}
             className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700"
           >
             Применить
@@ -248,6 +280,10 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
         <OfficeEmptyState message="Документов пока нет." testId="office-docs-empty" />
       ) : (
         <div className="space-y-3" data-testid="office-docs-list">
+          <div className="text-xs text-zinc-500">
+            Показано: {items.length}
+            {typeof total === "number" ? ` из ${total}` : ""}
+          </div>
           {items.map((doc) => (
             <div
               key={doc.id}
@@ -279,7 +315,7 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
                 </div>
               ) : null}
               <div className="mt-3 flex items-center gap-3 text-sm">
-                <a href={doc.fileUrl} className="text-[#5E704F] underline" target="_blank" rel="noreferrer">
+                <a href={doc.downloadUrl ?? doc.fileUrl} className="text-[#5E704F] underline" target="_blank" rel="noreferrer">
                   Открыть файл
                 </a>
                 <span className="text-xs text-zinc-500">{doc.fileName}</span>
@@ -310,6 +346,19 @@ export default function DocsClient({ initialItems }: { initialItems: OfficeDocum
               </div>
             </div>
           ))}
+          {nextCursor ? (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void load({ append: true, cursor: nextCursor });
+                }}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700"
+              >
+                Загрузить ещё
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

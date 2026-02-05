@@ -9,6 +9,11 @@ export type OfficeDocumentRecord = {
   period: string | null;
   tags: string[];
   isPublic: boolean;
+  plotId: string | null;
+  personId: string | null;
+  accessScope: "public" | "resident" | "office";
+  version: number;
+  versionKey: string | null;
   fileName: string;
   fileUrl: string;
   uploadedAt: string;
@@ -35,6 +40,9 @@ export function listOfficeDocuments(filters?: {
   period?: string | null;
   tag?: string | null;
   isPublic?: boolean | null;
+  plotId?: string | null;
+  personId?: string | null;
+  accessScope?: OfficeDocumentRecord["accessScope"] | null;
 }) {
   const db = getDb();
   let items = [...db.items];
@@ -50,6 +58,15 @@ export function listOfficeDocuments(filters?: {
   if (filters?.isPublic !== null && filters?.isPublic !== undefined) {
     items = items.filter((item) => item.isPublic === filters.isPublic);
   }
+  if (filters?.plotId) {
+    items = items.filter((item) => item.plotId === filters.plotId);
+  }
+  if (filters?.personId) {
+    items = items.filter((item) => item.personId === filters.personId);
+  }
+  if (filters?.accessScope) {
+    items = items.filter((item) => item.accessScope === filters.accessScope);
+  }
   return items.sort((a, b) => (a.uploadedAt < b.uploadedAt ? 1 : -1));
 }
 
@@ -63,12 +80,22 @@ export function createOfficeDocument(input: {
   period?: string | null;
   tags?: string[];
   isPublic?: boolean;
+  plotId?: string | null;
+  personId?: string | null;
+  accessScope?: OfficeDocumentRecord["accessScope"];
+  versionKey?: string | null;
   fileName: string;
   fileUrl: string;
   uploadedBy?: string | null;
 }): OfficeDocumentRecord {
   const db = getDb();
   const now = new Date().toISOString();
+  const versionKey = input.versionKey ?? null;
+  const version = versionKey
+    ? db.items
+        .filter((item) => item.versionKey === versionKey)
+        .reduce((max, item) => Math.max(max, item.version), 0) + 1
+    : 1;
   const record: OfficeDocumentRecord = {
     id: createId("doc"),
     title: input.title.trim(),
@@ -76,6 +103,11 @@ export function createOfficeDocument(input: {
     period: input.period ?? null,
     tags: normalizeTags(input.tags ?? []),
     isPublic: Boolean(input.isPublic),
+    plotId: input.plotId ?? null,
+    personId: input.personId ?? null,
+    accessScope: input.accessScope ?? (input.isPublic ? "public" : "office"),
+    version,
+    versionKey,
     fileName: input.fileName,
     fileUrl: input.fileUrl,
     uploadedAt: now,
@@ -83,6 +115,11 @@ export function createOfficeDocument(input: {
   };
   db.items.unshift(record);
   return record;
+}
+
+export function getOfficeDocumentById(id: string): OfficeDocumentRecord | null {
+  if (!id) return null;
+  return getDb().items.find((item) => item.id === id) ?? null;
 }
 
 export function deleteOfficeDocument(id: string) {
