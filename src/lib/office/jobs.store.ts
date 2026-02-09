@@ -8,6 +8,7 @@ export type OfficeJobType =
   | "payments.import.csv"
   | "payments.import.xlsx"
   | "billing.importStatement"
+  | "accruals.generate"
   | "reports.monthlyPdfBatch"
   | "notifications.campaignSend"
   | "notifications.send";

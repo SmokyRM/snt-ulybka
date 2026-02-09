@@ -1,5 +1,7 @@
 import { sql } from "@/db/client";
 import { getElectricityTariff, getMembershipFee } from "@/lib/billing.store";
+import { listFeeRules, listPlotsForRules, type BillingFeeRule } from "@/lib/billing/feeRules.pg";
+import { getRuleAmount, matchesRulePlot } from "@/lib/billing/feeRules.logic";
 
 export const hasPgConnection = () =>
   Boolean(process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL || process.env.DATABASE_URL);
@@ -26,6 +28,7 @@ const categoryTitle = (category: string) => {
   if (category === "target") return "Целевой взнос";
   return category;
 };
+
 
 const loadPlots = async (params?: { plotIds?: string[] | null; plotQuery?: string | null }) => {
   const conditions = [] as ReturnType<typeof sql>[];
@@ -74,6 +77,34 @@ export async function previewAccruals(params: {
       discount: 0,
     };
   });
+}
+
+export async function previewAccrualsByRules(params: {
+  period: string;
+  ruleIds?: string[] | null;
+}) {
+  const rules = await listFeeRules({ activeOnly: true, period: params.period });
+  const filteredRules = params.ruleIds?.length ? rules.filter((rule) => params.ruleIds!.includes(rule.id)) : rules;
+  if (!filteredRules.length) {
+    return { rows: [] as Array<{ plotId: string; plotLabel: string; amount: number; discount: number; ruleId: string }>, rules: [] };
+  }
+  const plots: PlotRow[] = await listPlotsForRules();
+  const rows: Array<{ plotId: string; plotLabel: string; amount: number; discount: number; ruleId: string }> = [];
+  for (const rule of filteredRules) {
+    for (const plot of plots) {
+      if (!matchesRulePlot(rule, plot)) continue;
+      const amount = getRuleAmount(rule, plot.id);
+      if (amount <= 0) continue;
+      rows.push({
+        plotId: plot.id,
+        plotLabel: formatPlotLabel(plot.plot_number, plot.snt_street_number, plot.city_address),
+        amount,
+        discount: 0,
+        ruleId: rule.id,
+      });
+    }
+  }
+  return { rows, rules: filteredRules };
 }
 
 export async function listAccruals(params?: {
@@ -211,6 +242,49 @@ export async function generateAccruals(params: {
   }
 
   const duplicates = rows.filter((row) => existing.has(row.plotId)).map((row) => row.plotId);
+  return { createdCount: payload.length, skippedCount: duplicates.length, duplicates };
+}
+
+export async function generateAccrualsByRules(params: {
+  period: string;
+  ruleIds?: string[] | null;
+}) {
+  const preview = await previewAccrualsByRules({ period: params.period, ruleIds: params.ruleIds });
+  const rows = preview.rows;
+  if (!rows.length) {
+    return { createdCount: 0, skippedCount: 0, duplicates: [] as string[] };
+  }
+  const plotIds = rows.map((row) => row.plotId);
+  const ruleIds = rows.map((row) => row.ruleId);
+  const plotValues = plotIds.map((value) => sql`${value}`);
+  const ruleValues = ruleIds.map((value) => sql`${value}`);
+  const existingRows: Array<{ plot_id: string; rule_id: string }> = await sql<{ plot_id: string; rule_id: string }[]>`
+    select plot_id, rule_id
+    from billing_accruals
+    where period = ${params.period}
+      and rule_id in (${sql.join(ruleValues, sql`, `)})
+      and plot_id in (${sql.join(plotValues, sql`, `)})
+  `;
+  const existing = new Set(existingRows.map((row) => `${row.plot_id}:${row.rule_id}`));
+
+  const payload = rows
+    .filter((row) => !existing.has(`${row.plotId}:${row.ruleId}`))
+    .map((row) => ({
+      plot_id: row.plotId,
+      period: params.period,
+      category: "rule",
+      amount: row.amount,
+      status: "open",
+      rule_id: row.ruleId,
+    }));
+
+  if (payload.length) {
+    await sql`
+      insert into billing_accruals ${sql(payload, "plot_id", "period", "category", "amount", "status", "rule_id")}
+    `;
+  }
+
+  const duplicates = rows.filter((row) => existing.has(`${row.plotId}:${row.ruleId}`)).map((row) => row.plotId);
   return { createdCount: payload.length, skippedCount: duplicates.length, duplicates };
 }
 

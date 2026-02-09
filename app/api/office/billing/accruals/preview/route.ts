@@ -6,7 +6,11 @@ import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
 import { previewAccruals } from "@/lib/billing.store";
-import { hasPgConnection, previewAccruals as previewAccrualsPg } from "@/lib/billing/accruals.pg";
+import {
+  hasPgConnection,
+  previewAccruals as previewAccrualsPg,
+  previewAccrualsByRules as previewAccrualsByRulesPg,
+} from "@/lib/billing/accruals.pg";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -49,18 +53,36 @@ export async function POST(request: Request) {
       ? body.plotIds.filter((id: unknown): id is string => typeof id === "string")
       : null;
     const plotQuery = typeof body.plotQuery === "string" ? body.plotQuery : null;
+    const ruleIds = Array.isArray(body.ruleIds)
+      ? body.ruleIds.filter((id: unknown): id is string => typeof id === "string")
+      : null;
 
-    if (!period || !category) {
-      return fail(request, "validation_error", "period и category обязательны", 400);
+    if (!period) {
+      return fail(request, "validation_error", "period обязателен", 400);
     }
 
-    if (category !== "membership" && category !== "electricity" && category !== "target") {
-      return fail(request, "validation_error", "Неверная категория", 400);
+    if (!ruleIds?.length) {
+      if (!category) {
+        return fail(request, "validation_error", "period и category обязательны", 400);
+      }
+      if (category !== "membership" && category !== "electricity" && category !== "target") {
+        return fail(request, "validation_error", "Неверная категория", 400);
+      }
     }
 
-    const rows: Array<{ plotId: string; plotLabel: string; amount: number; discount: number }> = hasPgConnection()
-      ? await previewAccrualsPg({ period, category, tariff, fixedAmount, plotIds, plotQuery })
-      : previewAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
+    let rows: Array<{ plotId: string; plotLabel: string; amount: number; discount: number }> = [];
+    if (ruleIds?.length) {
+      if (hasPgConnection()) {
+        const result = await previewAccrualsByRulesPg({ period, ruleIds });
+        rows = result.rows;
+      } else {
+        rows = [];
+      }
+    } else if (category) {
+      rows = hasPgConnection()
+        ? await previewAccrualsPg({ period, category, tariff, fixedAmount, plotIds, plotQuery })
+        : previewAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
+    }
     const totalAmount = rows.reduce((sum: number, row) => sum + row.amount, 0);
     return ok(request, {
       totals: { count: rows.length, totalAmount },

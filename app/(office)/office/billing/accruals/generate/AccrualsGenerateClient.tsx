@@ -27,6 +27,9 @@ export default function AccrualsGenerateClient() {
   const [scope, setScope] = useState<"all" | "filtered" | "selected">("all");
   const [plotQuery, setPlotQuery] = useState("");
   const [plotIdsRaw, setPlotIdsRaw] = useState("");
+  const [useRules, setUseRules] = useState(false);
+  const [rules, setRules] = useState<Array<{ id: string; name: string; isActive: boolean }>>([]);
+  const [ruleIds, setRuleIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -42,6 +45,7 @@ export default function AccrualsGenerateClient() {
       tariff: tariff ? Number(tariff) : null,
       fixedAmount: fixedAmount ? Number(fixedAmount) : null,
       reason: showReason && reason.trim() ? reason.trim() : undefined,
+      ruleIds: useRules ? ruleIds : undefined,
     };
     if (!batchMode) {
       return base;
@@ -118,6 +122,25 @@ export default function AccrualsGenerateClient() {
     };
   }, [period]);
 
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const data = await apiGet<{ rules: Array<{ id: string; name: string; isActive: boolean }> }>(
+          "/api/office/billing/fee-rules?active=true"
+        );
+        if (!active) return;
+        setRules(data.rules);
+      } catch {
+        if (!active) return;
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const retryWithReason = () => {
     if (pendingAction === "preview") {
       void runPreview();
@@ -148,6 +171,7 @@ export default function AccrualsGenerateClient() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              disabled={useRules}
               className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
             >
               <option value="membership">Членские</option>
@@ -160,6 +184,7 @@ export default function AccrualsGenerateClient() {
             <input
               value={tariff}
               onChange={(e) => setTariff(e.target.value)}
+              disabled={useRules}
               className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
               placeholder="Например, 4500"
             />
@@ -169,10 +194,41 @@ export default function AccrualsGenerateClient() {
             <input
               value={fixedAmount}
               onChange={(e) => setFixedAmount(e.target.value)}
+              disabled={useRules}
               className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
               placeholder="Например, 5000"
             />
           </label>
+          <label className="text-sm font-semibold text-zinc-700 sm:col-span-2">
+            <span className="flex items-center gap-2">
+              <input type="checkbox" checked={useRules} onChange={(e) => setUseRules(e.target.checked)} />
+              Генерация по правилам
+            </span>
+          </label>
+          {useRules && (
+            <div className="sm:col-span-2">
+              {rules.length === 0 ? (
+                <p className="text-xs text-zinc-500">Нет активных правил. Создайте их в разделе правил.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {rules.map((rule) => (
+                    <label key={rule.id} className="flex items-center gap-2 text-xs text-zinc-600">
+                      <input
+                        type="checkbox"
+                        checked={ruleIds.includes(rule.id)}
+                        onChange={(e) => {
+                          setRuleIds((prev) =>
+                            e.target.checked ? [...prev, rule.id] : prev.filter((id) => id !== rule.id)
+                          );
+                        }}
+                      />
+                      {rule.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="mt-3 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-3" data-testid="office-accruals-generate-batch">
           <div className="flex flex-wrap items-center gap-2">

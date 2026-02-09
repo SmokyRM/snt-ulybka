@@ -61,7 +61,13 @@ export type PermissionAction =
   | "appeals.run_reminders"
   | "notifications.send"
   | "notifications.manage"
-  | "notifications.generate_campaign";
+  | "notifications.generate_campaign"
+  | "meetings.manage"
+  | "meetings.view"
+  | "votes.manage"
+  | "votes.view"
+  | "tasks.manage"
+  | "tasks.view";
 
 const allActions: PermissionAction[] = [
   "admin.manage_users",
@@ -91,6 +97,12 @@ const allActions: PermissionAction[] = [
   "notifications.send",
   "notifications.manage",
   "notifications.generate_campaign",
+  "meetings.manage",
+  "meetings.view",
+  "votes.manage",
+  "votes.view",
+  "tasks.manage",
+  "tasks.view",
 ];
 
 const actionPermissions: Record<Role, Set<PermissionAction>> = {
@@ -122,6 +134,12 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "notifications.send",
     "notifications.manage",
     "notifications.generate_campaign",
+    "meetings.manage",
+    "meetings.view",
+    "votes.manage",
+    "votes.view",
+    "tasks.manage",
+    "tasks.view",
   ]),
   accountant: new Set([
     "billing.view_debtors",
@@ -137,6 +155,9 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "billing.penalty.apply",
     "billing.penalty.recalc",
     "billing.penalty.freeze",
+    "meetings.view",
+    "votes.view",
+    "tasks.view",
   ]),
   secretary: new Set([
     "appeals.view",
@@ -146,6 +167,12 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "appeals.bulk_update",
     "registry.view",
     "registry.edit",
+    "meetings.manage",
+    "meetings.view",
+    "votes.manage",
+    "votes.view",
+    "tasks.manage",
+    "tasks.view",
   ]),
   resident: new Set(),
 };
