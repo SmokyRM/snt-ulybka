@@ -35,6 +35,10 @@ export const getOfficeCapabilities = (role: Role): Set<string> => capabilityMap[
 export const can = (role: Role, capability: string): boolean => capabilityMap[role]?.has(capability) ?? false;
 
 export type PermissionAction =
+  | "admin.access"
+  | "office.access"
+  | "cabinet.access"
+  | "diagnostics.view"
   | "admin.manage_users"
   | "billing.view_debtors"
   | "billing.import_statement"
@@ -61,9 +65,19 @@ export type PermissionAction =
   | "appeals.run_reminders"
   | "notifications.send"
   | "notifications.manage"
-  | "notifications.generate_campaign";
+  | "notifications.generate_campaign"
+  | "meetings.manage"
+  | "meetings.view"
+  | "votes.manage"
+  | "votes.view"
+  | "tasks.manage"
+  | "tasks.view";
 
 const allActions: PermissionAction[] = [
+  "admin.access",
+  "office.access",
+  "cabinet.access",
+  "diagnostics.view",
   "admin.manage_users",
   "billing.view_debtors",
   "billing.import_statement",
@@ -91,11 +105,20 @@ const allActions: PermissionAction[] = [
   "notifications.send",
   "notifications.manage",
   "notifications.generate_campaign",
+  "meetings.manage",
+  "meetings.view",
+  "votes.manage",
+  "votes.view",
+  "tasks.manage",
+  "tasks.view",
 ];
 
 const actionPermissions: Record<Role, Set<PermissionAction>> = {
   admin: new Set(allActions),
   chairman: new Set([
+    "office.access",
+    "cabinet.access",
+    "diagnostics.view",
     "billing.view_debtors",
     "billing.import_statement",
     "billing.match_payments_manual",
@@ -122,8 +145,17 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "notifications.send",
     "notifications.manage",
     "notifications.generate_campaign",
+    "meetings.manage",
+    "meetings.view",
+    "votes.manage",
+    "votes.view",
+    "tasks.manage",
+    "tasks.view",
   ]),
   accountant: new Set([
+    "office.access",
+    "cabinet.access",
+    "diagnostics.view",
     "billing.view_debtors",
     "billing.import_statement",
     "billing.match_payments_manual",
@@ -137,8 +169,14 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "billing.penalty.apply",
     "billing.penalty.recalc",
     "billing.penalty.freeze",
+    "meetings.view",
+    "votes.view",
+    "tasks.view",
   ]),
   secretary: new Set([
+    "office.access",
+    "cabinet.access",
+    "diagnostics.view",
     "appeals.view",
     "appeals.manage",
     "appeals.assign",
@@ -146,8 +184,14 @@ const actionPermissions: Record<Role, Set<PermissionAction>> = {
     "appeals.bulk_update",
     "registry.view",
     "registry.edit",
+    "meetings.manage",
+    "meetings.view",
+    "votes.manage",
+    "votes.view",
+    "tasks.manage",
+    "tasks.view",
   ]),
-  resident: new Set(),
+  resident: new Set(["cabinet.access"]),
 };
 
 export const hasPermission = (role: Role | null | undefined, action: PermissionAction): boolean => {

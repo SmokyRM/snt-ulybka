@@ -5,6 +5,7 @@ import AppLink from "@/components/AppLink";
 import type { Role } from "@/lib/permissions";
 import GlobalLogoutButton from "../../_components/GlobalLogoutButton";
 import OfficeCommandPalette from "./OfficeCommandPalette";
+import OfficeSearch from "./OfficeSearch";
 
 type NavItem = { label: string; href: string; testId?: string };
 
@@ -40,6 +41,7 @@ export default function OfficeShell({ role, roleLabel, navItems, children, hasQa
                 </div>
                 <div className="text-xs text-zinc-500">Рабочие разделы правления и бухгалтерии</div>
               </div>
+              <OfficeSearch role={role} />
               <OfficeCommandPalette role={role} />
             </div>
             <div className="flex items-center gap-2">

@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { getEffectiveSessionUser } from "@/lib/session.server";
+import { requirePermission } from "@/lib/authGuard";
 import { getOfficeNavForRole } from "@/lib/officeNav";
 import type { Role } from "@/lib/permissions";
 import { isOfficeRole, isAdminRole, normalizeRole } from "@/lib/rbac";
 import OfficeShell from "./office/OfficeShell";
+import { logStructured } from "@/lib/structuredLogger/node";
 
 const roleLabelMap: Record<Role, string> = {
   chairman: "Председатель",
@@ -15,12 +16,11 @@ const roleLabelMap: Record<Role, string> = {
 
 export default async function OfficeLayout({ children }: { children: React.ReactNode }) {
   try {
-    const user = await getEffectiveSessionUser();
-    
-    // Если нет сессии -> redirect на /staff/login?next=<encoded current url>
-    if (!user) {
-      redirect("/staff-login?next=/office");
-    }
+    const user = await requirePermission("office.access", {
+      kind: "staff",
+      nextPath: "/office",
+      forbiddenReason: "office.only",
+    });
     
     // КРИТИЧНО: Используем ту же логику что middleware
     // 1. Берем effectiveRole из getEffectiveSessionUser (уже учитывает QA override)
@@ -38,7 +38,8 @@ export default async function OfficeLayout({ children }: { children: React.React
     
     // Серверный лог для диагностики (одна строка)
     if (process.env.NODE_ENV !== "production") {
-      console.log("[office-layout-guard]", {
+      logStructured("info", {
+        action: "office-layout-guard",
         role: effectiveRole ?? "null",
         effectiveRole: effectiveRole ?? "null",
         normalizedRole,
@@ -63,7 +64,10 @@ export default async function OfficeLayout({ children }: { children: React.React
         userId: user?.id ?? null,
       };
       if (process.env.NODE_ENV !== "production") {
-        console.warn("[office-layout] Redirect to /forbidden:", redirectChainLog);
+        logStructured("warn", {
+          action: "office-layout-deny",
+          ...redirectChainLog,
+        });
       }
       // Добавляем диагностические параметры для матрицы доступов
       redirect("/forbidden?reason=office.only&next=/office&src=layout");
@@ -91,7 +95,10 @@ export default async function OfficeLayout({ children }: { children: React.React
   } catch (error) {
     // В dev режиме логируем ошибку для отладки
     if (process.env.NODE_ENV !== "production") {
-      console.error("[office-layout] Error:", error);
+      logStructured("error", {
+        action: "office-layout-error",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
     // Пробрасываем ошибку дальше, чтобы error.tsx мог её обработать
     throw error;

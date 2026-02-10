@@ -25,6 +25,22 @@ export const metadata: Metadata = {
   description:
     "Официальный сайт СНТ «Улыбка» (г. Снежинск). Сайт в стадии разработки, поэтапно запускаются разделы документов, оплат и личного кабинета.",
   metadataBase: getSiteUrl(),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "ru_RU",
+    siteName,
+    title: `${siteName} — официальный сайт`,
+    description: `Официальный сайт ${siteName}: документы, отчеты, личный кабинет жителей.`,
+    url: "/",
+  },
+  twitter: {
+    card: "summary",
+    title: `${siteName} — официальный сайт`,
+    description: `Официальный сайт ${siteName} (${siteCity})`,
+  },
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },

@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import HomeOld from "./home/HomeOld";
 import HomeNew from "./home/HomeNew";
+import { getSiteUrl } from "@/lib/siteUrl";
+import { siteCity, siteName } from "@/config/site";
 import { getFeatureFlags, isFeatureEnabled, type FeatureFlags } from "@/lib/featureFlags";
 import { PUBLIC_CONTENT_DEFAULTS } from "@/lib/publicContentDefaults";
 import { getPublicContent } from "@/lib/publicContentStore";
@@ -79,11 +81,22 @@ async function HomeContent() {
 }
 
 export default function Home() {
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: siteName,
+    areaServed: siteCity,
+    url: getSiteUrl().toString(),
+  };
+
   // Выносим данные под Suspense - не блокирует TTFB
   // Показываем fallback сразу, данные подгрузятся асинхронно
   return (
-    <Suspense fallback={<HomeFallback />}>
-      <HomeContent />
-    </Suspense>
+    <>
+      <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
+      <Suspense fallback={<HomeFallback />}>
+        <HomeContent />
+      </Suspense>
+    </>
   );
 }

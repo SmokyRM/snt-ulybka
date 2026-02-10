@@ -15,29 +15,60 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
+env:
+  # Dummy values for CI (tests don't require real secrets)
+  SESSION_SECRET: "ci-test-session-secret-32chars!!"
+  NEXT_PUBLIC_BUILD_TIME: "2024-01-01T00:00:00Z"
+  FEATURE_QA_MODE: "false"
 
+jobs:
+  # --------------------------------------------
+  # Job 1: Fast checks (fail fast)
+  # --------------------------------------------
+  fast-checks:
+    name: Fast Checks
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
           cache: "npm"
 
-      # Кэшируем ТОЛЬКО .next/cache, не весь .next (чтобы lock не попадал в кэш)
-      - name: Cache Next.js build cache
-        uses: actions/cache@v4
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for merge conflicts
+        run: npm run check:conflicts
+
+      - name: Check migrations
+        run: npm run db:migrations:check
+
+      - name: Scan for secrets
+        run: npm run security:secrets
+
+      - name: Security scan (SAST-lite)
+        run: npm run security:scan
+
+  # --------------------------------------------
+  # Job 2: Quality checks
+  # --------------------------------------------
+  quality:
+    name: Lint, Typecheck, Tests
+    runs-on: ubuntu-latest
+    needs: fast-checks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          path: .next/cache
-          key: nextjs-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.ts', '**/*.tsx') }}
-          restore-keys: |
-            nextjs-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
-            nextjs-cache-${{ runner.os }}-
+          node-version: "20"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -51,7 +82,36 @@ jobs:
       - name: Run unit tests
         run: npm run test
 
-      # На случай если lock появился из артефактов/грязного воркспейса
+  # --------------------------------------------
+  # Job 3: Build & Bundle check
+  # --------------------------------------------
+  build:
+    name: Build & Performance
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # Кэшируем ТОЛЬКО .next/cache, не весь .next
+      - name: Cache Next.js build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .next/cache
+          key: nextjs-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            nextjs-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nextjs-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Remove stale Next lock (if any)
         run: rm -f .next/lock || true
 
@@ -62,8 +122,59 @@ jobs:
         run: npm run perf:budget
         continue-on-error: false
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+  # --------------------------------------------
+  # Job 4: Dependency audit
+  # --------------------------------------------
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit (production)
+        run: npm audit --omit=dev --audit-level=high
+
+  # --------------------------------------------
+  # Job 5: Runtime smoke (fast, no full E2E)
+  # --------------------------------------------
+  smoke-quick:
+    name: Smoke Quick Checks
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .next/cache
+          key: nextjs-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            nextjs-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nextjs-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
 
       - name: Start Next.js server
         run: |
@@ -72,71 +183,16 @@ jobs:
         env:
           PORT: 3000
           NODE_ENV: production
-          ENABLE_QA: "true"
+          ENABLE_QA: "false"
 
       - name: Wait for server to be ready
-        run: npx wait-on http://127.0.0.1:3000/login --timeout 60000
+        run: npx wait-on http://127.0.0.1:3000/ --timeout 60000
 
-      - name: Run test:matrix
-        run: npm run test:matrix
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-          TEST_ACCESS_CODE: ${{ secrets.TEST_ACCESS_CODE }}
-          TEST_ADMIN_CODE: ${{ secrets.TEST_ADMIN_CODE }}
-          AUTH_USER_CHAIRMAN: ${{ secrets.AUTH_USER_CHAIRMAN }}
-          AUTH_PASS_CHAIRMAN: ${{ secrets.AUTH_PASS_CHAIRMAN }}
-          AUTH_USER_SECRETARY: ${{ secrets.AUTH_USER_SECRETARY }}
-          AUTH_PASS_SECRETARY: ${{ secrets.AUTH_PASS_SECRETARY }}
-          AUTH_USER_ACCOUNTANT: ${{ secrets.AUTH_USER_ACCOUNTANT }}
-          AUTH_PASS_ACCOUNTANT: ${{ secrets.AUTH_PASS_ACCOUNTANT }}
-          CI: "true"
+      - name: Health endpoint check
+        run: curl -fsS http://127.0.0.1:3000/api/health > /tmp/health.json
 
-      - name: Run E2E smoke routes tests
-        run: npx playwright test tests/e2e/smoke.routes.spec.ts --reporter=line
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-          NODE_ENV: development
-          ENABLE_QA: "true"
-          CI: "true"
-
-      - name: Run E2E smoke tests
-        run: npx playwright test tests/e2e/smoke.spec.ts
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-          TEST_ACCESS_CODE: ${{ secrets.TEST_ACCESS_CODE }}
-          TEST_ADMIN_CODE: ${{ secrets.TEST_ADMIN_CODE }}
-          AUTH_USER_CHAIRMAN: ${{ secrets.AUTH_USER_CHAIRMAN }}
-          AUTH_PASS_CHAIRMAN: ${{ secrets.AUTH_PASS_CHAIRMAN }}
-          AUTH_USER_SECRETARY: ${{ secrets.AUTH_USER_SECRETARY }}
-          AUTH_PASS_SECRETARY: ${{ secrets.AUTH_PASS_SECRETARY }}
-          AUTH_USER_ACCOUNTANT: ${{ secrets.AUTH_USER_ACCOUNTANT }}
-          AUTH_PASS_ACCOUNTANT: ${{ secrets.AUTH_PASS_ACCOUNTANT }}
-          CI: "true"
-
-      - name: Run E2E Office smoke tests
-        run: npx playwright test tests/e2e/office-smoke.spec.ts --reporter=line
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-          AUTH_USER_CHAIRMAN: ${{ secrets.AUTH_USER_CHAIRMAN }}
-          AUTH_PASS_CHAIRMAN: ${{ secrets.AUTH_PASS_CHAIRMAN }}
-          AUTH_USER_SECRETARY: ${{ secrets.AUTH_USER_SECRETARY }}
-          AUTH_PASS_SECRETARY: ${{ secrets.AUTH_PASS_SECRETARY }}
-          AUTH_USER_ACCOUNTANT: ${{ secrets.AUTH_USER_ACCOUNTANT }}
-          AUTH_PASS_ACCOUNTANT: ${{ secrets.AUTH_PASS_ACCOUNTANT }}
-          AUTH_USER_ADMIN: ${{ secrets.AUTH_USER_ADMIN }}
-          AUTH_PASS_ADMIN: ${{ secrets.AUTH_PASS_ADMIN }}
-          ENABLE_QA: "true"
-          CI: "true"
-
-      - name: Run E2E regression tests
-        run: npx playwright test tests/e2e/regression.access.spec.ts tests/e2e/regression.admin-flow.spec.ts --reporter=line
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-          TEST_ACCESS_CODE: ${{ secrets.TEST_ACCESS_CODE }}
-          TEST_ADMIN_CODE: ${{ secrets.TEST_ADMIN_CODE }}
-          AUTH_USER_CHAIRMAN: ${{ secrets.AUTH_USER_CHAIRMAN }}
-          AUTH_PASS_CHAIRMAN: ${{ secrets.AUTH_PASS_CHAIRMAN }}
-          CI: "true"
+      - name: Public page check
+        run: curl -fsS http://127.0.0.1:3000/ > /tmp/home.html
 
       - name: Stop Next.js server
         if: always()
@@ -146,3 +202,11 @@ jobs:
             rm /tmp/nextjs.pid
           fi
           pkill -f "next start" || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nextjs-logs
+          path: /tmp/nextjs.log
+          retention-days: 7

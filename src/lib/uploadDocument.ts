@@ -1,6 +1,12 @@
 import { put } from "@vercel/blob";
 
-const ALLOWED_MIME = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const ALLOWED_MIME = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function uploadDocument(file: File) {

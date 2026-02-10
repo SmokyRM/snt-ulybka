@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RegistryPerson } from "@/types/snt";
 import { apiPost, apiGet } from "@/lib/api/client";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import Breadcrumbs from "@/components/ui/Breadcrumbs";
 
 function OfficeVerifyButton({ personId }: { personId: string }) {
   const router = useRouter();
@@ -80,6 +83,11 @@ export default function OfficeRegistryClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const exportParams = new URLSearchParams();
+  if (query) exportParams.set("q", query);
+  exportParams.set("limit", "1000");
+  exportParams.set("offset", "0");
+
   const updateUrl = (nextPage: number) => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
@@ -134,11 +142,24 @@ export default function OfficeRegistryClient({
 
   return (
     <div className="space-y-6" data-testid="office-registry-root">
+      <Breadcrumbs
+        items={[
+          { title: "Офис", href: "/office" },
+          { title: "Реестр" },
+        ]}
+        className="mb-2"
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Реестр СНТ</h1>
           <p className="mt-1 text-sm text-zinc-600">Просмотр данных участков и владельцев</p>
         </div>
+        <a
+          href={`/api/office/registry/export.csv?${exportParams.toString()}`}
+          className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[#5E704F] hover:text-[#5E704F]"
+        >
+          Экспорт CSV
+        </a>
       </div>
 
       {error && (
@@ -192,10 +213,7 @@ export default function OfficeRegistryClient({
 
       {/* Table */}
       {loading ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-zinc-600" data-testid="office-loading-state">
-          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-[#5E704F]" />
-          Загрузка...
-        </div>
+        <SkeletonTable rows={8} cols={6} showHeader data-testid="office-loading-state" />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-zinc-200 text-sm">
@@ -212,18 +230,30 @@ export default function OfficeRegistryClient({
             <tbody className="divide-y divide-zinc-100 bg-white">
               {persons.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-zinc-500" data-testid="office-empty-state">
-                    <p>Реестр пуст</p>
-                    {(query || statusFilter !== "all") && (
-                      <button
-                        type="button"
-                        onClick={() => { setQuery(""); setStatusFilter("all"); }}
-                        className="mt-2 rounded-lg border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-[#5E704F]"
-                        data-testid="office-reset-filters"
-                      >
-                        Сбросить фильтры
-                      </button>
-                    )}
+                  <td colSpan={6} className="p-0" data-testid="office-empty-state">
+                    <EmptyState
+                      icon="users"
+                      title={query || statusFilter !== "all" ? "Ничего не найдено" : "Реестр пуст"}
+                      description={
+                        query || statusFilter !== "all"
+                          ? "Попробуйте изменить параметры поиска или сбросить фильтры."
+                          : "В реестре пока нет записей."
+                      }
+                      actions={
+                        query || statusFilter !== "all"
+                          ? [
+                              {
+                                label: "Сбросить фильтры",
+                                onClick: () => {
+                                  setQuery("");
+                                  setStatusFilter("all");
+                                },
+                              },
+                            ]
+                          : []
+                      }
+                      className="border-0 rounded-none"
+                    />
                   </td>
                 </tr>
               ) : (

@@ -1,16 +1,24 @@
-import { ok, unauthorized, forbidden, badRequest, serverError } from "@/lib/api/respond";
-import { getEffectiveSessionUser } from "@/lib/session.server";
-import { canManageMeetingMinutes } from "@/lib/meetingMinutesAccess";
-import { createMeetingMinutes, listMeetingMinutes } from "@/lib/meetingMinutes";
+export const runtime = "nodejs";
+
+import { ok, fail, serverError } from "@/lib/api/respond";
+import { requirePermission } from "@/lib/permissionsGuard";
+import { createMeeting, listMeetings, hasPgConnection } from "@/lib/meetings.pg";
 import { logAdminAction } from "@/lib/audit";
 
 export async function GET(request: Request) {
   try {
-    const user = await getEffectiveSessionUser();
-    if (!user) return unauthorized(request);
-    if (!canManageMeetingMinutes(user.role)) return forbidden(request);
-
-    const meetings = await listMeetingMinutes();
+    const guard = await requirePermission(request, "meetings.manage", { route: "/api/office/meetings" });
+    if (guard instanceof Response) return guard;
+    if (!hasPgConnection()) return ok(request, { meetings: [] });
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const limit = searchParams.get("limit");
+    const offset = searchParams.get("offset");
+    const meetings = await listMeetings({
+      status: status ? (status as "draft" | "published" | "closed" | "archived") : null,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
     return ok(request, { meetings });
   } catch (error) {
     return serverError(request, "Internal error", error);
@@ -19,36 +27,31 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getEffectiveSessionUser();
-    if (!user) return unauthorized(request);
-    if (!canManageMeetingMinutes(user.role)) return forbidden(request);
+    const guard = await requirePermission(request, "meetings.manage", { route: "/api/office/meetings" });
+    if (guard instanceof Response) return guard;
+    if (!hasPgConnection()) return fail(request, "pg_missing", "Postgres не настроен", 503);
 
     const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") return badRequest(request, "Invalid payload");
-
+    if (!body || typeof body !== "object") return fail(request, "validation_error", "Invalid payload", 400);
     const title = typeof body.title === "string" ? body.title.trim() : "";
-    const date = typeof body.date === "string" ? body.date.trim() : "";
-    if (!title || !date) return badRequest(request, "title and date are required");
+    const type = body.type === "board" || body.type === "extra" ? body.type : "general";
+    const startsAt = typeof body.startsAt === "string" ? body.startsAt : null;
+    const endsAt = typeof body.endsAt === "string" ? body.endsAt : null;
+    if (!title) return fail(request, "validation_error", "title is required", 400);
 
-    const meeting = await createMeetingMinutes({
+    const meeting = await createMeeting({
       title,
-      date,
-      location: typeof body.location === "string" ? body.location.trim() : null,
-      attendees: typeof body.attendees === "string" ? body.attendees.trim() : null,
-      agenda: Array.isArray(body.agenda) ? body.agenda : [],
-      votes: Array.isArray(body.votes) ? body.votes : [],
-      decisions: Array.isArray(body.decisions) ? body.decisions : [],
-      summary: typeof body.summary === "string" ? body.summary.trim() : null,
-      attachments: Array.isArray(body.attachments) ? body.attachments : [],
-      status: body.status === "published" ? "published" : "draft",
-      createdByUserId: user.id ?? null,
+      type,
+      startsAt,
+      endsAt,
+      createdBy: guard.session.id ?? null,
     });
 
     await logAdminAction({
-      action: "meeting_minutes_created",
-      entity: "meeting_minutes",
+      action: "meetings.create",
+      entity: "meetings",
       entityId: meeting.id,
-      after: { title: meeting.title, date: meeting.date, status: meeting.status },
+      after: { title: meeting.title, type: meeting.type, status: meeting.status },
       headers: request.headers,
     });
 

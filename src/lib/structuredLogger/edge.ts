@@ -1,9 +1,10 @@
+import { sanitizeForLog } from "./sanitize";
+
 /**
  * Edge-safe структурированное логирование
  * Используется в Edge Runtime (middleware.ts)
  * Без зависимостей от Node.js модулей и Sentry
  */
-
 export type LogLevel = "info" | "warn" | "error" | "debug";
 
 export interface StructuredLog {
@@ -49,11 +50,12 @@ function formatLog(log: StructuredLog): string {
  * Структурированное логирование (Edge-safe)
  */
 export function logStructured(level: LogLevel, data: Omit<StructuredLog, "timestamp" | "level">) {
+  const sanitizedData = sanitizeForLog(data);
   const log: StructuredLog = {
     timestamp: new Date().toISOString(),
     level,
-    action: (data as StructuredLog).action || "unknown",
-    ...data,
+    action: (sanitizedData as StructuredLog).action || "unknown",
+    ...sanitizedData,
   };
 
   const formatted = formatLog(log);

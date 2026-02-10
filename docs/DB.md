@@ -47,3 +47,30 @@ npm run db:migrate
 ```
 
 The script loads `.env.local` when `POSTGRES_URL` is not already set.
+
+Validate migration filenames/order before running CI:
+
+```
+npm run db:migrations:check
+```
+
+Detailed migration policy: `docs/MIGRATIONS.md`.
+
+## Seed
+
+To populate a small sample dataset:
+
+```
+npm run db:seed
+```
+
+## Backup / Restore
+
+Scripts:
+
+```
+npm run db:backup
+npm run db:restore -- --file=tmp/backups/backup.sql --target-url=$TARGET_POSTGRES_URL
+```
+
+Full playbook: `docs/BACKUP_RESTORE.md`.

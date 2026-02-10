@@ -2,6 +2,8 @@ import { ok, fail, serverError } from "@/lib/api/respond";
 import { markInviteCodeAsUsed, validateInviteCode } from "@/lib/registry/core/inviteCodes.store";
 import { updatePerson } from "@/lib/registry/core/persons.store";
 import { upsertUser } from "@/lib/mockDb";
+import { createSignedSessionCookieValue } from "@/lib/security/sessionCookie";
+import { logStructured } from "@/lib/structuredLogger/node";
 
 const SESSION_COOKIE = "snt_session";
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
     });
 
     // Create session
-    const cookiePayload = JSON.stringify({
+    const cookiePayload = createSignedSessionCookieValue({
       userId: user.id,
       contact,
     });
@@ -86,7 +88,10 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error) {
-    console.error("Registration error:", error);
+    logStructured("error", {
+      action: "auth.register",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return serverError(request, "Ошибка регистрации", error);
   }
 }

@@ -110,6 +110,11 @@ const baseSections = [
         label: "Публичный контент",
         hint: "FAQ, документы, шаги доступа",
       },
+      {
+        href: "/admin/flags",
+        label: "Флаги env",
+        hint: "Только чтение, источники env/default",
+      },
     ],
   },
   {

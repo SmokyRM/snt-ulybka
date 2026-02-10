@@ -1,3 +1,4 @@
 npm run check:conflicts
 npm run check:api-contracts
+npm run security:secrets
 npx lint-staged

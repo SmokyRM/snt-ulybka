@@ -3,6 +3,13 @@ import { findUserByContact, findUserById } from "@/lib/mockDb";
 import { getQaScenarioFromCookies } from "@/lib/qaScenario.server";
 import type { QaScenario } from "./qaScenario";
 import { normalizeRole as normalizeRoleRbac } from "./rbac";
+import { logStructured } from "@/lib/structuredLogger/node";
+import {
+  createSignedSessionCookieValue,
+  parseSignedSessionCookieValue,
+  type SessionPayload,
+} from "@/lib/security/sessionCookie";
+import { applyQaScenario } from "@/lib/security/qaOverride";
 
 const SESSION_COOKIE = "snt_session";
 
@@ -33,22 +40,7 @@ export interface SessionUser {
   qaScenario?: QaScenario | null;
 }
 
-interface SessionPayload {
-  userId?: string;
-  contact?: string;
-  role?: SessionRole;
-  impersonateUserId?: string;
-  impersonatorAdminId?: string;
-}
-
-const parseCookie = (value: string | undefined): SessionPayload | null => {
-  if (!value) return null;
-  try {
-    return JSON.parse(value) as SessionPayload;
-  } catch {
-    return null;
-  }
-};
+type SessionPayloadWithRole = SessionPayload & { role?: SessionRole };
 
 const normalizeRole = (value: unknown): SessionRole => {
   // КРИТИЧНО: Если value null/undefined, возвращаем "user", а не "guest"
@@ -75,21 +67,26 @@ const normalizeRole = (value: unknown): SessionRole => {
     default:
       // Неизвестная роль - логируем в dev и возвращаем "user"
       if (process.env.NODE_ENV !== "production") {
-        console.warn("[session] Неизвестная роль после normalizeRole:", { value, normalized });
+        logStructured("warn", {
+          action: "session.normalize_role",
+          value,
+          normalized,
+        });
       }
       return "user";
   }
 };
 
-export const getSessionPayload = async (): Promise<SessionPayload | null> => {
+export const getSessionPayload = async (): Promise<SessionPayloadWithRole | null> => {
   const cookieStore = await Promise.resolve(cookies());
   const raw = cookieStore.get(SESSION_COOKIE)?.value;
-  return parseCookie(raw);
+  return parseSignedSessionCookieValue(raw) as SessionPayloadWithRole | null;
 };
 
-const writeSessionPayload = async (payload: SessionPayload) => {
+const writeSessionPayload = async (payload: SessionPayloadWithRole) => {
+  const signed = createSignedSessionCookieValue(payload);
   const cookieStore = await Promise.resolve(cookies());
-  cookieStore.set(SESSION_COOKIE, JSON.stringify(payload), {
+  cookieStore.set(SESSION_COOKIE, signed, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
@@ -98,7 +95,7 @@ const writeSessionPayload = async (payload: SessionPayload) => {
   });
 };
 
-const cleanPayload = (payload: SessionPayload) => {
+const cleanPayload = (payload: SessionPayloadWithRole) => {
   const next = { ...payload } as Record<string, unknown>;
   Object.keys(next).forEach((key) => {
     const value = next[key];
@@ -106,10 +103,10 @@ const cleanPayload = (payload: SessionPayload) => {
       delete next[key];
     }
   });
-  return next as SessionPayload;
+  return next as SessionPayloadWithRole;
 };
 
-export const updateSessionPayload = async (patch: Partial<SessionPayload>) => {
+export const updateSessionPayload = async (patch: Partial<SessionPayloadWithRole>) => {
   const current = (await getSessionPayload()) ?? {};
   const next = cleanPayload({ ...current, ...patch });
   await writeSessionPayload(next);
@@ -171,39 +168,10 @@ export const getSessionUser = async (): Promise<SessionUser | null> => {
 export const getEffectiveSessionUser = async (): Promise<SessionUser | null> => {
   const qa = await getQaScenarioFromCookies();
   const real = await getSessionUser();
-  if (qa === "guest") {
-    return null;
-  }
   if (!qa || !real) {
     return real;
   }
-  const isStaffRole =
-    real.role === "admin" ||
-    real.role === "chairman" ||
-    real.role === "accountant" ||
-    real.role === "secretary";
-  if (isStaffRole) {
-    return {
-      ...real,
-      isQaOverride: false,
-      realRole: real.role,
-      qaScenario: qa,
-    };
-  }
-  const qaRole: SessionRole | null =
-    qa === "resident_ok" || qa === "resident_debtor"
-      ? "resident"
-      : qa === "chairman" || qa === "accountant" || qa === "secretary" || qa === "admin" || qa === "resident"
-        ? qa
-        : null;
-  if (!qaRole) return real;
-  return {
-    ...real,
-    role: qaRole,
-    isQaOverride: true,
-    realRole: real.role,
-    qaScenario: qa,
-  };
+  return applyQaScenario(real, qa);
 };
 
 export const clearSessionCookie = async () => {
@@ -222,7 +190,7 @@ export const requireUser = async (): Promise<SessionUser> => {
 export const isAdmin = (user: SessionUser | null | undefined): boolean =>
   Boolean(user && user.role === "admin");
 
-export const isAdminPayload = (payload: SessionPayload | null | undefined): boolean =>
+export const isAdminPayload = (payload: SessionPayloadWithRole | null | undefined): boolean =>
   Boolean(payload && payload.role === "admin");
 
 export const hasAdminAccess = (user: SessionUser | null | undefined): boolean =>

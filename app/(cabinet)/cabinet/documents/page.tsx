@@ -1,18 +1,25 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { listDocuments } from "@/lib/documents.store";
 import { getSessionUser } from "@/lib/session.server";
+import { listResidentDocuments } from "@/lib/office/documentAccess.server";
 
 export default async function CabinetDocumentsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login?next=/cabinet/documents");
-  const items = listDocuments({ status: "published", visibility: "residents" });
+  const items = await listResidentDocuments(user.id);
 
   return (
     <div className="space-y-4" data-testid="cabinet-documents-root">
       <div>
         <h1 className="text-2xl font-semibold text-zinc-900">Документы</h1>
         <p className="text-sm text-zinc-600">Доступные публикации и шаблоны</p>
+        <div className="mt-3">
+          <a
+            href="/api/cabinet/documents/no-debt.pdf"
+            className="inline-flex items-center rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+          >
+            Сгенерировать справку по расчетам (PDF)
+          </a>
+        </div>
       </div>
       <div className="space-y-3">
         {items.length === 0 ? (
@@ -29,11 +36,13 @@ export default async function CabinetDocumentsPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold text-zinc-900">{item.title}</div>
-                  <div className="text-xs text-zinc-500">{new Date(item.updatedAt).toLocaleDateString("ru-RU")}</div>
-                  <div className="mt-2 text-sm text-zinc-700 whitespace-pre-wrap">{item.description ?? "Без описания"}</div>
+                  <div className="text-xs text-zinc-500">{new Date(item.uploadedAt).toLocaleDateString("ru-RU")}</div>
+                  <div className="mt-2 text-sm text-zinc-700 whitespace-pre-wrap">
+                    {item.period ? `Период: ${item.period}` : "Документ доступен для скачивания"}
+                  </div>
                   {item.fileUrl ? (
                     <a
-                      href={item.fileUrl}
+                      href={`/api/cabinet/documents/${item.id}/download`}
                       target="_blank"
                       rel="noopener noreferrer"
                       data-testid={`cabinet-documents-filelink-${item.id}`}

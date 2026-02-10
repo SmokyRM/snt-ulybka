@@ -58,6 +58,14 @@ export default async function OfficeBillingPage() {
               Генератор начислений
             </AppLink>
           )}
+          {canGenerate && (
+            <AppLink
+              href="/office/billing/rules"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+            >
+              Правила начислений
+            </AppLink>
+          )}
           <AppLink
             href="/office/billing/payments"
             className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
@@ -106,6 +114,14 @@ export default async function OfficeBillingPage() {
               className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
             >
               Пени (отчёт)
+            </AppLink>
+          )}
+          {canPenalty && (
+            <AppLink
+              href="/office/billing/penalties"
+              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-[#5E704F]"
+            >
+              Пени v2
             </AppLink>
           )}
           {canExport && (

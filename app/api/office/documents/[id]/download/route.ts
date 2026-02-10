@@ -1,0 +1,44 @@
+export const runtime = "nodejs";
+
+import { NextResponse } from "next/server";
+import { getEffectiveSessionUser } from "@/lib/session.server";
+import type { Role } from "@/lib/permissions";
+import { isStaffOrAdmin } from "@/lib/rbac";
+import { can } from "@/lib/permissions";
+import { getOfficeDocumentById } from "@/lib/office/documentsRegistry.store";
+import { assertCanAccessOfficeDocument, DocumentAccessNotFoundError } from "@/lib/office/documentAccess.server";
+import { readOfficeDocumentBytes } from "@/lib/office/documentDownload.server";
+
+type Params = { params: Promise<{ id: string }> };
+
+export async function GET(_request: Request, context: Params) {
+  const session = await getEffectiveSessionUser().catch(() => null);
+  const role = (session?.role as Role | undefined) ?? "resident";
+
+  if (!session || !isStaffOrAdmin(role) || !can(role === "admin" ? "chairman" : role, "documents.manage")) {
+    return NextResponse.json({ ok: false, error: { code: "not_found", message: "Not found" } }, { status: 404 });
+  }
+
+  try {
+    const { id } = await context.params;
+    const doc = await assertCanAccessOfficeDocument(session, getOfficeDocumentById(id));
+    const file = await readOfficeDocumentBytes(doc);
+    return new NextResponse(Buffer.from(file.body), {
+      status: 200,
+      headers: {
+        "Content-Type": file.mime,
+        "Content-Disposition": `attachment; filename="${file.fileName}"`,
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    if (error instanceof DocumentAccessNotFoundError) {
+      return NextResponse.json({ ok: false, error: { code: "not_found", message: "Not found" } }, { status: 404 });
+    }
+    return NextResponse.json(
+      { ok: false, error: { code: "download_failed", message: "Не удалось выдать файл" } },
+      { status: 500 },
+    );
+  }
+}
