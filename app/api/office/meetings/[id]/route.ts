@@ -1,23 +1,35 @@
-import { ok, unauthorized, forbidden, badRequest, fail, serverError } from "@/lib/api/respond";
-import { getEffectiveSessionUser } from "@/lib/session.server";
-import { canManageMeetingMinutes } from "@/lib/meetingMinutesAccess";
-import { deleteMeetingMinutes, getMeetingMinutesById, updateMeetingMinutes } from "@/lib/meetingMinutes";
+export const runtime = "nodejs";
+
+import { ok, fail, serverError } from "@/lib/api/respond";
+import { requirePermission } from "@/lib/permissionsGuard";
+import {
+  getMeetingById,
+  updateMeeting,
+  listAgendaItems,
+  listMaterials,
+  listQuestions,
+  hasPgConnection,
+} from "@/lib/meetings.pg";
+import { listMeetingVotes } from "@/lib/votes.pg";
 import { logAdminAction } from "@/lib/audit";
+import { sql } from "@/db/client";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getEffectiveSessionUser();
-    if (!user) return unauthorized(request);
-    if (!canManageMeetingMinutes(user.role)) return forbidden(request);
-
+    const guard = await requirePermission(request, "meetings.manage", { route: "/api/office/meetings/:id" });
+    if (guard instanceof Response) return guard;
+    if (!hasPgConnection()) return ok(request, { meeting: null });
     const { id } = await params;
-    const meeting = await getMeetingMinutesById(id);
+    const meeting = await getMeetingById(id);
     if (!meeting) return fail(request, "not_found", "Meeting not found", 404);
-
-    return ok(request, { meeting });
+    const agenda = await listAgendaItems(id);
+    const materials = await listMaterials(id);
+    const questions = await listQuestions(id, true);
+    const votes = await listMeetingVotes(id);
+    return ok(request, { meeting, agenda, materials, questions, votes });
   } catch (error) {
     return serverError(request, "Internal error", error);
   }
@@ -28,41 +40,32 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getEffectiveSessionUser();
-    if (!user) return unauthorized(request);
-    if (!canManageMeetingMinutes(user.role)) return forbidden(request);
-
+    const guard = await requirePermission(request, "meetings.manage", { route: "/api/office/meetings/:id" });
+    if (guard instanceof Response) return guard;
+    if (!hasPgConnection()) return fail(request, "pg_missing", "Postgres не настроен", 503);
     const { id } = await params;
     const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") return badRequest(request, "Invalid payload");
+    if (!body || typeof body !== "object") return fail(request, "validation_error", "Invalid payload", 400);
 
-    const existing = await getMeetingMinutesById(id);
+    const existing = await getMeetingById(id);
     if (!existing) return fail(request, "not_found", "Meeting not found", 404);
 
-    const nextStatus: "draft" | "published" = body.status === "published" ? "published" : "draft";
-    const patch = {
-      title: typeof body.title === "string" ? body.title.trim() : existing.title,
-      date: typeof body.date === "string" ? body.date.trim() : existing.date,
-      location: typeof body.location === "string" ? body.location.trim() : existing.location ?? null,
-      attendees: typeof body.attendees === "string" ? body.attendees.trim() : existing.attendees ?? null,
-      agenda: Array.isArray(body.agenda) ? body.agenda : existing.agenda,
-      votes: Array.isArray(body.votes) ? body.votes : existing.votes,
-      decisions: Array.isArray(body.decisions) ? body.decisions : existing.decisions,
-      summary: typeof body.summary === "string" ? body.summary.trim() : existing.summary ?? null,
-      attachments: Array.isArray(body.attachments) ? body.attachments : existing.attachments,
-      status: nextStatus,
-      updatedByUserId: user.id ?? null,
-    };
-
-    const updated = await updateMeetingMinutes(id, patch);
+    const updated = await updateMeeting(id, {
+      title: typeof body.title === "string" ? body.title.trim() : undefined,
+      type: body.type === "board" || body.type === "extra" ? body.type : undefined,
+      startsAt: typeof body.startsAt === "string" ? body.startsAt : null,
+      endsAt: typeof body.endsAt === "string" ? body.endsAt : null,
+      status: body.status === "archived" ? "archived" : undefined,
+      updatedBy: guard.session.id ?? null,
+    });
     if (!updated) return serverError(request, "Failed to update");
 
     await logAdminAction({
-      action: "meeting_minutes_updated",
-      entity: "meeting_minutes",
+      action: "meetings.update",
+      entity: "meetings",
       entityId: id,
-      before: { title: existing.title, date: existing.date, status: existing.status },
-      after: { title: updated.title, date: updated.date, status: updated.status },
+      before: { title: existing.title, status: existing.status },
+      after: { title: updated.title, status: updated.status },
       headers: request.headers,
     });
 
@@ -77,25 +80,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getEffectiveSessionUser();
-    if (!user) return unauthorized(request);
-    if (!canManageMeetingMinutes(user.role)) return forbidden(request);
-
+    const guard = await requirePermission(request, "meetings.manage", { route: "/api/office/meetings/:id" });
+    if (guard instanceof Response) return guard;
+    if (!hasPgConnection()) return fail(request, "pg_missing", "Postgres не настроен", 503);
     const { id } = await params;
-    const existing = await getMeetingMinutesById(id);
+    const existing = await getMeetingById(id);
     if (!existing) return fail(request, "not_found", "Meeting not found", 404);
-
-    const removed = await deleteMeetingMinutes(id);
-    if (!removed) return serverError(request, "Failed to delete");
-
+    await sql`delete from meetings where id = ${id}`;
     await logAdminAction({
-      action: "meeting_minutes_deleted",
-      entity: "meeting_minutes",
+      action: "meetings.delete",
+      entity: "meetings",
       entityId: id,
-      before: { title: existing.title, date: existing.date },
+      before: { title: existing.title },
       headers: request.headers,
     });
-
     return ok(request, { ok: true });
   } catch (error) {
     return serverError(request, "Internal error", error);

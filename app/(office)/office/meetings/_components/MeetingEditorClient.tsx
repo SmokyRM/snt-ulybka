@@ -1,590 +1,505 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { MeetingAgendaItem, MeetingAttachment, MeetingDecision, MeetingMinutes, MeetingVote } from "@/lib/meetingMinutes";
-import { readOk } from "@/lib/api/client";
+import { apiGet, apiPost, ApiError } from "@/lib/api/client";
+import OfficeLoadingState from "../../_components/OfficeLoadingState";
+import OfficeErrorState from "../../_components/OfficeErrorState";
 
-type MeetingEditorClientProps = {
-  initialMeeting?: MeetingMinutes | null;
+type Meeting = {
+  id: string;
+  title: string;
+  type: "general" | "board" | "extra";
+  status: "draft" | "published" | "closed" | "archived";
+  startsAt: string | null;
+  endsAt: string | null;
+  publishedAt: string | null;
 };
 
-const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+type AgendaItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  requiresVote: boolean;
+  position: number;
+};
 
-export default function MeetingEditorClient({ initialMeeting }: MeetingEditorClientProps) {
+type Material = {
+  id: string;
+  title: string;
+  documentId: string | null;
+  visibility: "residents" | "office";
+};
+
+type Question = {
+  id: string;
+  question: string;
+  answer: string | null;
+  status: "new" | "answered" | "hidden";
+};
+
+type Vote = {
+  id: string;
+  agendaItemId: string;
+  status: "draft" | "open" | "closed";
+  quorumType: "persons" | "plots";
+  quorumRequired: number;
+};
+
+type MeetingPayload = {
+  meeting: Meeting;
+  agenda: AgendaItem[];
+  materials: Material[];
+  questions: Question[];
+  votes: Vote[];
+};
+
+export default function MeetingEditorClient({ meetingId }: { meetingId?: string | null }) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(Boolean(meetingId));
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [agenda, setAgenda] = useState<AgendaItem[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [votes, setVotes] = useState<Vote[]>([]);
 
-  const [title, setTitle] = useState(initialMeeting?.title ?? "");
-  const [date, setDate] = useState(initialMeeting?.date ?? "");
-  const [location, setLocation] = useState(initialMeeting?.location ?? "");
-  const [attendees, setAttendees] = useState(initialMeeting?.attendees ?? "");
-  const [summary, setSummary] = useState(initialMeeting?.summary ?? "");
-  const [status, setStatus] = useState<MeetingMinutes["status"]>(initialMeeting?.status ?? "draft");
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<Meeting["type"]>("general");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const [agenda, setAgenda] = useState<MeetingAgendaItem[]>(initialMeeting?.agenda ?? []);
-  const [votes, setVotes] = useState<MeetingVote[]>(initialMeeting?.votes ?? []);
-  const [decisions, setDecisions] = useState<MeetingDecision[]>(initialMeeting?.decisions ?? []);
-  const [attachments, setAttachments] = useState<MeetingAttachment[]>(initialMeeting?.attachments ?? []);
-  const [uploading, setUploading] = useState(false);
+  const [newAgendaTitle, setNewAgendaTitle] = useState("");
+  const [newAgendaDescription, setNewAgendaDescription] = useState("");
+  const [newAgendaVote, setNewAgendaVote] = useState(false);
 
-  const meetingId = initialMeeting?.id ?? null;
-  const canUpload = Boolean(meetingId);
+  const [materialTitle, setMaterialTitle] = useState("");
+  const [materialDocId, setMaterialDocId] = useState("");
+  const [materialVisibility, setMaterialVisibility] = useState<Material["visibility"]>("residents");
 
-  const voteOptionsById = useMemo(() => new Map(votes.map((v) => [v.id, v.question])), [votes]);
-
-  const addAgendaItem = () => {
-    setAgenda((prev) => [...prev, { id: makeId(), title: "", presenter: "", notes: "" }]);
+  const reload = async () => {
+    if (!meetingId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiGet<MeetingPayload>(`/api/office/meetings/${meetingId}`);
+      setMeeting(data.meeting);
+      setAgenda(data.agenda);
+      setMaterials(data.materials);
+      setQuestions(data.questions);
+      setVotes(data.votes);
+      setTitle(data.meeting.title);
+      setType(data.meeting.type);
+      setStartsAt(data.meeting.startsAt ?? "");
+      setEndsAt(data.meeting.endsAt ?? "");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось загрузить собрание");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addVote = () => {
-    const vote: MeetingVote = {
-      id: makeId(),
-      question: "",
-      options: [{ option: "За", votes: 0 }, { option: "Против", votes: 0 }, { option: "Воздержались", votes: 0 }],
-      result: "",
-      notes: "",
-    };
-    setVotes((prev) => [...prev, vote]);
-  };
+  useEffect(() => {
+    if (meetingId) void reload();
+  }, [meetingId]);
 
-  const addDecision = () => {
-    setDecisions((prev) => [
-      ...prev,
-      {
-        id: makeId(),
-        title: "",
-        category: "",
-        status: "approved",
-        outcome: "",
-        voteId: null,
-        responsible: "",
-        dueDate: "",
-      },
-    ]);
-  };
-
-  const handleSave = async () => {
+  const saveMeeting = async () => {
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
-      const payload = {
-        title,
-        date,
-        location,
-        attendees,
-        summary,
-        status,
-        agenda,
-        votes,
-        decisions,
-        attachments,
-      };
-      if (!title.trim() || !date.trim()) {
-        setError("Заполните название и дату протокола.");
+      if (!title.trim()) {
+        setError("Введите название собрания");
         return;
       }
       if (meetingId) {
-        const res = await fetch(`/api/office/meetings/${meetingId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        await apiPost(`/api/office/meetings/${meetingId}`, {
+          title: title.trim(),
+          type,
+          startsAt: startsAt || null,
+          endsAt: endsAt || null,
         });
-        const json = await readOk<{ meeting: MeetingMinutes }>(res);
-        setMessage("Протокол обновлён");
-        setAttachments(json.meeting.attachments);
-        router.refresh();
+        await reload();
+        setMessage("Сохранено");
       } else {
-        const res = await fetch("/api/office/meetings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        const res = await apiPost<{ meeting: Meeting }>(`/api/office/meetings`, {
+          title: title.trim(),
+          type,
+          startsAt: startsAt || null,
+          endsAt: endsAt || null,
         });
-        const json = await readOk<{ meeting: MeetingMinutes }>(res);
-        setMessage("Протокол создан");
-        router.push(`/office/meetings/${json.meeting.id}`);
+        router.push(`/office/meetings/${res.meeting.id}`);
       }
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ошибка сохранения");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpload = async (file: File) => {
+  const saveAgenda = async () => {
     if (!meetingId) return;
-    setUploading(true);
+    setSaving(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-      const res = await fetch(`/api/office/meetings/${meetingId}/attachments`, {
-        method: "POST",
-        body: formData,
+      await apiPost(`/api/office/meetings/${meetingId}/agenda`, {
+        items: agenda.map((item, index) => ({
+          position: index,
+          title: item.title,
+          description: item.description,
+          requiresVote: item.requiresVote,
+        })),
       });
-      const json = await readOk<{ meeting: MeetingMinutes }>(res);
-      setAttachments(json.meeting.attachments);
-    } catch (e) {
-      setError((e as Error).message);
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ошибка сохранения повестки");
     } finally {
-      setUploading(false);
+      setSaving(false);
     }
   };
 
-  const handleRemoveAttachment = async (attachmentId: string) => {
+  const addAgenda = () => {
+    if (!newAgendaTitle.trim()) return;
+    setAgenda((prev) => [
+      ...prev,
+      {
+        id: `tmp-${Date.now()}`,
+        title: newAgendaTitle.trim(),
+        description: newAgendaDescription.trim() || null,
+        requiresVote: newAgendaVote,
+        position: prev.length,
+      },
+    ]);
+    setNewAgendaTitle("");
+    setNewAgendaDescription("");
+    setNewAgendaVote(false);
+  };
+
+  const addMaterial = async () => {
     if (!meetingId) return;
+    if (!materialTitle.trim()) {
+      setError("Введите название материала");
+      return;
+    }
+    setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/office/meetings/${meetingId}/attachments`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attachmentId }),
+      await apiPost(`/api/office/meetings/${meetingId}/materials`, {
+        title: materialTitle.trim(),
+        documentId: materialDocId.trim() || null,
+        visibility: materialVisibility,
       });
-      const json = await readOk<{ meeting: MeetingMinutes }>(res);
-      setAttachments(json.meeting.attachments);
-    } catch (e) {
-      setError((e as Error).message);
+      setMaterialTitle("");
+      setMaterialDocId("");
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ошибка добавления материала");
+    } finally {
+      setSaving(false);
     }
   };
+
+  const publishMeeting = async () => {
+    if (!meetingId) return;
+    await apiPost(`/api/office/meetings/${meetingId}/publish`);
+    await reload();
+  };
+
+  const closeMeeting = async () => {
+    if (!meetingId) return;
+    await apiPost(`/api/office/meetings/${meetingId}/close`);
+    await reload();
+  };
+
+  const answerQuestion = async (questionId: string, status: "answered" | "hidden") => {
+    if (!meetingId) return;
+    const answer = status === "answered" ? prompt("Ответ для жителя") ?? "" : "";
+    await apiPost(`/api/office/meetings/${meetingId}/questions/${questionId}/answer`, {
+      status,
+      answer,
+    });
+    await reload();
+  };
+
+  const createVote = async (agendaItemId: string) => {
+    if (!meetingId) return;
+    await apiPost(`/api/office/meetings/${meetingId}/votes`, {
+      agendaItemId,
+      quorumType: "persons",
+      quorumRequired: 0.5,
+    });
+    await reload();
+  };
+
+  const openVote = async (voteId: string) => {
+    await apiPost(`/api/office/votes/${voteId}/open`);
+    await reload();
+  };
+
+  const closeVote = async (voteId: string) => {
+    await apiPost(`/api/office/votes/${voteId}/close`);
+    await reload();
+  };
+
+  if (loading) {
+    return <OfficeLoadingState message="Загрузка собрания..." testId="office-meeting-loading" />;
+  }
+
+  if (error) {
+    return <OfficeErrorState message={error} testId="office-meeting-error" />;
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">{meetingId ? "Редактировать протокол" : "Новый протокол"}</h1>
-          <p className="text-sm text-zinc-600">Повестка, голосования, решения и итоговый протокол собрания.</p>
+          <h1 className="text-2xl font-semibold text-zinc-900">
+            {meetingId ? "Редактирование собрания" : "Новое собрание"}
+          </h1>
+          {meeting && <div className="text-xs text-zinc-500">Статус: {meeting.status}</div>}
         </div>
         <div className="flex gap-2">
           {meetingId && (
-            <button
-              type="button"
-              onClick={() => window.open(`/api/office/meetings/${meetingId}/export.pdf`, "_blank", "noopener,noreferrer")}
-              className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-300"
-            >
-              Экспорт PDF
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={publishMeeting}
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700"
+              >
+                Опубликовать
+              </button>
+              <button
+                type="button"
+                onClick={closeMeeting}
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700"
+              >
+                Закрыть
+              </button>
+            </>
           )}
           <button
             type="button"
-            onClick={handleSave}
+            onClick={saveMeeting}
             disabled={saving}
-            className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5d41] disabled:opacity-60"
+            className="rounded-full bg-[#5E704F] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
             {saving ? "Сохранение..." : "Сохранить"}
           </button>
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div>}
-      {message && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">{message}</div>
-      )}
+      {message && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm">{message}</div>}
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Общие сведения</h2>
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm text-zinc-800">
-            Название протокола
+            Название
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-              placeholder="Протокол заседания правления"
             />
           </label>
           <label className="text-sm text-zinc-800">
-            Дата
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm text-zinc-800">
-            Место проведения
-            <input
-              value={location ?? ""}
-              onChange={(e) => setLocation(e.target.value)}
-              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-              placeholder="Правление, кабинет"
-            />
-          </label>
-          <label className="text-sm text-zinc-800">
-            Участники
-            <input
-              value={attendees ?? ""}
-              onChange={(e) => setAttendees(e.target.value)}
-              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-              placeholder="ФИО, роли"
-            />
-          </label>
-          <label className="text-sm text-zinc-800">
-            Статус
+            Тип
             <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as MeetingMinutes["status"])}
+              value={type}
+              onChange={(e) => setType(e.target.value as Meeting["type"])}
               className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
             >
-              <option value="draft">Черновик</option>
-              <option value="published">Опубликован</option>
+              <option value="general">Общее</option>
+              <option value="board">Правление</option>
+              <option value="extra">Внеочередное</option>
             </select>
           </label>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900">Повестка</h2>
-          <button
-            type="button"
-            onClick={addAgendaItem}
-            className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700"
-          >
-            + пункт
-          </button>
-        </div>
-        {agenda.length === 0 ? (
-          <p className="text-sm text-zinc-600">Добавьте пункты повестки.</p>
-        ) : (
-          <div className="space-y-3">
-            {agenda.map((item, idx) => (
-              <div key={item.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 space-y-2">
-                <div className="text-xs font-semibold text-zinc-600">Пункт {idx + 1}</div>
-                <input
-                  value={item.title}
-                  onChange={(e) =>
-                    setAgenda((prev) =>
-                      prev.map((a) => (a.id === item.id ? { ...a, title: e.target.value } : a))
-                    )
-                  }
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Обсудить..."
-                />
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    value={item.presenter ?? ""}
-                    onChange={(e) =>
-                      setAgenda((prev) =>
-                        prev.map((a) => (a.id === item.id ? { ...a, presenter: e.target.value } : a))
-                      )
-                    }
-                    className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                    placeholder="Докладчик"
-                  />
-                  <input
-                    value={item.notes ?? ""}
-                    onChange={(e) =>
-                      setAgenda((prev) =>
-                        prev.map((a) => (a.id === item.id ? { ...a, notes: e.target.value } : a))
-                      )
-                    }
-                    className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                    placeholder="Примечание"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAgenda((prev) => prev.filter((a) => a.id !== item.id))}
-                  className="text-xs font-semibold text-rose-600"
-                >
-                  Удалить пункт
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900">Голосования</h2>
-          <button
-            type="button"
-            onClick={addVote}
-            className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700"
-          >
-            + голосование
-          </button>
-        </div>
-        {votes.length === 0 ? (
-          <p className="text-sm text-zinc-600">Добавьте вопросы для голосования.</p>
-        ) : (
-          <div className="space-y-3">
-            {votes.map((vote, idx) => (
-              <div key={vote.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 space-y-2">
-                <div className="text-xs font-semibold text-zinc-600">Вопрос {idx + 1}</div>
-                <input
-                  value={vote.question}
-                  onChange={(e) =>
-                    setVotes((prev) =>
-                      prev.map((v) => (v.id === vote.id ? { ...v, question: e.target.value } : v))
-                    )
-                  }
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Вопрос голосования"
-                />
-                <div className="space-y-2">
-                  {vote.options.map((opt, optIdx) => (
-                    <div key={`${vote.id}-${optIdx}`} className="grid grid-cols-[1fr_100px] gap-2">
-                      <input
-                        value={opt.option}
-                        onChange={(e) =>
-                          setVotes((prev) =>
-                            prev.map((v) =>
-                              v.id === vote.id
-                                ? {
-                                    ...v,
-                                    options: v.options.map((o, i) =>
-                                      i === optIdx ? { ...o, option: e.target.value } : o
-                                    ),
-                                  }
-                                : v
-                            )
-                          )
-                        }
-                        className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                        placeholder="Вариант"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={opt.votes}
-                        onChange={(e) =>
-                          setVotes((prev) =>
-                            prev.map((v) =>
-                              v.id === vote.id
-                                ? {
-                                    ...v,
-                                    options: v.options.map((o, i) =>
-                                      i === optIdx ? { ...o, votes: Number(e.target.value) || 0 } : o
-                                    ),
-                                  }
-                                : v
-                            )
-                          )
-                        }
-                        className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setVotes((prev) =>
-                        prev.map((v) =>
-                          v.id === vote.id
-                            ? { ...v, options: [...v.options, { option: "", votes: 0 }] }
-                            : v
-                        )
-                      )
-                    }
-                    className="text-xs font-semibold text-zinc-600"
-                  >
-                    + вариант
-                  </button>
-                </div>
-                <input
-                  value={vote.result}
-                  onChange={(e) =>
-                    setVotes((prev) => prev.map((v) => (v.id === vote.id ? { ...v, result: e.target.value } : v)))
-                  }
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Итог голосования"
-                />
-                <input
-                  value={vote.notes ?? ""}
-                  onChange={(e) =>
-                    setVotes((prev) => prev.map((v) => (v.id === vote.id ? { ...v, notes: e.target.value } : v)))
-                  }
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Примечание"
-                />
-                <button
-                  type="button"
-                  onClick={() => setVotes((prev) => prev.filter((v) => v.id !== vote.id))}
-                  className="text-xs font-semibold text-rose-600"
-                >
-                  Удалить голосование
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900">Решения</h2>
-          <button
-            type="button"
-            onClick={addDecision}
-            className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700"
-          >
-            + решение
-          </button>
-        </div>
-        {decisions.length === 0 ? (
-          <p className="text-sm text-zinc-600">Добавьте решения по итогам встречи.</p>
-        ) : (
-          <div className="space-y-3">
-            {decisions.map((decision, idx) => (
-              <div key={decision.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 space-y-2">
-                <div className="text-xs font-semibold text-zinc-600">Решение {idx + 1}</div>
-                <input
-                  value={decision.title}
-                  onChange={(e) =>
-                    setDecisions((prev) =>
-                      prev.map((d) => (d.id === decision.id ? { ...d, title: e.target.value } : d))
-                    )
-                  }
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Суть решения"
-                />
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <input
-                    value={decision.category ?? ""}
-                    onChange={(e) =>
-                      setDecisions((prev) =>
-                        prev.map((d) => (d.id === decision.id ? { ...d, category: e.target.value } : d))
-                      )
-                    }
-                    className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                    placeholder="Категория"
-                  />
-                  <select
-                    value={decision.status ?? "approved"}
-                    onChange={(e) =>
-                      setDecisions((prev) =>
-                        prev.map((d) => (d.id === decision.id ? { ...d, status: e.target.value as MeetingDecision["status"] } : d))
-                      )
-                    }
-                    className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                  >
-                    <option value="approved">Принято</option>
-                    <option value="rejected">Отклонено</option>
-                    <option value="postponed">Отложено</option>
-                  </select>
-                  <select
-                    value={decision.voteId ?? ""}
-                    onChange={(e) =>
-                      setDecisions((prev) =>
-                        prev.map((d) => (d.id === decision.id ? { ...d, voteId: e.target.value || null } : d))
-                      )
-                    }
-                    className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                  >
-                    <option value="">Без голосования</option>
-                    {Array.from(voteOptionsById.entries()).map(([id, label]) => (
-                      <option key={id} value={id}>
-                        {label || "Голосование"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    value={decision.responsible ?? ""}
-                    onChange={(e) =>
-                      setDecisions((prev) =>
-                        prev.map((d) => (d.id === decision.id ? { ...d, responsible: e.target.value } : d))
-                      )
-                    }
-                    className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                    placeholder="Ответственный"
-                  />
-                  <input
-                    type="date"
-                    value={decision.dueDate ?? ""}
-                    onChange={(e) =>
-                      setDecisions((prev) =>
-                        prev.map((d) => (d.id === decision.id ? { ...d, dueDate: e.target.value } : d))
-                      )
-                    }
-                    className="rounded border border-zinc-300 px-3 py-2 text-sm"
-                  />
-                </div>
-                <input
-                  value={decision.outcome ?? ""}
-                  onChange={(e) =>
-                    setDecisions((prev) =>
-                      prev.map((d) => (d.id === decision.id ? { ...d, outcome: e.target.value } : d))
-                    )
-                  }
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="Итог/формулировка решения"
-                />
-                <button
-                  type="button"
-                  onClick={() => setDecisions((prev) => prev.filter((d) => d.id !== decision.id))}
-                  className="text-xs font-semibold text-rose-600"
-                >
-                  Удалить решение
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Итоги</h2>
-        <textarea
-          value={summary ?? ""}
-          onChange={(e) => setSummary(e.target.value)}
-          className="min-h-[120px] w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-          placeholder="Краткое резюме заседания"
-        />
-      </section>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Приложения</h2>
-        {!canUpload && (
-          <p className="text-sm text-zinc-600">Сначала сохраните протокол, чтобы прикреплять файлы.</p>
-        )}
-        {canUpload && (
-          <label className="inline-flex items-center gap-3 rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700">
+          <label className="text-sm text-zinc-800">
+            Начало
             <input
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleUpload(file);
-              }}
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
+              placeholder="2026-02-09T18:00"
             />
-            <span>{uploading ? "Загрузка..." : "Прикрепить файл"}</span>
           </label>
-        )}
-        {attachments.length === 0 ? (
-          <p className="text-sm text-zinc-600">Нет вложений.</p>
-        ) : (
-          <div className="space-y-2">
-            {attachments.map((a) => (
-              <div key={a.id} className="flex flex-wrap items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 text-sm">
-                <div>
-                  <div className="font-semibold text-zinc-900">{a.name}</div>
-                  <div className="text-xs text-zinc-600">{(a.size / 1024).toFixed(1)} KB</div>
+          <label className="text-sm text-zinc-800">
+            Конец
+            <input
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
+              placeholder="2026-02-09T20:00"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold text-zinc-900">Повестка</div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <input
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            placeholder="Название пункта"
+            value={newAgendaTitle}
+            onChange={(e) => setNewAgendaTitle(e.target.value)}
+          />
+          <input
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            placeholder="Описание"
+            value={newAgendaDescription}
+            onChange={(e) => setNewAgendaDescription(e.target.value)}
+          />
+          <label className="flex items-center gap-2 text-sm text-zinc-600">
+            <input type="checkbox" checked={newAgendaVote} onChange={(e) => setNewAgendaVote(e.target.checked)} />
+            Требует голосования
+          </label>
+        </div>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={addAgenda}
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700"
+          >
+            Добавить
+          </button>
+          <button
+            type="button"
+            onClick={saveAgenda}
+            className="rounded-lg bg-[#5E704F] px-3 py-2 text-sm font-semibold text-white"
+          >
+            Сохранить повестку
+          </button>
+        </div>
+        <div className="mt-3 space-y-2">
+          {agenda.map((item) => (
+            <div key={item.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
+              <div className="font-semibold text-zinc-900">{item.title}</div>
+              {item.description && <div className="text-xs text-zinc-600">{item.description}</div>}
+              {item.requiresVote && (
+                <div className="mt-2 text-xs text-zinc-600">
+                  Голосование:{" "}
+                  {votes.find((vote) => vote.agendaItemId === item.id) ? (
+                    <span>создано</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-[#5E704F] font-semibold"
+                      onClick={() => createVote(item.id)}
+                    >
+                      создать
+                    </button>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <a href={a.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[#5E704F]">
-                    Открыть
-                  </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold text-zinc-900">Материалы</div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <input
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            placeholder="Название"
+            value={materialTitle}
+            onChange={(e) => setMaterialTitle(e.target.value)}
+          />
+          <input
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            placeholder="Document ID"
+            value={materialDocId}
+            onChange={(e) => setMaterialDocId(e.target.value)}
+          />
+          <select
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            value={materialVisibility}
+            onChange={(e) => setMaterialVisibility(e.target.value as Material["visibility"])}
+          >
+            <option value="residents">Жителям</option>
+            <option value="office">Только офис</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={addMaterial}
+          className="mt-3 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700"
+        >
+          Добавить материал
+        </button>
+        <div className="mt-3 space-y-2 text-sm text-zinc-700">
+          {materials.map((material) => (
+            <div key={material.id}>
+              {material.title} · {material.visibility}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold text-zinc-900">Вопросы жителей</div>
+        <div className="mt-3 space-y-2 text-sm">
+          {questions.length === 0 ? (
+            <div className="text-zinc-500">Нет вопросов.</div>
+          ) : (
+            questions.map((q) => (
+              <div key={q.id} className="rounded-lg border border-zinc-200 p-3">
+                <div className="font-semibold text-zinc-900">{q.question}</div>
+                <div className="text-xs text-zinc-500">Статус: {q.status}</div>
+                {q.answer && <div className="mt-2 text-xs text-zinc-700">Ответ: {q.answer}</div>}
+                <div className="mt-2 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => handleRemoveAttachment(a.id)}
-                    className="text-xs font-semibold text-rose-600"
+                    className="text-[#5E704F] text-xs font-semibold"
+                    onClick={() => answerQuestion(q.id, "answered")}
                   >
-                    Удалить
+                    Ответить
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-zinc-500"
+                    onClick={() => answerQuestion(q.id, "hidden")}
+                  >
+                    Скрыть
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold text-zinc-900">Голосования</div>
+        <div className="mt-3 space-y-2 text-sm">
+          {votes.length === 0 ? (
+            <div className="text-zinc-500">Голосований нет.</div>
+          ) : (
+            votes.map((vote) => (
+              <div key={vote.id} className="rounded-lg border border-zinc-200 p-3">
+                <div>Статус: {vote.status}</div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="text-[#5E704F] text-xs font-semibold"
+                    onClick={() => openVote(vote.id)}
+                  >
+                    Открыть
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-zinc-500"
+                    onClick={() => closeVote(vote.id)}
+                  >
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -115,3 +115,65 @@ export async function buildMonthlyReportPg(period: string) {
     debtors,
   };
 }
+
+export async function buildDebtReportPg(params?: {
+  period?: string | null;
+  minDebt?: number | null;
+  street?: string | null;
+  limit?: number;
+  offset?: number;
+}) {
+  const conditions = [] as ReturnType<typeof sql>[];
+  if (params?.period) {
+    conditions.push(sql`a.period = ${params.period}`);
+  }
+  if (params?.street) {
+    conditions.push(sql`pl.snt_street_number = ${params.street}`);
+  }
+  const where = conditions.length ? sql`where ${sql.join(conditions, sql` and `)}` : sql``;
+  const limit = Math.min(200, Math.max(20, params?.limit ?? 50));
+  const offset = Math.max(0, params?.offset ?? 0);
+
+  const rows = await sql<
+    Array<{
+      plot_id: string;
+      plot_number: string | null;
+      snt_street_number: string | null;
+      city_address: string | null;
+      accrued: number | string;
+      paid: number | string;
+    }>
+  >`
+    select
+      a.plot_id,
+      pl.plot_number,
+      pl.snt_street_number,
+      pl.city_address,
+      sum(a.amount) as accrued,
+      coalesce(sum(al.amount), 0) as paid
+    from billing_accruals a
+    left join billing_allocations al on al.accrual_id = a.id
+    left join plots pl on pl.id = a.plot_id
+    ${where}
+    group by a.plot_id, pl.plot_number, pl.snt_street_number, pl.city_address
+    order by (sum(a.amount) - coalesce(sum(al.amount), 0)) desc
+    limit ${limit}
+    offset ${offset}
+  `;
+
+  const items = rows
+    .map((row) => {
+      const accrued = toNumber(row.accrued);
+      const paid = toNumber(row.paid);
+      return {
+        plotId: row.plot_id,
+        plotLabel: formatPlotLabel(row.plot_number, row.snt_street_number, row.city_address),
+        debt: Math.max(0, accrued - paid),
+        accrued,
+        paid,
+      };
+    })
+    .filter((row) => (params?.minDebt ? row.debt >= params.minDebt : true));
+
+  return { items, limit, offset };
+}

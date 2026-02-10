@@ -5,10 +5,17 @@ import { getEffectiveSessionUser } from "@/lib/session.server";
 import type { Role } from "@/lib/permissions";
 import { isStaffOrAdmin } from "@/lib/rbac";
 import { logAuthEvent } from "@/lib/structuredLogger/node";
-import { generateAccruals } from "@/lib/billing.store";
-import { hasPgConnection, generateAccruals as generateAccrualsPg } from "@/lib/billing/accruals.pg";
+import { generateAccruals, previewAccruals } from "@/lib/billing.store";
+import {
+  hasPgConnection,
+  generateAccruals as generateAccrualsPg,
+  generateAccrualsByRules as generateAccrualsByRulesPg,
+  previewAccruals as previewAccrualsPg,
+  previewAccrualsByRules as previewAccrualsByRulesPg,
+} from "@/lib/billing/accruals.pg";
 import { assertPeriodOpenOrReason } from "@/lib/office/periodClose.store";
 import { logAdminAction } from "@/lib/audit";
+import { createOfficeJob } from "@/lib/office/jobs.store";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -52,13 +59,22 @@ export async function POST(request: Request) {
       : null;
     const plotQuery = typeof body.plotQuery === "string" ? body.plotQuery : null;
     const reason = typeof body.reason === "string" ? body.reason : null;
+    const ruleIds = Array.isArray(body.ruleIds)
+      ? body.ruleIds.filter((id: unknown): id is string => typeof id === "string")
+      : null;
+    const dryRun = Boolean(body.dryRun);
 
-    if (!period || !category) {
-      return fail(request, "validation_error", "period и category обязательны", 400);
+    if (!period) {
+      return fail(request, "validation_error", "period обязателен", 400);
     }
 
-    if (category !== "membership" && category !== "electricity" && category !== "target") {
-      return fail(request, "validation_error", "Неверная категория", 400);
+    if (!ruleIds?.length) {
+      if (!category) {
+        return fail(request, "validation_error", "period и category обязательны", 400);
+      }
+      if (category !== "membership" && category !== "electricity" && category !== "target") {
+        return fail(request, "validation_error", "Неверная категория", 400);
+      }
     }
 
     let closeCheck: { closed: false } | { closed: true; reason: string };
@@ -68,9 +84,39 @@ export async function POST(request: Request) {
       return fail(request, "period_closed", e instanceof Error ? e.message : "Период закрыт", 409);
     }
 
-    const result = hasPgConnection()
-      ? await generateAccrualsPg({ period, category, tariff, fixedAmount, plotIds, plotQuery })
-      : generateAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
+    if (dryRun) {
+      let rows: Array<{ plotId: string; plotLabel: string; amount: number; discount: number }> = [];
+      if (ruleIds?.length) {
+        if (hasPgConnection()) {
+          const preview = await previewAccrualsByRulesPg({ period, ruleIds });
+          rows = preview.rows;
+        }
+      } else if (category) {
+        rows = hasPgConnection()
+          ? await previewAccrualsPg({ period, category, tariff, fixedAmount, plotIds, plotQuery })
+          : previewAccruals({ period, category, tariff, fixedAmount, plotIds, plotQuery });
+      }
+      const totalAmount = rows.reduce((sum: number, row) => sum + row.amount, 0);
+      return ok(request, {
+        dryRun: true,
+        totals: { count: rows.length, totalAmount },
+        rows: rows.slice(0, 5),
+      });
+    }
+
+    const result = ruleIds?.length
+      ? hasPgConnection()
+        ? await generateAccrualsByRulesPg({ period, ruleIds })
+        : { createdCount: 0, skippedCount: 0, duplicates: [] as string[] }
+      : hasPgConnection()
+      ? await generateAccrualsPg({ period, category: category!, tariff, fixedAmount, plotIds, plotQuery })
+      : generateAccruals({ period, category: category!, tariff, fixedAmount, plotIds, plotQuery });
+
+    const job = await createOfficeJob({
+      type: "accruals.generate",
+      payload: { period, category, ruleIds, createdCount: result.createdCount },
+      createdBy: session.id ?? null,
+    });
 
     await logAdminAction({
       action: "accruals.generate",
@@ -78,10 +124,12 @@ export async function POST(request: Request) {
       entityId: period,
       route: "/api/office/billing/accruals/generate",
       success: true,
-      meta: closeCheck.closed ? { period, category, postCloseChange: true, reason: closeCheck.reason } : { period, category },
+      meta: closeCheck.closed
+        ? { period, category, ruleIds, postCloseChange: true, reason: closeCheck.reason, jobId: job.id }
+        : { period, category, ruleIds, jobId: job.id },
       headers: request.headers,
     });
-    return ok(request, result);
+    return ok(request, { ...result, jobId: job.id });
   } catch (error) {
     return serverError(request, "Ошибка генерации начислений", error);
   }
